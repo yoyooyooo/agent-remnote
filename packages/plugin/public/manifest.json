@@ -1,17 +1,20 @@
 {
   "manifestVersion": 1,
   "id": "agent-remnote-bridge",
-  "name": "agent-remnote-bridge",
-  "author": "remnote",
-  "repoUrl": "https://example.com/agent-remnote",
+  "name": "Agent Remnote Bridge",
+  "author": "yoyooyooo",
+  "repoUrl": "https://github.com/yoyooyooo/agent-renmote",
+  "projectUrl": "https://github.com/yoyooyooo/agent-renmote",
+  "supportUrl": "https://github.com/yoyooyooo/agent-renmote/issues",
+  "changelogUrl": "https://github.com/yoyooyooo/agent-renmote/releases",
   "version": {
     "major": 0,
     "minor": 0,
-    "patch": 1
+    "patch": 2
   },
   "theme": [],
   "enableOnMobile": false,
-  "description": "Bridge plugin to execute queued write ops via RemNote SDK.",
+  "description": "Bridge plugin that executes queued write operations through the RemNote SDK.",
   "requestNative": true,
   "requiredScopes": [
     {
