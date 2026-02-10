@@ -1,0 +1,6 @@
+node_modules
+dist
+**/dist
+**/PluginZip.zip
+bun.lock
+**/package-lock.json

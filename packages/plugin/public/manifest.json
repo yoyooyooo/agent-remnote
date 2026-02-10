@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "id": "agent-remnote-bridge",
+  "name": "agent-remnote-bridge",
+  "author": "remnote",
+  "repoUrl": "https://example.com/agent-remnote",
+  "version": {
+    "major": 0,
+    "minor": 0,
+    "patch": 1
+  },
+  "theme": [],
+  "enableOnMobile": false,
+  "description": "Bridge plugin to execute queued write ops via RemNote SDK.",
+  "requestNative": true,
+  "requiredScopes": [
+    {
+      "type": "All",
+      "level": "ReadCreateModifyDelete"
+    },
+    {
+      "type": "KnowledgeBaseInfo",
+      "level": "Read"
+    }
+  ]
+}
