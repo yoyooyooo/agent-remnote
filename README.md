@@ -274,13 +274,13 @@ flowchart LR
     DB[(remnote.db<br/>read-only)] -->|DB Pull| CLI[agent-remnote CLI]
     CLI -->|SearchRequest| WS[WS bridge / daemon]
     WS -->|SearchRequest| PLG[RemNote plugin]
-    PLG -->|SearchResponse (Top‑K + snippets)| WS
+    PLG -->|SearchResponse - Top-K snippets| WS
     WS -->|SearchResponse| CLI
   end
 
   subgraph Write
     CLI -->|enqueue ops| S[(store.sqlite)]
-    CLI -->|notify/kick (StartSync)| WS
+    CLI -->|notify/kick StartSync| WS
     WS -->|OpDispatchBatch / StartSync| PLG
     PLG -->|OpAck| WS
     WS -->|update txn/op status| S
