@@ -12,6 +12,7 @@ import { RefResolver } from '../../../../services/RefResolver.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
+import { makeTempId } from '../../../_tempId.js';
 
 import { compileTableValueOps, parseValuesArrayOnly, type TablePropertyDef } from '../../../../lib/tableValues.js';
 
@@ -22,12 +23,6 @@ const dispatchMode = Options.choice('dispatch-mode', ['serial', 'conflict_parall
   Options.optional,
   Options.map(optionToUndefined),
 );
-
-function makeUuidLike(): string {
-  const g: any = globalThis as any;
-  if (g.crypto && typeof g.crypto.randomUUID === 'function') return String(g.crypto.randomUUID());
-  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-}
 
 export const writePowerupRecordAddCommand = Command.make(
   'add',
@@ -135,7 +130,7 @@ export const writePowerupRecordAddCommand = Command.make(
             ? resolvedRef
             : yield* refs.resolve(resolvedRef);
 
-      const rowClientTempId = `tmp:${makeUuidLike()}`;
+      const rowClientTempId = makeTempId();
 
       const rawValues = values ? yield* payloadSvc.readJson(values) : undefined;
       const parsedValues =

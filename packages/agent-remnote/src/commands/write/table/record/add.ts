@@ -12,16 +12,11 @@ import { RefResolver } from '../../../../services/RefResolver.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
+import { makeTempId } from '../../../_tempId.js';
 
 import { parseValuesArrayOnly, compileTableValueOps, type TablePropertyDef } from '../../../../lib/tableValues.js';
 
 import { optionToUndefined, writeCommonOptions } from '../../_shared.js';
-
-function makeUuidLike(): string {
-  const g: any = globalThis as any;
-  if (g.crypto && typeof g.crypto.randomUUID === 'function') return String(g.crypto.randomUUID());
-  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-}
 
 export const writeTableRecordAddCommand = Command.make(
   'add',
@@ -119,7 +114,7 @@ export const writeTableRecordAddCommand = Command.make(
                   ),
                 );
 
-      const rowClientTempId = `tmp:${makeUuidLike()}`;
+      const rowClientTempId = makeTempId();
 
       const rawValues = values ? yield* payloadSvc.readJson(values) : undefined;
       const parsedValues =

@@ -20,7 +20,7 @@ export type WsClientInfo = {
   readonly connId: string;
   readonly clientType?: string | undefined;
   readonly clientInstanceId?: string | null | undefined;
-  readonly capabilities?: { control?: boolean; worker?: boolean; readRpc?: boolean } | undefined;
+  readonly capabilities?: { control?: boolean; worker?: boolean; readRpc?: boolean; batchPull?: boolean } | undefined;
   readonly isActiveWorker?: boolean | undefined;
   readonly connectedAt: number;
   readonly lastSeenAt: number;

@@ -18,6 +18,11 @@ describe('conflict keys: deriveConflictKeys', () => {
     expect(keys).toEqual(['rem:r1', 'children:p2', 'children:p1']);
   });
 
+  it('move_rem derives children key from new_parent_id', () => {
+    const keys = deriveConflictKeys('move_rem', { rem_id: 'r1', new_parent_id: 'p3' });
+    expect(keys).toEqual(['rem:r1', 'children:p3']);
+  });
+
   it('replace_selection_with_markdown derives explicit rem targets', () => {
     const keys = deriveConflictKeys('replace_selection_with_markdown', {
       remId: 'r1',

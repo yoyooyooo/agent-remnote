@@ -1,3 +1,5 @@
+import { canonicalizeOpType } from '../op-catalog/normalize.js';
+
 export type ConflictKey = string;
 
 function asNonEmptyString(value: unknown): string | null {
@@ -64,7 +66,7 @@ function isStructureOp(opType: string): boolean {
 }
 
 export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readonly ConflictKey[] {
-  const opType = typeof opTypeRaw === 'string' ? opTypeRaw.trim() : '';
+  const opType = canonicalizeOpType(opTypeRaw);
   const p: any = payload && typeof payload === 'object' ? payload : null;
 
   const keys: string[] = [];
@@ -76,6 +78,7 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
 
   const remId = getFirstString(p, ['rem_id', 'remId']);
   const parentId = getFirstString(p, ['parent_id', 'parentId']);
+  const newParentId = getFirstString(p, ['new_parent_id', 'newParentId']);
   const toParentId = getFirstString(p, ['to_parent_id', 'toParentId', 'target_parent_id', 'targetParentId']);
   const fromParentId = getFirstString(p, ['from_parent_id', 'fromParentId']);
 
@@ -106,7 +109,7 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
   if (isStructureOp(opType)) {
     if (remId) keys.push(`rem:${remId}`);
 
-    const parents = [parentId, toParentId, fromParentId].filter((x): x is string => typeof x === 'string' && x.length > 0);
+    const parents = [parentId, newParentId, toParentId, fromParentId].filter((x): x is string => typeof x === 'string' && x.length > 0);
     for (const pid of parents) keys.push(`children:${pid}`);
 
     if (!remId && parents.length === 0) {

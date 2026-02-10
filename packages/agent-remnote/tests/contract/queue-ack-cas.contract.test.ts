@@ -50,8 +50,10 @@ describe('queue contract: ack is CAS by attempt_id', () => {
         if (!dup.ok) throw new Error('expected AckOk (duplicate)');
         expect(dup.duplicate).toBe(true);
 
-        const row2 = db.prepare(`SELECT status FROM queue_ops WHERE op_id=?`).get(opId) as any;
+        const row2 = db.prepare(`SELECT status, locked_at, lease_expires_at FROM queue_ops WHERE op_id=?`).get(opId) as any;
         expect(String(row2.status)).toBe('succeeded');
+        expect(row2.locked_at).toBeNull();
+        expect(row2.lease_expires_at).toBeNull();
 
         // Stale retry must not roll back a terminal op.
         const retry = ackRetry(db, { opId, attemptId, lockedBy: 'conn-1', error: { code: 'EXEC_ERROR', message: 'late' } });

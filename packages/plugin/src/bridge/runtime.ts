@@ -70,9 +70,35 @@ const DEFAULT_SYNC_CONCURRENCY = 4;
 const DEFAULT_LEASE_MS = 120_000;
 const DEFAULT_REQUEST_MAX_BYTES = 512_000;
 const DEFAULT_REQUEST_MAX_OP_BYTES = 256_000;
+const REQUEST_OPS_RETRY_MIN_DELAY_MS = 250;
+const REQUEST_OPS_RETRY_MAX_DELAY_MS = 2000;
+const REQUEST_OPS_RETRY_MAX_STREAK = 5;
+const REQUEST_OPS_NON_RETRYABLE_CODES = new Set(['PROTOCOL_MISMATCH', 'INVALID_MESSAGE', 'UNSUPPORTED_CLIENT', 'UNSUPPORTED_VERSION']);
 const LEASE_EXTEND_INITIAL_DELAY_MS = 20_000;
 const LEASE_EXTEND_INTERVAL_MS = 30_000;
 const opLocks = new OpLockManager();
+
+type RequestOpsResult =
+  | { readonly kind: 'ops'; readonly ops: readonly OpDispatchItem[] }
+  | { readonly kind: 'no_work' }
+  | {
+      readonly kind: 'error';
+      readonly code: string;
+      readonly message: string;
+      readonly retryable: boolean;
+    };
+
+function isRetryableRequestOpsErrorCode(code: string): boolean {
+  if (!code) return true;
+  if (REQUEST_OPS_NON_RETRYABLE_CODES.has(code)) return false;
+  return true;
+}
+
+function computeRequestOpsRetryDelayMs(streak: number): number {
+  const safeStreak = Math.max(1, Math.floor(streak));
+  const backoff = REQUEST_OPS_RETRY_MIN_DELAY_MS * Math.pow(2, Math.max(0, safeStreak - 1));
+  return Math.min(REQUEST_OPS_RETRY_MAX_DELAY_MS, backoff);
+}
 
 type PendingAck = {
   readonly key: string;
@@ -1050,7 +1076,7 @@ async function getOrOpenWorkerWs(url: string, preferControl = true): Promise<Web
   return workerWs;
 }
 
-async function requestOps(ws: WebSocket, maxOps: number): Promise<readonly OpDispatchItem[]> {
+async function requestOps(ws: WebSocket, maxOps: number): Promise<RequestOpsResult> {
   const max = Math.max(1, Math.min(50, Math.floor(maxOps)));
   send(ws, {
     type: 'RequestOps',
@@ -1059,23 +1085,45 @@ async function requestOps(ws: WebSocket, maxOps: number): Promise<readonly OpDis
     maxBytes: DEFAULT_REQUEST_MAX_BYTES,
     maxOpBytes: DEFAULT_REQUEST_MAX_OP_BYTES,
   });
+
   const msg: any = await waitForOpOrNoWork(ws);
-  if (!msg || msg.type === 'NoWork') return [];
+  if (!msg || msg.type === 'NoWork') {
+    return { kind: 'no_work' };
+  }
+
   if (msg.type === 'Error') {
+    const code = typeof msg?.code === 'string' ? msg.code : '';
+    const message = typeof msg?.message === 'string' ? msg.message : '';
+
+    if (code === 'OP_PAYLOAD_TOO_LARGE') {
+      try {
+        send(ws, { type: 'TriggerStartSync' });
+      } catch {}
+    }
+
     try {
       console.warn('[agent-remnote][ws] RequestOps error', {
-        code: msg?.code,
-        message: msg?.message,
+        code,
+        message,
         details: msg?.details,
         nextActions: msg?.nextActions,
       });
     } catch {}
-    return [];
+
+    return {
+      kind: 'error',
+      code,
+      message,
+      retryable: isRetryableRequestOpsErrorCode(code),
+    };
   }
+
   if (msg.type === 'OpDispatchBatch') {
     const batch = msg as OpDispatchBatch;
-    return Array.isArray(batch.ops) ? batch.ops : [];
+    const ops = Array.isArray(batch.ops) ? batch.ops : [];
+    return { kind: 'ops', ops };
   }
+
   if (msg.type === 'OpDispatch') {
     const op = msg as any;
     if (op?.op_id && op?.attempt_id) {
@@ -1089,10 +1137,11 @@ async function requestOps(ws: WebSocket, maxOps: number): Promise<readonly OpDis
         idempotency_key: op.idempotency_key ?? null,
         lease_expires_at: typeof op.lease_expires_at === 'number' ? op.lease_expires_at : undefined,
       };
-      return [item];
+      return { kind: 'ops', ops: [item] };
     }
   }
-  return [];
+
+  return { kind: 'no_work' };
 }
 
 export async function runSyncLoop(
@@ -1208,14 +1257,55 @@ export async function runSyncLoop(
       }
     };
 
+    let requestOpsErrorStreak = 0;
+
     while (true) {
       while (!noWork && inFlight.size < maxConcurrency) {
         const want = maxConcurrency - inFlight.size;
-        const batch = await requestOps(ws, want);
+        const pull = await requestOps(ws, want);
+
+        if (pull.kind === 'error') {
+          requestOpsErrorStreak += 1;
+          const shouldRetry = pull.retryable && requestOpsErrorStreak <= REQUEST_OPS_RETRY_MAX_STREAK;
+          if (shouldRetry) {
+            const delayMs = computeRequestOpsRetryDelayMs(requestOpsErrorStreak);
+            try {
+              console.warn('[agent-remnote][ws] RequestOps transient error; retrying', {
+                code: pull.code,
+                message: pull.message,
+                streak: requestOpsErrorStreak,
+                delayMs,
+              });
+            } catch {}
+            await sleep(delayMs);
+            continue;
+          }
+
+          try {
+            console.warn('[agent-remnote][ws] RequestOps error; stopping pull loop', {
+              code: pull.code,
+              message: pull.message,
+              streak: requestOpsErrorStreak,
+              retryable: pull.retryable,
+            });
+          } catch {}
+          noWork = true;
+          break;
+        }
+
+        requestOpsErrorStreak = 0;
+
+        if (pull.kind === 'no_work') {
+          noWork = true;
+          break;
+        }
+
+        const batch = pull.ops;
         if (batch.length === 0) {
           noWork = true;
           break;
         }
+
         for (const item of batch) {
           const op: OpDispatch = { type: 'OpDispatch', ...item };
           const p = runOne(op)

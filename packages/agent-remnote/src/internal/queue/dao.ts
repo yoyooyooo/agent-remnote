@@ -429,7 +429,7 @@ export function ackSuccess(
     const res = db
       .prepare(
         `UPDATE queue_ops
-         SET status='succeeded', updated_at=@t
+         SET status='succeeded', locked_at=NULL, lease_expires_at=NULL, updated_at=@t
          WHERE op_id=@op_id AND status='in_flight' AND locked_by=@locked_by AND attempt_id=@attempt_id`,
       )
       .run({ t, op_id: params.opId, locked_by: params.lockedBy, attempt_id: params.attemptId });
@@ -479,7 +479,7 @@ export function ackRetry(
   const t = nowMs();
   const trx = db.transaction(() => {
     const current = db
-      .prepare(`SELECT status, attempt_id, locked_by, attempt_count, max_attempts FROM queue_ops WHERE op_id=?`)
+      .prepare(`SELECT txn_id, status, attempt_id, locked_by, attempt_count, max_attempts FROM queue_ops WHERE op_id=?`)
       .get(params.opId) as any;
     if (!current) {
       return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'not_found' } satisfies AckResult;
@@ -491,7 +491,7 @@ export function ackRetry(
       locked_by: (current.locked_by as string | null) ?? null,
     };
 
-    if (cur.attempt_id === params.attemptId && cur.locked_by === params.lockedBy && cur.status === 'pending') {
+    if (cur.attempt_id === params.attemptId && cur.locked_by === params.lockedBy && (cur.status === 'pending' || cur.status === 'dead')) {
       return { ok: true, op_id: params.opId, attempt_id: params.attemptId, duplicate: true } satisfies AckResult;
     }
 
@@ -500,6 +500,60 @@ export function ackRetry(
     }
 
     const attempt = Number(current.attempt_count ?? 0) + 1;
+    const maxAttemptsRaw = Number(current.max_attempts ?? 10);
+    const maxAttempts = Number.isFinite(maxAttemptsRaw) && maxAttemptsRaw > 0 ? Math.floor(maxAttemptsRaw) : 10;
+
+    if (attempt >= maxAttempts) {
+      const reason = params.error.message ?? params.error.code ?? 'max attempts exceeded';
+      const res = db
+        .prepare(
+          `UPDATE queue_ops
+           SET status='dead',
+               attempt_count=@attempt,
+               dead_reason=@reason,
+               locked_at=NULL,
+               lease_expires_at=NULL,
+               updated_at=@t
+           WHERE op_id=@op_id AND status='in_flight' AND locked_by=@locked_by AND attempt_id=@attempt_id`,
+        )
+        .run({
+          attempt,
+          reason,
+          t,
+          op_id: params.opId,
+          locked_by: params.lockedBy,
+          attempt_id: params.attemptId,
+        });
+
+      if (res.changes === 0) {
+        return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'stale_ack', current: cur } satisfies AckResult;
+      }
+
+      db.prepare(
+        `INSERT OR REPLACE INTO queue_op_results(op_id, error_code, error_message, finished_at) VALUES(@op_id, @code, @message, @t)`,
+      ).run({ op_id: params.opId, code: params.error.code ?? null, message: params.error.message ?? null, t });
+
+      upsertOpAttempt(db, {
+        opId: params.opId,
+        attemptId: params.attemptId,
+        connId: params.lockedBy,
+        status: 'dead',
+        detail: {
+          acked_at: t,
+          retry_after_ms: null,
+          max_attempts: maxAttempts,
+          exhausted_at_attempt: attempt,
+        },
+      });
+
+      db.prepare(`UPDATE queue_txns SET status='failed', finished_at=@t, updated_at=@t WHERE txn_id=@txn_id`).run({
+        t,
+        txn_id: String(current.txn_id),
+      });
+
+      return { ok: true, op_id: params.opId, attempt_id: params.attemptId, duplicate: false } satisfies AckResult;
+    }
+
     const base = Math.min(60_000, Math.pow(2, attempt) * 1000);
     const jitter = Math.round(base * (0.1 + Math.random() * 0.2));
     const delay = params.error.retryAfterMs ?? base + jitter;
@@ -511,6 +565,7 @@ export function ackRetry(
          SET status='pending',
              attempt_count=@attempt,
              next_attempt_at=@next,
+             locked_at=NULL,
              lease_expires_at=NULL,
              updated_at=@t
          WHERE op_id=@op_id AND status='in_flight' AND locked_by=@locked_by AND attempt_id=@attempt_id`,
@@ -567,7 +622,7 @@ export function ackDead(
     const res = db
       .prepare(
         `UPDATE queue_ops
-         SET status='dead', dead_reason=@reason, lease_expires_at=NULL, updated_at=@t
+         SET status='dead', dead_reason=@reason, locked_at=NULL, lease_expires_at=NULL, updated_at=@t
          WHERE op_id=@op_id AND status='in_flight' AND locked_by=@locked_by AND attempt_id=@attempt_id`,
       )
       .run({ reason, t, op_id: params.opId, locked_by: params.lockedBy, attempt_id: params.attemptId });
@@ -690,8 +745,15 @@ export function getRemoteIdsByClientTempIds(db: QueueDB, clientTempIds: readonly
 }
 
 export function queueStats(db: QueueDB) {
+  const now = nowMs();
   const q = (sql: string) => db.prepare(sql).get() as any;
-  const pending = q(`SELECT COUNT(1) as c FROM queue_ops WHERE status='pending' AND next_attempt_at<=${nowMs()}`)?.c ?? 0;
+  const pending =
+    q(
+      `SELECT COUNT(1) as c
+       FROM queue_ops o
+       JOIN queue_txns x ON x.txn_id = o.txn_id
+       WHERE o.status='pending' AND o.next_attempt_at<=${now} AND x.status IN ('ready','in_progress')`,
+    )?.c ?? 0;
   const in_flight = q(`SELECT COUNT(1) as c FROM queue_ops WHERE status='in_flight'`)?.c ?? 0;
   const dead = q(`SELECT COUNT(1) as c FROM queue_ops WHERE status='dead'`)?.c ?? 0;
   const ready_txns = q(`SELECT COUNT(1) as c FROM queue_txns WHERE status IN ('ready','in_progress')`)?.c ?? 0;

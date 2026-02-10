@@ -10,6 +10,7 @@ import type { Process } from '../services/Process.js';
 import type { SupervisorState } from '../services/SupervisorState.js';
 
 import { StatusLineController } from '../runtime/status-line/StatusLineController.js';
+import { canonicalizeOpType } from '../kernel/op-catalog/index.js';
 import { WS_HEALTH_TIMEOUT_MS, WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from './ws/_shared.js';
 
 export type EnqueueAndNotifyResult = {
@@ -37,6 +38,10 @@ export function normalizeOp(raw: any, normalizer: (u: unknown) => unknown): Enqu
   if (!type) {
     throw new CliError({ code: 'INVALID_PAYLOAD', message: 'op.type is required and must be a string', exitCode: 2 });
   }
+  const canonicalType = canonicalizeOpType(type);
+  if (!canonicalType) {
+    throw new CliError({ code: 'INVALID_PAYLOAD', message: 'op.type is required and must be a string', exitCode: 2 });
+  }
 
   const payload = normalizer(raw.payload ?? {});
 
@@ -62,7 +67,7 @@ export function normalizeOp(raw: any, normalizer: (u: unknown) => unknown): Enqu
         : undefined;
 
   return {
-    type,
+    type: canonicalType,
     payload,
     idempotencyKey,
     maxAttempts,

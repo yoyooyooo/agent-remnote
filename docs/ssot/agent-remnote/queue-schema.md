@@ -182,9 +182,10 @@ CREATE TABLE IF NOT EXISTS queue_consumers (
 - 入队：queue_ops.status = 'pending'，next_attempt_at = now
 - 派发：queue_txns 成为 ready 后，从 queue_ops 选取 `status='pending' AND next_attempt_at<=now` 的最小 `(priority, created_at, op_seq)`；同一 txn 内要求“无 in_flight 且前序 op 全部 succeeded”；加锁并置 `in_flight`，设置 `locked_by(connId)/lease_expires_at`
 - 执行成功：置 `succeeded`，写入 `queue_op_results`，更新 `queue_id_map`（若返回新 ID）
-- 可重试失败：递增 `attempt_count`，指数退避更新 `next_attempt_at`，回到 `pending`
-- 死亡：`attempt_count>=max_attempts` 或明确不可重试 → `dead` 并记录 `dead_reason`
+- 可重试失败：`ackRetry` 先递增 `attempt_count`；仅当递增后 `attempt_count < max_attempts` 时，才按指数退避更新 `next_attempt_at` 并回到 `pending`
+- 死亡：当 `ackRetry` 递增后 `attempt_count >= max_attempts`（或明确不可重试）时，直接置 `dead`（不再回到 `pending`），并写入 `queue_op_results` 与 `dead_reason`
 - 事务聚合：当 txn 的所有 op 均 `succeeded` → txn.status='succeeded'；若有 `dead` → 'failed'
+- 统计口径：`queue stats` 的 `pending` 仅统计 `txn.status in (ready,in_progress)` 的 pending op，避免把 `failed/aborted` 事务计入可派发积压
 
 ## Lease 策略（SSoT）
 

@@ -57,6 +57,7 @@
   - 表/属性：`create_table`/`add_property`/`set_property_type`/`set_table_filter`/`add_option`/`remove_option`
   - 表行/单元格：`table_add_row`/`table_remove_row`/`set_cell_select`/`set_cell_checkbox`/`set_cell_number`/`set_cell_date`/`table_cell_write`
   - 其他：`add_source`/`remove_source`/`set_todo_status`
+- 入队语义：CLI 在入队前会 canonicalize `op.type`（别名统一转为标准类型）；后续冲突键/ID 字段提取/依赖替换均基于标准类型。
 - 点式别名（可直接使用；会自动映射为标准类型）
   - `rem.create` → `create_rem`
   - `portal.create` / `rem.createPortal` → `create_portal`
@@ -124,6 +125,7 @@
 - 幂等（强烈建议）：
   - 提供 `--idempotency-key` 时，若命中既有 txn，将复用 txn（`deduped=true`）
   - `alias_map` 会写入 txn meta（`write_plan.alias_map`）并在 dedupe 时回显，保证“重试返回稳定 alias_map”
+- 规范化：计划编译出的 ops 在 enqueue 前同样执行 `op.type` canonicalize（与 `apply` 完全一致）。
 - 引用解析：
   - `@alias` 仅允许出现在 ID 语义字段（action-specific allowlist）；其它字段出现必须 fail-fast
   - daemon 在 dispatch 前对 ID 语义字段做替换：若字段值为 `tmp:*` 且 `queue_id_map` 已有映射，则替换为 remote id（见 013/012 的一致性语义）

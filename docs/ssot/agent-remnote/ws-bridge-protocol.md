@@ -260,7 +260,7 @@
 
 ### 7) 状态查询（调试/运维）
 
-- Client/CLI → Server：`{ "type": "QueryStats" }` → `{ "type": "Stats", "pending": 0, "in_flight": 0, "dead": 0, "ready_txns": 0 }`
+- Client/CLI → Server：`{ "type": "QueryStats" }` → `{ "type": "Stats", "pending": 0, "in_flight": 0, "dead": 0, "ready_txns": 0 }`（`pending` 仅统计 `txn.status in (ready,in_progress)` 的 pending op）
 - Client/CLI → Server：`{ "type": "QueryClients" }` → `{ "type": "Clients", "clients": [...], "activeWorkerConnId": "uuid-or-null" }`
 - Client/CLI → Server：`{ "type": "WhoAmI" }` → `{ "type": "YouAre", "connId": "uuid", "clientType": "remnote-plugin|cli|debug", "lastSeenAt": 0 }`
 

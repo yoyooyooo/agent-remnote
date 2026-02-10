@@ -11,14 +11,9 @@ import { tryParseRemnoteLink } from '../../../lib/remnote.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
+import { makeTempId } from '../../_tempId.js';
 
 import { optionToUndefined, writeCommonOptions } from '../_shared.js';
-
-function makeUuidLike(): string {
-  const g: any = globalThis as any;
-  if (g.crypto && typeof g.crypto.randomUUID === 'function') return String(g.crypto.randomUUID());
-  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-}
 
 function normalizeRemIdInput(raw: string): string {
   const trimmed = raw.trim();
@@ -138,7 +133,7 @@ export const writePortalCreateCommand = Command.make(
         );
       }
 
-      const portalClientTempId = clientTempId ? String(clientTempId).trim() : `tmp:${makeUuidLike()}`;
+      const portalClientTempId = clientTempId ? String(clientTempId).trim() : makeTempId();
 
       const op = yield* Effect.try({
         try: () =>

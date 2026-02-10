@@ -24,6 +24,6 @@ export type OpDispatchBatch = {
     approxBytes?: number;
     scanLimit?: number;
   };
-  skipped?: { overBudget?: number; oversizeOp?: number; conflict?: number; txnBusy?: number };
+  skipped?: { overBudget?: number; oversizeOp?: number; conflict?: number; txnBusy?: number; depsMissing?: number };
   ops: readonly OpDispatchItem[];
 };

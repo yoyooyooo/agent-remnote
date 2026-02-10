@@ -201,7 +201,7 @@ function findTextLenForBudget(maxBytes: number): number {
     approxBytes: 0,
     scanLimit: 50,
   };
-  const skipped = { overBudget: 0, oversizeOp: 0, conflict: 0, txnBusy: 0 };
+  const skipped = { overBudget: 0, oversizeOp: 0, conflict: 0, txnBusy: 0, depsMissing: 0 };
 
   for (let len = 50; len <= 5000; len += 25) {
     const text = 'a'.repeat(len);

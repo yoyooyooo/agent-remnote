@@ -208,7 +208,7 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
       optional: ['parent_id', 'rem_id', 'text', 'client_temp_id', 'values', 'extra_tags'],
     },
     description: 'Add a row to a table (tag a Rem, optionally creating a new one).',
-    id_fields: ['table_tag_id', 'parent_id', 'rem_id', 'extra_tags[]'],
+    id_fields: ['table_tag_id', 'parent_id', 'rem_id', 'extra_tags[]', 'values[].property_id'],
   },
 
   table_remove_row: {
