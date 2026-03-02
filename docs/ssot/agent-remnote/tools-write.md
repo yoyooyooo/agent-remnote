@@ -14,7 +14,7 @@
 ## 命令一览
 - `agent-remnote import markdown`：写 Markdown（树导入；支持 bundle；对应 `create_tree_with_markdown` 等）。
 - `agent-remnote daily write`：写入 Daily Note（支持 bundle；对应 `daily_note_write`）。
-- `agent-remnote rem create/move/text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。
+- `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。
 - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
 - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
 - `agent-remnote table create`：创建 Table（对应 `create_table`；避免调用方手写 ops）。
@@ -22,7 +22,7 @@
 - `agent-remnote table property add/set-type`：Table 列定义管理（对应 `add_property`/`set_property_type`）。
 - `agent-remnote table option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。
 - `agent-remnote powerup apply/remove/...`：Powerup(Tag) 视角的封装命令（常见场景：列 schema、给 Rem 打 Powerup Tag 并设置 properties；内部仍生成标准 ops 入队）。
-- `agent-remnote replace block/text`：用 Markdown 替换目标 Rem（需要选择/引用/显式 ids；更适合“重排/清理”类任务）。
+- `agent-remnote replace markdown/literal`：替换目标 Rem（`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids）。
 - `agent-remnote import wechat outline`：抓取 WeChat 文章并写入 RemNote（生成可导入的大纲/Markdown 树；最终仍走队列/插件执行链路）。
 - `agent-remnote plan apply`：入队一份批量写入计划（WritePlanV1；支持 `as/@alias` 多步依赖；write-first）。
 - `agent-remnote apply`：入队一批 raw ops（advanced/debug 入口；默认 notify/ensure-daemon）。

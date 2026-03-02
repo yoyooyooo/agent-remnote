@@ -19,8 +19,8 @@ function normalizeRemIdInput(raw: string): string {
   return trimmed;
 }
 
-export const writeRemTextCommand = Command.make(
-  'text',
+export const writeRemSetTextCommand = Command.make(
+  'set-text',
   {
     rem: Options.text('rem'),
     text: Options.text('text'),

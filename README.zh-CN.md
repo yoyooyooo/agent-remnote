@@ -229,7 +229,7 @@ npx add-skill https://github.com/yoyooyooo/agent-renmote -g -a codex -a claude-c
 | 创建 Portal（传送门） | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait` |
 | 创建 Rem | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait` |
 | 移动 Rem | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait` |
-| 更新 Rem 文本 | `agent-remnote --json rem text --rem "<rem_id>" --text "..." --wait` |
+| 更新 Rem 文本 | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait` |
 | 给 Rem 加 Tag | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"` |
 | 给 Rem 移除 Tag | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"` |
 | Powerup schema（Tag + properties） | `agent-remnote --json powerup schema --powerup "Todo" --include-options` |

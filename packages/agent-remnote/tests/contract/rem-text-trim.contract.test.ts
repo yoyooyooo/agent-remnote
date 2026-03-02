@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { runCli } from '../helpers/runCli.js';
 
-describe('cli contract: rem text trims boundary blank lines', () => {
+describe('cli contract: rem set-text trims boundary blank lines', () => {
   it('removes leading/trailing blank lines from payload.text (dry-run)', async () => {
     const res = await runCli(
-      ['--json', 'rem', 'text', '--rem', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'],
+      ['--json', 'rem', 'set-text', '--rem', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'],
       { env: { REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 15_000 },
     );
 
@@ -19,4 +19,3 @@ describe('cli contract: rem text trims boundary blank lines', () => {
     expect(parsed.data?.ops?.[0]?.payload?.text).toBe('hello');
   });
 });
-

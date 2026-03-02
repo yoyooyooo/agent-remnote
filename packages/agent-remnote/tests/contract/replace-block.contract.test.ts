@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 
 import { runCli } from '../helpers/runCli.js';
 
-describe('cli contract: write replace block --dry-run --json', () => {
+describe('cli contract: write replace markdown --dry-run --json', () => {
   it('reads selection from ws state file and prints a replace_selection_with_markdown op', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'remnote-cli-test-'));
     const statePath = path.join(tmpDir, 'ws.bridge.state.json');
@@ -46,7 +46,7 @@ describe('cli contract: write replace block --dry-run --json', () => {
       const res = await runCli([
         '--json',
         'replace',
-        'block',
+        'markdown',
         '--selection',
         '--file',
         '@' + mdPath,

@@ -94,8 +94,8 @@ function replaceRichText(value: unknown, replacer: (s: string) => string): { val
   return { value, changed: false };
 }
 
-export const replaceTextCommand = Command.make(
-  'text',
+export const replaceLiteralCommand = Command.make(
+  'literal',
   {
     selection,
     stateFile,

@@ -51,8 +51,8 @@ const wait = Options.boolean('wait');
 const timeoutMs = Options.integer('timeout-ms').pipe(Options.optional, Options.map(optionToUndefined));
 const pollMs = Options.integer('poll-ms').pipe(Options.optional, Options.map(optionToUndefined));
 
-export const replaceBlockCommand = Command.make(
-  'block',
+export const replaceMarkdownCommand = Command.make(
+  'markdown',
   {
     selection,
     stateFile,
@@ -160,7 +160,7 @@ export const replaceBlockCommand = Command.make(
           new CliError({
             code: 'INVALID_ARGS',
             message:
-              'replace block does not support --scope subtree (block-level replace deletes roots and recursively deletes their subtrees)',
+              'replace markdown does not support --scope subtree (block-level replace deletes roots and recursively deletes their subtrees)',
             exitCode: 2,
           }),
         );
