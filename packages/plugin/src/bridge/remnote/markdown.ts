@@ -97,12 +97,15 @@ function normalizeBody(md: string): string {
 type IdRefPlaceholder = { placeholder: string; remId: string; original: string };
 
 const REM_ID_PATTERN = /^[A-Za-z0-9]{17}$/;
-const ID_REF_PATTERN = /\(\(([^\s()|]+)(?:\|[^()]+)?\)\)/g;
+const ID_REF_PATTERN = /\(\(([^\s()|]+)(?:\|[^()]+)?\)\)|\{ref:([A-Za-z0-9]+)\}/g;
 
-function replaceIdReferencesWithPlaceholders(input: string): { markdown: string; refs: IdRefPlaceholder[] } {
-  if (!input.includes('((') || !input.includes('))')) return { markdown: input, refs: [] };
+export function replaceIdReferencesWithPlaceholders(input: string): { markdown: string; refs: IdRefPlaceholder[] } {
+  const mayContainParenRef = input.includes('((') && input.includes('))');
+  const mayContainBraceRef = input.includes('{ref:') && input.includes('}');
+  if (!mayContainParenRef && !mayContainBraceRef) return { markdown: input, refs: [] };
   const refs: IdRefPlaceholder[] = [];
-  const markdown = input.replace(ID_REF_PATTERN, (full, remIdRaw) => {
+  const markdown = input.replace(ID_REF_PATTERN, (full, remIdRawParen, remIdRawBrace) => {
+    const remIdRaw = typeof remIdRawParen === 'string' && remIdRawParen.trim() ? remIdRawParen : remIdRawBrace;
     const remId = typeof remIdRaw === 'string' ? remIdRaw.trim() : '';
     if (!REM_ID_PATTERN.test(remId)) return full;
     const placeholder = `AGENT_REMNOTE_REF_PLACEHOLDER_${refs.length}`;

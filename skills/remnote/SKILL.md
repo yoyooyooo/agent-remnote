@@ -34,6 +34,29 @@ agent-remnote --json search --query "..." --timeout-ms 30000
 - Multi-line Markdown inputs often include accidental leading/trailing blank lines (from heredocs / clipboard). `import markdown` trims boundary blank lines by default to avoid creating empty Rems.
 - For a smoother “one-shot insert” (less UI waterfall flicker), add `--staged` to `import markdown` (imports under a temporary container, then moves roots into place once).
 
+### Backlinks (must use write paths that parse reference tokens)
+
+- Supported backlink input syntaxes: `((<remId>))` and `{ref:<remId>}`.
+- For single Rem updates, prefer `rem set-text` (compat alias: `rem text`).
+- Avoid `replace text` for backlink creation; it can leave literal text instead of real references on rich-text Rems.
+
+Example:
+
+```bash
+agent-remnote --json rem set-text --rem "<remId>" --text "see also {ref:<targetRemId>}" --wait
+agent-remnote --json rem inspect --id "<remId>" --expand-references
+```
+
+One-shot verified write (recommended for zero-context agents):
+
+```bash
+node scripts/remnote-set-text-verify-ref.mjs \
+  --rem "<remId>" \
+  --text "see also {ref:<targetRemId>}" \
+  --timeout-ms 60000 \
+  --poll-ms 1000
+```
+
 Example:
 
 ```bash

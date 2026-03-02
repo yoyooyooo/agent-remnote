@@ -12,13 +12,14 @@ import { writeRemCreateCommand } from '../write/rem/create.js';
 import { writeRemDeleteCommand } from '../write/rem/delete.js';
 import { writeRemMoveCommand } from '../write/rem/move.js';
 import { writeRemTagCommand } from '../write/rem/tag/index.js';
-import { writeRemSetTextCommand } from '../write/rem/text.js';
+import { writeRemSetTextCommand, writeRemTextCommand } from '../write/rem/text.js';
 
 export const remCommand = Command.make('rem', {}).pipe(
   Command.withSubcommands([
     writeRemCreateCommand,
     writeRemMoveCommand,
     writeRemSetTextCommand,
+    writeRemTextCommand,
     writeRemTagCommand,
     writeRemDeleteCommand,
     readInspectCommand,

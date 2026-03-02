@@ -29,6 +29,7 @@
 
 - `((<remId>))`
 - `((<remId>|<label>))`
+- `{ref:<remId>}`
 
 解析后会产生 `{ i: 'q', _id: remId }` token（用于表示引用）。
 

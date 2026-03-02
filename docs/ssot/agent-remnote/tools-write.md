@@ -14,7 +14,7 @@
 ## 命令一览
 - `agent-remnote import markdown`：写 Markdown（树导入；支持 bundle；对应 `create_tree_with_markdown` 等）。
 - `agent-remnote daily write`：写入 Daily Note（支持 bundle；对应 `daily_note_write`）。
-- `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。
+- `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`；`rem text` 为 `set-text` 兼容别名）。
 - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
 - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
 - `agent-remnote table create`：创建 Table（对应 `create_table`；避免调用方手写 ops）。
@@ -77,7 +77,7 @@
     - `indentMode`/`indent_mode`（可选，默认 true）：是否启用“按缩进建树”的自研导入器；传 `false` 则强制走 RemNote 原生 `createTreeWithMarkdown`
       - indent 模式为“行级导入”：每行优先用 `createSingleRemWithMarkdown` 解析为富文本（失败降级为纯文本 setText），再按缩进关系挂到对应 parent 下；不会像原生导入那样按 Markdown 块结构（段落/列表/标题）整体建树。
       - todo：`- [ ]` / `- [x]` 会被转换为 RemNote todo（文本会去掉 `[ ]`/`[x]` 前缀）。
-      - id 引用：`((<remId>))` 会在导入后尝试修正为“按 RemId 的引用”（仅当该 id 可解析），避免意外创建“名字=remId”的 Rem。
+      - id 引用：`((<remId>))` 与 `{ref:<remId>}` 都会在导入后尝试修正为“按 RemId 的引用”（仅当该 id 可解析），避免意外创建“名字=remId”的 Rem。
     - `staged`/`staging.enabled`（可选，默认 false）：视觉增强导入（staged import）
       - 语义：先在父级下创建临时容器 Rem，并在其下完成导入，最后一次性 `moveRems` 把根节点移动到 `parentId`（减少“逐层出现”的 UI 抖动）。
       - 失败语义：若最终 move 失败，会 best-effort 自动回滚（删除 staging 容器及其子树，并清理可能已移动的根节点），避免留下过渡项/孤儿 Rem；成功时会删除临时容器。
@@ -112,6 +112,23 @@
         4. 最后尝试 delete 备份容器（等价于删除旧内容子树；若删除失败则回滚：删除新内容、把旧内容 move 回原位，并 best-effort 清理备份容器；仍失败时返回 `backup_rem_id` 供手动处理）
       - 说明：队列 txn 只能保证 **op 顺序**，不能保证跨 op 的 all-or-nothing；要做到“失败可回滚”，必须把替换封装为插件侧的单 op（或等价的可补偿 saga）。
 - 入队后默认会通过 WS 主动通知插件开始同步（`notify` 默认 true，可传 `notify=false` 禁用）。
+
+### 写后双链校验（推荐）
+
+- 场景：把字符串写入某个 Rem 且内容包含 `((RID))` / `{ref:RID}`，希望“写完立即确认是真双链而不是字面文本”。
+- 推荐脚本：`scripts/remnote-set-text-verify-ref.mjs`
+  - 步骤：`rem set-text --wait` → `rem inspect --expand-references` → 校验 `summary.references` 覆盖目标 RID
+  - 失败即非 0 退出，适合给 agent/自动化作为硬门禁。
+
+示例：
+
+```bash
+node scripts/remnote-set-text-verify-ref.mjs \
+  --rem "<remId>" \
+  --text "see also {ref:<targetRemId>}" \
+  --timeout-ms 60000 \
+  --poll-ms 1000
+```
 
 ## plan apply（批量计划写入）
 

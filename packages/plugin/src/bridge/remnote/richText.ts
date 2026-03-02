@@ -1,11 +1,11 @@
 function parseStringRichText(str: string): any[] {
   const tokens: any[] = [];
-  const referencePattern = /\(\(([^\s()|]+)(?:\|[^()]+)?\)\)/g;
+  const referencePattern = /\(\(([^\s()|]+)(?:\|[^()]+)?\)\)|\{ref:([A-Za-z0-9]+)\}/g;
   let lastIndex = 0;
   for (const match of str.matchAll(referencePattern)) {
     const before = str.slice(lastIndex, match.index ?? 0);
     if (before) tokens.push({ i: 'm', text: before });
-    const refId = match[1];
+    const refId = (match[1] ?? match[2] ?? '').trim();
     if (refId) tokens.push({ i: 'q', _id: refId });
     lastIndex = (match.index ?? 0) + match[0].length;
   }
