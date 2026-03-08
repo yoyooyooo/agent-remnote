@@ -23,6 +23,7 @@
 - `docs/proposals/agent-remnote/ws-bridge-protocol-vnext.md`
 - `docs/architecture/future-packaging.md`
 - `docs/guides/ws-debug-and-testing.md`
+- `docs/runbook/release.md`
 - `docs/remnote/app-overview.md`
 - `docs/remnote/database-notes.md`
 - `docs/remnote/search-index-investigation.md`

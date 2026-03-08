@@ -378,6 +378,16 @@ npm run dev -- --help
 npm run check
 ```
 
+## Release
+This repo uses Changesets for npm releases.
+
+- Add a changeset for every release-worthy `agent-remnote` change
+- Merge to `master`
+- GitHub Actions opens/updates a version PR
+- Merging that PR publishes the new npm version and updates changelogs
+
+Maintainer runbook: `docs/runbook/release.md`
+
 ## Contributing
 
 PRs and issues are welcome. Please read `CONTRIBUTING.md` first for setup, style, and validation expectations.

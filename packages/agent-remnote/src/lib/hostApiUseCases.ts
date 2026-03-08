@@ -108,7 +108,6 @@ export function executeWriteOpsUseCase(params: {
   readonly ensureDaemon?: boolean | undefined;
 }): Effect.Effect<any, CliError, AppConfig | Queue | Payload | WsClient | RefResolver | any> {
   return Effect.gen(function* () {
-    const payloadSvc = yield* Payload;
     const parsed = yield* Effect.try({
       try: () => parseEnqueuePayload(params.raw),
       catch: (e) =>
@@ -172,6 +171,8 @@ export function executeImportMarkdownUseCase(params: {
   readonly pollMs?: number | undefined;
 }): Effect.Effect<any, CliError, AppConfig | Payload | RefResolver | Queue | WsClient | any> {
   return Effect.gen(function* () {
+    const payloadSvc = yield* Payload;
+
     if (params.parent && params.ref) {
       return yield* Effect.fail(
         new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of parent or ref', exitCode: 2 }),
@@ -193,7 +194,6 @@ export function executeImportMarkdownUseCase(params: {
       );
     }
 
-    const payloadSvc = yield* Payload;
     const markdownValue = dropBlankLinesOutsideFences(trimBoundaryBlankLines(params.markdown));
     const bulkMode = params.bulk ?? 'auto';
     const bundleTitleValue = typeof params.bundleTitle === 'string' ? params.bundleTitle.trim() : '';

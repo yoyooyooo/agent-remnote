@@ -9,7 +9,8 @@
     "cli.js",
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "type": "module",
   "scripts": {

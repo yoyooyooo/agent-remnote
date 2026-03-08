@@ -378,6 +378,16 @@ npm run dev -- --help
 npm run check
 ```
 
+## 发布
+本仓库使用 Changesets 管理 npm 发版。
+
+- 对每个值得发版的 `agent-remnote` 变更添加一个 changeset
+- 合并到 `master`
+- GitHub Actions 自动开/更新版本 PR
+- 合并该版本 PR 后自动发布 npm 新版本并更新 changelog
+
+维护者操作手册：`docs/runbook/release.md`
+
 ## 参与贡献
 
 欢迎提 Issue / PR。提交前请先阅读 `CONTRIBUTING.md`，其中包含环境准备、代码规范与验证要求。
