@@ -30,7 +30,22 @@ export const writeTablePropertyAddCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ tableTag, name, type, options, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    tableTag,
+    name,
+    type,
+    options,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(

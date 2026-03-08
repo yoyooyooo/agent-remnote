@@ -57,6 +57,8 @@
 
 ## 可选并行/后续扩展（按需纳入路线）
 
+- `019-local-host-api-and-stack/`：把宿主机 authoritative runtime 通过本机 Host API 暴露给容器内 agent，并新增 `api` / `stack` 命令面（本机自用优先，不引入 auth 复杂度）。
+
 - `015-ws-backpressure-and-lease-extension/`：补齐 010 的 `maxBytes` 背压与 lease 策略缺口，并落地续租（LeaseExtend），降低断线/重派发/重复副作用窗口（任务需反哺 SSoT）。
 - `006-table-tag-crud/`：为 `write plan` 扩展更多原子写入 action（table/tag/property 等）。
 - `008-agent-module-reorg/`：若需要更彻底的模块边界/抽包演进，再推进该目录的规划。

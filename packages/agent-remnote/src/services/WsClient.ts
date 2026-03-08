@@ -96,7 +96,11 @@ function wsTimeoutError(params: { readonly url: string; readonly timeoutMs: numb
   });
 }
 
-function wsUnavailableError(params: { readonly url: string; readonly timeoutMs: number; readonly error: unknown }): CliError {
+function wsUnavailableError(params: {
+  readonly url: string;
+  readonly timeoutMs: number;
+  readonly error: unknown;
+}): CliError {
   return new CliError({
     code: 'WS_UNAVAILABLE',
     message: formatError(params.error),
@@ -163,13 +167,22 @@ function withWebSocket<A>(params: {
   const duration = Math.max(0, params.timeoutMs);
   return Effect.scoped(
     Effect.acquireRelease(
-      acquireWebSocket(params.url).pipe(Effect.mapError((error) => wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error }))),
+      acquireWebSocket(params.url).pipe(
+        Effect.mapError((error) => wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error })),
+      ),
       terminateSocket,
     ).pipe(Effect.flatMap(params.use)),
-  ).pipe(Effect.timeoutFail({ duration, onTimeout: () => wsTimeoutError({ url: params.url, timeoutMs: params.timeoutMs }) }));
+  ).pipe(
+    Effect.timeoutFail({ duration, onTimeout: () => wsTimeoutError({ url: params.url, timeoutMs: params.timeoutMs }) }),
+  );
 }
 
-function sendJson(params: { readonly ws: WebSocket; readonly url: string; readonly timeoutMs: number; readonly msg: unknown }) {
+function sendJson(params: {
+  readonly ws: WebSocket;
+  readonly url: string;
+  readonly timeoutMs: number;
+  readonly msg: unknown;
+}) {
   return Effect.try({
     try: () => {
       params.ws.send(JSON.stringify(params.msg));
@@ -212,14 +225,19 @@ function awaitFirstJson<A>(params: {
 
     const onError = (error: unknown) => {
       cleanup();
-      Deferred.unsafeDone(deferred, Exit.fail(wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error })));
+      Deferred.unsafeDone(
+        deferred,
+        Exit.fail(wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error })),
+      );
     };
 
     const onClose = () => {
       cleanup();
       Deferred.unsafeDone(
         deferred,
-        Exit.fail(wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error: new Error('connection closed') })),
+        Exit.fail(
+          wsUnavailableError({ url: params.url, timeoutMs: params.timeoutMs, error: new Error('connection closed') }),
+        ),
       );
     };
 

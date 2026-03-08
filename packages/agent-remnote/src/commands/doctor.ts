@@ -86,7 +86,8 @@ export const doctorCommand = Command.make('doctor', {}, () =>
     if (data.ws.ok && data.ws.clients.length === 0)
       hints.push('WS is reachable but no plugin is connected; ensure the plugin is enabled and connected');
     if (!data.queue.ok) hints.push('Store DB is unavailable; check --store-db or REMNOTE_STORE_DB path permissions');
-    if (!data.queue.writable) hints.push('Store DB path is not writable; fix permissions or choose a different --store-db');
+    if (!data.queue.writable)
+      hints.push('Store DB path is not writable; fix permissions or choose a different --store-db');
     if (!data.remnote_db.ok)
       hints.push('RemNote DB is unavailable; check --remnote-db or run agent-remnote db backups to pick a backup path');
     if (!data.remnote_db.has_search_index && data.remnote_db.ok) {

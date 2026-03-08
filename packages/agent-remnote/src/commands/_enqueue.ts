@@ -103,7 +103,9 @@ function assertOpsNoOrphanCreates(ops: readonly EnqueueOpInput[]): void {
         message: 'op(table_add_row) is missing parentId (creating a Rem without a parent is not allowed)',
         exitCode: 2,
         details: { op_type: op.type },
-        hint: ['Provide payload.parentId (or parent_id) unless you are adding an existing row via payload.remId (or rem_id)'],
+        hint: [
+          'Provide payload.parentId (or parent_id) unless you are adding an existing row via payload.remId (or rem_id)',
+        ],
       });
     }
 
@@ -198,7 +200,9 @@ export function enqueueOps(params: {
     ];
 
     if ((enqueue as any).deduped === true) {
-      warnings.push('Idempotency key matched an existing transaction; reusing the existing txn (no new ops were enqueued)');
+      warnings.push(
+        'Idempotency key matched an existing transaction; reusing the existing txn (no new ops were enqueued)',
+      );
     }
 
     if (params.notify) {

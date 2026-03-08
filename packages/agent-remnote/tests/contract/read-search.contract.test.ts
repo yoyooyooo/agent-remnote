@@ -19,6 +19,8 @@ describe('cli contract: read search --json', () => {
       const parsed = JSON.parse(res.stdout.trim());
       expect(parsed.ok).toBe(false);
       expect(parsed.error.code).toBe('DB_UNAVAILABLE');
+      expect(String(parsed.error.message)).not.toContain('shared.js');
+      expect(String(parsed.error.message)).not.toContain('Cannot find module');
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }

@@ -92,7 +92,10 @@ export const writeTableRecordDeleteCommand = Command.make(
               message: `Row does not belong to table tag: ${tableTag}`,
               exitCode: 2,
               details: { row_id: row, table_tag_id: tableTag },
-              hint: ['Verify you are using the correct --table-tag', 'Use `agent-remnote table show --id <tableTagId>` to confirm'],
+              hint: [
+                'Verify you are using the correct --table-tag',
+                'Use `agent-remnote table show --id <tableTagId>` to confirm',
+              ],
             }),
           );
         }

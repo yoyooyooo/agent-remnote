@@ -41,4 +41,3 @@ export function normalizeSelectionForUiContext(params: {
 
   return selection;
 }
-

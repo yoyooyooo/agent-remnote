@@ -22,4 +22,3 @@ export type SupervisorRestartConfig = {
   readonly baseBackoffMs: number;
   readonly maxBackoffMs: number;
 };
-

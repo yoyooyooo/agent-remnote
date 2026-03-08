@@ -22,9 +22,7 @@ function unwrapCliError(exit: Exit.Exit<unknown, unknown>) {
   return failure.value as any;
 }
 
-async function startWsServer(params: {
-  readonly onMessage?: (msg: any) => void;
-}): Promise<{
+async function startWsServer(params: { readonly onMessage?: (msg: any) => void }): Promise<{
   readonly url: string;
   readonly close: () => Promise<void>;
   readonly skipped: boolean;

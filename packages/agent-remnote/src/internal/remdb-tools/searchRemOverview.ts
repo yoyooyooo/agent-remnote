@@ -92,8 +92,15 @@ async function executeSearchRemOverviewDirect(params: SearchRemOverviewInput) {
 }
 
 async function executeSearchRemOverviewWithHardTimeout(params: SearchRemOverviewInput, timeoutMs: number) {
+  const selfUrl = new URL(import.meta.url);
+  const isSourceMode = selfUrl.protocol === 'file:' && selfUrl.pathname.endsWith('.ts');
+
+  if (isSourceMode) {
+    return await executeSearchRemOverviewDirect(params);
+  }
+
   return await runWorkerJob({
-    url: new URL(import.meta.url),
+    url: selfUrl,
     workerData: { kind: 'search_rem_overview', input: params } satisfies WorkerJob,
     timeoutMs,
     onTimeout: () => new HardTimeoutError(timeoutMs),

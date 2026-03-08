@@ -96,7 +96,18 @@ describe('cli contract: daemon restart cleans up display artifacts', () => {
       );
 
       const res = await runCli(
-        ['--json', '--daemon-url', `ws://127.0.0.1:${port}/ws`, 'daemon', 'restart', '--force', '--wait', '0', '--pid-file', pidFile],
+        [
+          '--json',
+          '--daemon-url',
+          `ws://127.0.0.1:${port}/ws`,
+          'daemon',
+          'restart',
+          '--force',
+          '--wait',
+          '0',
+          '--pid-file',
+          pidFile,
+        ],
         { env: { HOME: tmpDir, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 15_000 },
       );
       expect(res.exitCode).toBe(0);

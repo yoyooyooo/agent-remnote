@@ -22,4 +22,3 @@ export const writeCommonOptions = {
   idempotencyKey: readOptionalText('idempotency-key'),
   meta: readOptionalText('meta'),
 } as const;
-

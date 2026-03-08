@@ -12,10 +12,15 @@ import { WsBridgeState } from '../../services/WsBridgeState.js';
 import { updateStatusLine, type StatusLineSource } from './updateStatusLine.js';
 
 export interface StatusLineUpdaterService {
-  readonly update: (params: { readonly source: StatusLineSource }) => Effect.Effect<{ readonly text: string; readonly wrote: boolean }, CliError>;
+  readonly update: (params: {
+    readonly source: StatusLineSource;
+  }) => Effect.Effect<{ readonly text: string; readonly wrote: boolean }, CliError>;
 }
 
-export class StatusLineUpdater extends Context.Tag('StatusLineUpdater')<StatusLineUpdater, StatusLineUpdaterService>() {}
+export class StatusLineUpdater extends Context.Tag('StatusLineUpdater')<
+  StatusLineUpdater,
+  StatusLineUpdaterService
+>() {}
 
 export const StatusLineUpdaterLive = Layer.effect(
   StatusLineUpdater,

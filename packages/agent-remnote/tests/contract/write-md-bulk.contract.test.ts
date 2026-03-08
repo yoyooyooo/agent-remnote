@@ -15,7 +15,16 @@ function buildLargeMarkdown(lines: number): string {
 describe('cli contract: write md bulk bundling', () => {
   it('auto-bundles large markdown by default (dry-run)', async () => {
     const md = buildLargeMarkdown(81);
-    const res = await runCli(['--json', 'import', 'markdown', '--parent', 'dummy-parent', '--markdown', md, '--dry-run']);
+    const res = await runCli([
+      '--json',
+      'import',
+      'markdown',
+      '--parent',
+      'dummy-parent',
+      '--markdown',
+      md,
+      '--dry-run',
+    ]);
 
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');

@@ -77,7 +77,7 @@ export const WsBridgeServerLive = Layer.succeed(WsBridgeServer, {
           });
 
           ws.on('message', (raw: any) => {
-            const text = typeof raw === 'string' ? raw : raw?.toString?.() ?? String(raw);
+            const text = typeof raw === 'string' ? raw : (raw?.toString?.() ?? String(raw));
             if (text === 'ping') {
               try {
                 ws.send('pong');

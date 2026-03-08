@@ -13,10 +13,9 @@ describe('cli contract: --ids output', () => {
 
     try {
       const payload = '[{"type":"create_rem","payload":{"parentId":"dummy-parent","text":"hello"}}]';
-      const res = await runCli(
-        ['--ids', 'apply', '--no-notify', '--no-ensure-daemon', '--payload', payload],
-        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb } },
-      );
+      const res = await runCli(['--ids', 'apply', '--no-notify', '--no-ensure-daemon', '--payload', payload], {
+        env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb },
+      });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');

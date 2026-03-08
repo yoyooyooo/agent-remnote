@@ -150,9 +150,11 @@ export function makeWritePlanCommand(config: WritePlanCommandConfig) {
               ops: resolvedOps,
               meta: payloadSvc.normalizeKeys(metaForTxn),
             },
-            md: [`- dry_run: true`, `- ops: ${normalizedOps.length}`, `- aliases: ${Object.keys(compiled.alias_map).length}`].join(
-              '\n',
-            ),
+            md: [
+              `- dry_run: true`,
+              `- ops: ${normalizedOps.length}`,
+              `- aliases: ${Object.keys(compiled.alias_map).length}`,
+            ].join('\n'),
           });
           return;
         }

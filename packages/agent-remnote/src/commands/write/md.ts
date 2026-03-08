@@ -33,7 +33,10 @@ const mode = Options.choice('mode', ['indent', 'native'] as const).pipe(
 );
 const indentSize = Options.integer('indent-size').pipe(Options.optional, Options.map(optionToUndefined));
 
-const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(Options.optional, Options.map(optionToUndefined));
+const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(
+  Options.optional,
+  Options.map(optionToUndefined),
+);
 const bundleTitle = readOptionalText('bundle-title');
 
 const clientId = readOptionalText('client-id');
@@ -175,7 +178,8 @@ export const writeMdCommand = Command.make(
       const lines = markdownValue.split('\n').length;
       const chars = markdownValue.length;
       const shouldBundle =
-        bulkMode === 'always' || (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
+        bulkMode === 'always' ||
+        (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
       if (shouldBundle) {
         const title = bundleTitleValue || `Imported (bundle) (${lines} lines, ${chars} chars)`;
         payload.bundle = { enabled: true, title };

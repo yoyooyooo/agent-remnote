@@ -3,7 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import { claimOpById, enqueueTxn, listInFlightOps, openQueueDb, peekEligibleOps } from '../../src/internal/queue/index.js';
+import {
+  claimOpById,
+  enqueueTxn,
+  listInFlightOps,
+  openQueueDb,
+  peekEligibleOps,
+} from '../../src/internal/queue/index.js';
 import { deriveConflictKeys, greedyPickNonConflicting } from '../../src/kernel/conflicts/index.js';
 
 function safeParseJson(s: string) {
@@ -19,7 +25,13 @@ function isSerialTxn(dispatchMode: unknown): boolean {
   return raw !== 'conflict_parallel';
 }
 
-function dispatchWithScheduler(params: { db: any; lockedBy: string; leaseMs: number; maxOps: number; peekLimit?: number }) {
+function dispatchWithScheduler(params: {
+  db: any;
+  lockedBy: string;
+  leaseMs: number;
+  maxOps: number;
+  peekLimit?: number;
+}) {
   const peekLimit = Math.max(1, Math.min(500, Math.floor(params.peekLimit ?? 200)));
 
   const usedKeys = new Set<string>();
@@ -64,7 +76,9 @@ describe('scheduler integration (db + conflicts)', () => {
       try {
         const enqueueOne = (remId: string) => {
           const txnId = enqueueTxn(db as any, [{ type: 'update_text', payload: { remId, text: 'x' } }]);
-          const row = db.prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC LIMIT 1`).get(txnId) as any;
+          const row = db
+            .prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC LIMIT 1`)
+            .get(txnId) as any;
           return { txnId, opId: String(row.op_id) };
         };
 

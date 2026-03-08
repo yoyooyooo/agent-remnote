@@ -130,7 +130,21 @@ export const writeTagRemoveCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, tag, removeProperties, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    rem,
+    tag,
+    removeProperties,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -208,4 +222,6 @@ export const writeTagRemoveCommand = Command.make(
     }).pipe(Effect.catchAll(writeFailure)),
 );
 
-export const writeTagCommand = Command.make('tag', {}).pipe(Command.withSubcommands([writeTagAddCommand, writeTagRemoveCommand]));
+export const writeTagCommand = Command.make('tag', {}).pipe(
+  Command.withSubcommands([writeTagAddCommand, writeTagRemoveCommand]),
+);

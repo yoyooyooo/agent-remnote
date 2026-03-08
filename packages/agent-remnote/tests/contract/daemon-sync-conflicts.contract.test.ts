@@ -52,7 +52,16 @@ describe('cli contract: daemon sync conflict warnings --json', () => {
         db.close();
       }
 
-      const res = await runCli(['--json', '--store-db', dbPath, '--daemon-url', url, 'daemon', 'sync', '--no-ensure-daemon']);
+      const res = await runCli([
+        '--json',
+        '--store-db',
+        dbPath,
+        '--daemon-url',
+        url,
+        'daemon',
+        'sync',
+        '--no-ensure-daemon',
+      ]);
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');

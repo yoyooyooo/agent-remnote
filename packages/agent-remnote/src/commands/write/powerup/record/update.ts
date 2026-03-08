@@ -141,7 +141,10 @@ export const writePowerupRecordUpdateCommand = Command.make(
               message: `Rem does not belong to powerup tag: ${tableTagId}`,
               exitCode: 2,
               details: { rem_id: remId, tag_id: tableTagId },
-              hint: ['Verify you are using the correct --tag-id', 'Use `agent-remnote table show --id <tagId>` to confirm'],
+              hint: [
+                'Verify you are using the correct --tag-id',
+                'Use `agent-remnote table show --id <tagId>` to confirm',
+              ],
             }),
           );
         }
@@ -238,7 +241,16 @@ export const writePowerupRecordUpdateCommand = Command.make(
             dry_run: true,
             rem_id: remId,
             tag_id: tableTagId,
-            ...(resolved ? { powerup: { query: resolved.query, matchedBy: resolved.matchedBy, title: resolved.title, code: resolved.rcrt } } : {}),
+            ...(resolved
+              ? {
+                  powerup: {
+                    query: resolved.query,
+                    matchedBy: resolved.matchedBy,
+                    title: resolved.title,
+                    code: resolved.rcrt,
+                  },
+                }
+              : {}),
             op_count: ops.length,
             ops,
             meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,

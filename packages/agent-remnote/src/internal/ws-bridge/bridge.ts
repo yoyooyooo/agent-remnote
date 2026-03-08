@@ -163,8 +163,18 @@ function envKickConfig(): KickConfig {
   const enabledRaw = normalizeBooleanValue(process.env.REMNOTE_WS_KICK_ENABLED || process.env.WS_KICK_ENABLED);
   const enabled = enabledRaw === null ? DEFAULT_KICK_CONFIG.enabled : enabledRaw;
 
-  const intervalMs = readEnvInt(['REMNOTE_WS_KICK_INTERVAL_MS', 'WS_KICK_INTERVAL_MS'], DEFAULT_KICK_CONFIG.intervalMs, 0, 60 * 60_000);
-  const cooldownMs = readEnvInt(['REMNOTE_WS_KICK_COOLDOWN_MS', 'WS_KICK_COOLDOWN_MS'], DEFAULT_KICK_CONFIG.cooldownMs, 0, 60 * 60_000);
+  const intervalMs = readEnvInt(
+    ['REMNOTE_WS_KICK_INTERVAL_MS', 'WS_KICK_INTERVAL_MS'],
+    DEFAULT_KICK_CONFIG.intervalMs,
+    0,
+    60 * 60_000,
+  );
+  const cooldownMs = readEnvInt(
+    ['REMNOTE_WS_KICK_COOLDOWN_MS', 'WS_KICK_COOLDOWN_MS'],
+    DEFAULT_KICK_CONFIG.cooldownMs,
+    0,
+    60 * 60_000,
+  );
   const noProgressWarnMs = readEnvInt(
     ['REMNOTE_WS_KICK_NO_PROGRESS_WARN_MS', 'WS_KICK_NO_PROGRESS_WARN_MS'],
     DEFAULT_KICK_CONFIG.noProgressWarnMs,
@@ -316,12 +326,15 @@ export function startWebSocketBridge(opts: WsBridgeOptions = {}): StartedWsBridg
           clearTimeout(existing);
           timers.delete(action.id);
         }
-        const timer = setTimeout(() => {
-          timers.delete(action.id);
-          try {
-            applyActions(core.handle({ _tag: 'Timer', now: Date.now(), event: action.event }));
-          } catch {}
-        }, Math.max(0, Math.floor(action.delayMs)));
+        const timer = setTimeout(
+          () => {
+            timers.delete(action.id);
+            try {
+              applyActions(core.handle({ _tag: 'Timer', now: Date.now(), event: action.event }));
+            } catch {}
+          },
+          Math.max(0, Math.floor(action.delayMs)),
+        );
         timers.set(action.id, timer);
         continue;
       }
@@ -366,7 +379,9 @@ export function startWebSocketBridge(opts: WsBridgeOptions = {}): StartedWsBridg
         resolvedPort = addr.port;
       }
     } catch {}
-    applyActions(core.handle({ _tag: 'ServerInfoUpdated', now: Date.now(), serverInfo: { port: resolvedPort, path: wsPath } }));
+    applyActions(
+      core.handle({ _tag: 'ServerInfoUpdated', now: Date.now(), serverInfo: { port: resolvedPort, path: wsPath } }),
+    );
     console.log(`websocket bridge ready at ws://${host}:${resolvedPort}${wsPath}`);
   });
 
@@ -389,7 +404,7 @@ export function startWebSocketBridge(opts: WsBridgeOptions = {}): StartedWsBridg
     });
 
     ws.on('message', (raw) => {
-      const text = typeof raw === 'string' ? raw : (raw as any)?.toString?.() ?? String(raw);
+      const text = typeof raw === 'string' ? raw : ((raw as any)?.toString?.() ?? String(raw));
       if (text === 'ping') {
         try {
           ws.send('pong');

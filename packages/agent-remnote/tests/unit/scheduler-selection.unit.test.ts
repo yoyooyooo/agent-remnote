@@ -46,4 +46,3 @@ describe('conflict scheduler: greedyPickNonConflicting', () => {
     expect(res.skipped).toBe(2);
   });
 });
-

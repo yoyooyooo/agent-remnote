@@ -11,6 +11,7 @@ import { dbCommand } from './db/index.js';
 import { importCommand } from './import/index.js';
 import { opsCommand } from './ops/index.js';
 import { applyCommand } from './apply.js';
+import { apiCommand } from './api/index.js';
 import { planCommand } from './plan/index.js';
 import { pluginCommand } from './plugin/index.js';
 import { powerupCommand } from './powerup/index.js';
@@ -24,11 +25,13 @@ import { tagCommand } from './tag/index.js';
 import { todoCommand } from './todo/index.js';
 import { topicCommand } from './topic/index.js';
 import { portalCommand } from './portal/index.js';
+import { stackCommand } from './stack/index.js';
 
 import { AppConfig } from '../services/AppConfig.js';
 import { resolveConfig } from '../services/Config.js';
 import { ChildProcessLive } from '../services/ChildProcess.js';
 import { DaemonFilesLive } from '../services/DaemonFiles.js';
+import { ApiDaemonFilesLive } from '../services/ApiDaemonFiles.js';
 import { FileInputLive } from '../services/FileInput.js';
 import { FsAccessLive } from '../services/FsAccess.js';
 import { LogWriterFactoryLive } from '../services/LogWriter.js';
@@ -46,6 +49,7 @@ import { WsBridgeServerLive } from '../services/WsBridgeServer.js';
 import { WsBridgeStateLive } from '../services/WsBridgeState.js';
 import { WsBridgeStateFileLive } from '../services/WsBridgeStateFile.js';
 import { WsClientLive } from '../services/WsClient.js';
+import { HostApiClientLive } from '../services/HostApiClient.js';
 
 import { StatusLineControllerLive } from '../runtime/status-line/StatusLineController.js';
 import { StatusLineUpdaterLive } from '../runtime/status-line/StatusLineUpdater.js';
@@ -59,6 +63,7 @@ const storeDb = Options.text('store-db').pipe(Options.optional, Options.map(opti
 const daemonUrl = Options.text('daemon-url').pipe(Options.optional, Options.map(optionToUndefined));
 const wsPort = Options.integer('ws-port').pipe(Options.optional, Options.map(optionToUndefined));
 const repo = Options.text('repo').pipe(Options.optional, Options.map(optionToUndefined));
+const apiBaseUrl = Options.text('api-base-url').pipe(Options.optional, Options.map(optionToUndefined));
 
 const appConfigLive = Layer.effect(AppConfig, resolveConfig());
 
@@ -66,7 +71,10 @@ const statusLineUpdaterLive = StatusLineUpdaterLive.pipe(
   Layer.provide([appConfigLive, QueueLive, StatusLineFileLive, TmuxLive, WsBridgeStateLive]),
 );
 
-const statusLineLive = StatusLineControllerLive.pipe(Layer.provide(statusLineUpdaterLive), Layer.provide(appConfigLive));
+const statusLineLive = StatusLineControllerLive.pipe(
+  Layer.provide(statusLineUpdaterLive),
+  Layer.provide(appConfigLive),
+);
 
 const servicesLive = Layer.mergeAll(
   appConfigLive,
@@ -76,9 +84,11 @@ const servicesLive = Layer.mergeAll(
   LogWriterFactoryLive,
   PayloadLive,
   DaemonFilesLive,
+  ApiDaemonFilesLive,
   ProcessLive,
   ChildProcessLive,
   WsClientLive,
+  HostApiClientLive,
   QueueLive,
   RefResolverLive,
   RemDbLive,
@@ -102,9 +112,12 @@ export const rootCommand = Command.make('agent-remnote', {
   daemonUrl,
   wsPort,
   repo,
+  apiBaseUrl,
 }).pipe(
   Command.withSubcommands([
     daemonCommand,
+    apiCommand,
+    stackCommand,
     queueCommand,
     applyCommand,
     pluginCommand,

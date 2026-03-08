@@ -100,4 +100,3 @@ describe('kernel portability guard', () => {
     expect(violations, JSON.stringify(violations.slice(0, 20), null, 2)).toEqual([]);
   });
 });
-

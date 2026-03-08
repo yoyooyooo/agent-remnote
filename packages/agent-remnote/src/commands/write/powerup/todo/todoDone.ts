@@ -33,7 +33,23 @@ export const writePowerupTodoDoneCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, tagId, due, values, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, dispatchMode, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    rem,
+    tagId,
+    due,
+    values,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    dispatchMode,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     todoWriteEffect({
       rem,
       tagId,
@@ -53,4 +69,3 @@ export const writePowerupTodoDoneCommand = Command.make(
       meta,
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

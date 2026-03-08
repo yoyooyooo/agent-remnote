@@ -21,4 +21,3 @@ describe('op catalog normalization', () => {
     expect(idFieldPathsForOpType('table.addRow')).toContain('parent_id');
   });
 });
-

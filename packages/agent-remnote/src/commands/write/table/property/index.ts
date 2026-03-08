@@ -6,4 +6,3 @@ import { writeTablePropertySetTypeCommand } from './setType.js';
 export const writeTablePropertyCommand = Command.make('property', {}).pipe(
   Command.withSubcommands([writeTablePropertyAddCommand, writeTablePropertySetTypeCommand]),
 );
-

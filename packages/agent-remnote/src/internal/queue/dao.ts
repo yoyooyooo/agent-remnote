@@ -165,7 +165,13 @@ export function commitTxn(db: QueueDB, txn_id: string) {
 export function enqueueTxn(
   db: QueueDB,
   ops: EnqueueOpInput[],
-  options?: { priority?: number; idempotencyKey?: string; clientId?: string; dispatchMode?: 'serial' | 'conflict_parallel'; meta?: any },
+  options?: {
+    priority?: number;
+    idempotencyKey?: string;
+    clientId?: string;
+    dispatchMode?: 'serial' | 'conflict_parallel';
+    meta?: any;
+  },
 ) {
   const txn_id = createTxn(db, options);
   addOps(db, txn_id, ops);
@@ -180,19 +186,39 @@ export type AckResult =
       readonly op_id: string;
       readonly attempt_id: string;
       readonly reason: 'not_found' | 'stale_ack' | 'invalid_attempt';
-      readonly current?: { readonly status: string; readonly attempt_id: string | null; readonly locked_by: string | null };
+      readonly current?: {
+        readonly status: string;
+        readonly attempt_id: string | null;
+        readonly locked_by: string | null;
+      };
     };
 
 export class IdMapConflictError extends Error {
   readonly _tag = 'IdMapConflictError';
   readonly clientTempId: string;
-  readonly existing: { readonly remote_id: string | null; readonly remote_type: string | null; readonly source_txn: string | null };
-  readonly incoming: { readonly remote_id: string; readonly remote_type: string | null; readonly source_txn: string | null };
+  readonly existing: {
+    readonly remote_id: string | null;
+    readonly remote_type: string | null;
+    readonly source_txn: string | null;
+  };
+  readonly incoming: {
+    readonly remote_id: string;
+    readonly remote_type: string | null;
+    readonly source_txn: string | null;
+  };
 
   constructor(params: {
     readonly clientTempId: string;
-    readonly existing: { readonly remote_id: string | null; readonly remote_type: string | null; readonly source_txn: string | null };
-    readonly incoming: { readonly remote_id: string; readonly remote_type: string | null; readonly source_txn: string | null };
+    readonly existing: {
+      readonly remote_id: string | null;
+      readonly remote_type: string | null;
+      readonly source_txn: string | null;
+    };
+    readonly incoming: {
+      readonly remote_id: string;
+      readonly remote_type: string | null;
+      readonly source_txn: string | null;
+    };
   }) {
     super('Id map conflict detected');
     this.name = 'IdMapConflictError';
@@ -204,7 +230,13 @@ export class IdMapConflictError extends Error {
 
 function upsertOpAttempt(
   db: QueueDB,
-  params: { readonly opId: string; readonly attemptId: string; readonly connId?: string | null; readonly status: string; readonly detail?: unknown },
+  params: {
+    readonly opId: string;
+    readonly attemptId: string;
+    readonly connId?: string | null;
+    readonly status: string;
+    readonly detail?: unknown;
+  },
 ): void {
   const t = nowMs();
   const detail_json = JSON.stringify(params.detail ?? {});
@@ -230,7 +262,13 @@ function upsertOpAttempt(
 
 export function recordOpAttempt(
   db: QueueDB,
-  params: { readonly opId: string; readonly attemptId: string; readonly connId?: string | null; readonly status: string; readonly detail?: unknown },
+  params: {
+    readonly opId: string;
+    readonly attemptId: string;
+    readonly connId?: string | null;
+    readonly status: string;
+    readonly detail?: unknown;
+  },
 ): void {
   upsertOpAttempt(db, params);
 }
@@ -280,12 +318,12 @@ export function claimNextOp(db: QueueDB, lockedBy: string, leaseMs = 30_000): Op
   if (res.changes === 0) return null;
 
   // mark txn in progress
-  db.prepare(`UPDATE queue_txns SET status='in_progress', updated_at=@t WHERE txn_id=@txn_id AND status!='in_progress'`).run(
-    {
-      t,
-      txn_id: row.txn_id,
-    },
-  );
+  db.prepare(
+    `UPDATE queue_txns SET status='in_progress', updated_at=@t WHERE txn_id=@txn_id AND status!='in_progress'`,
+  ).run({
+    t,
+    txn_id: row.txn_id,
+  });
 
   upsertOpAttempt(db, {
     opId: String(row.op_id),
@@ -365,12 +403,12 @@ export function claimOpById(db: QueueDB, opId: string, lockedBy: string, leaseMs
   const res = upd.run({ attempt_id, locked_by: lockedBy, t, lease_expires_at, op_id: opId });
   if (res.changes === 0) return null;
 
-  db.prepare(`UPDATE queue_txns SET status='in_progress', updated_at=@t WHERE txn_id=@txn_id AND status!='in_progress'`).run(
-    {
-      t,
-      txn_id: row.txn_id,
-    },
-  );
+  db.prepare(
+    `UPDATE queue_txns SET status='in_progress', updated_at=@t WHERE txn_id=@txn_id AND status!='in_progress'`,
+  ).run({
+    t,
+    txn_id: row.txn_id,
+  });
 
   upsertOpAttempt(db, {
     opId: String(opId),
@@ -423,7 +461,13 @@ export function ackSuccess(
     }
 
     if (cur.attempt_id !== params.attemptId) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'invalid_attempt', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'invalid_attempt',
+        current: cur,
+      } satisfies AckResult;
     }
 
     const res = db
@@ -434,7 +478,13 @@ export function ackSuccess(
       )
       .run({ t, op_id: params.opId, locked_by: params.lockedBy, attempt_id: params.attemptId });
     if (res.changes === 0) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'stale_ack', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'stale_ack',
+        current: cur,
+      } satisfies AckResult;
     }
 
     db.prepare(
@@ -454,7 +504,9 @@ export function ackSuccess(
     });
 
     const txn_id = String(current.txn_id);
-    const remain = db.prepare(`SELECT 1 FROM queue_ops WHERE txn_id=? AND status!='succeeded' LIMIT 1`).get(txn_id) as any;
+    const remain = db
+      .prepare(`SELECT 1 FROM queue_ops WHERE txn_id=? AND status!='succeeded' LIMIT 1`)
+      .get(txn_id) as any;
     if (!remain) {
       db.prepare(`UPDATE queue_txns SET status='succeeded', finished_at=@t, updated_at=@t WHERE txn_id=@txn_id`).run({
         t,
@@ -491,12 +543,22 @@ export function ackRetry(
       locked_by: (current.locked_by as string | null) ?? null,
     };
 
-    if (cur.attempt_id === params.attemptId && cur.locked_by === params.lockedBy && (cur.status === 'pending' || cur.status === 'dead')) {
+    if (
+      cur.attempt_id === params.attemptId &&
+      cur.locked_by === params.lockedBy &&
+      (cur.status === 'pending' || cur.status === 'dead')
+    ) {
       return { ok: true, op_id: params.opId, attempt_id: params.attemptId, duplicate: true } satisfies AckResult;
     }
 
     if (cur.attempt_id !== params.attemptId) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'invalid_attempt', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'invalid_attempt',
+        current: cur,
+      } satisfies AckResult;
     }
 
     const attempt = Number(current.attempt_count ?? 0) + 1;
@@ -526,7 +588,13 @@ export function ackRetry(
         });
 
       if (res.changes === 0) {
-        return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'stale_ack', current: cur } satisfies AckResult;
+        return {
+          ok: false,
+          op_id: params.opId,
+          attempt_id: params.attemptId,
+          reason: 'stale_ack',
+          current: cur,
+        } satisfies AckResult;
       }
 
       db.prepare(
@@ -573,7 +641,13 @@ export function ackRetry(
       .run({ attempt, next, t, op_id: params.opId, locked_by: params.lockedBy, attempt_id: params.attemptId });
 
     if (res.changes === 0) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'stale_ack', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'stale_ack',
+        current: cur,
+      } satisfies AckResult;
     }
 
     db.prepare(
@@ -595,11 +669,18 @@ export function ackRetry(
 
 export function ackDead(
   db: QueueDB,
-  params: { readonly opId: string; readonly attemptId: string; readonly lockedBy: string; readonly error: { readonly code?: string; readonly message?: string } },
+  params: {
+    readonly opId: string;
+    readonly attemptId: string;
+    readonly lockedBy: string;
+    readonly error: { readonly code?: string; readonly message?: string };
+  },
 ): AckResult {
   const t = nowMs();
   const trx = db.transaction(() => {
-    const current = db.prepare(`SELECT txn_id, status, attempt_id, locked_by FROM queue_ops WHERE op_id=?`).get(params.opId) as any;
+    const current = db
+      .prepare(`SELECT txn_id, status, attempt_id, locked_by FROM queue_ops WHERE op_id=?`)
+      .get(params.opId) as any;
     if (!current) {
       return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'not_found' } satisfies AckResult;
     }
@@ -615,7 +696,13 @@ export function ackDead(
     }
 
     if (cur.attempt_id !== params.attemptId) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'invalid_attempt', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'invalid_attempt',
+        current: cur,
+      } satisfies AckResult;
     }
 
     const reason = params.error.message ?? params.error.code ?? 'dead';
@@ -627,7 +714,13 @@ export function ackDead(
       )
       .run({ reason, t, op_id: params.opId, locked_by: params.lockedBy, attempt_id: params.attemptId });
     if (res.changes === 0) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'stale_ack', current: cur } satisfies AckResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'stale_ack',
+        current: cur,
+      } satisfies AckResult;
     }
 
     db.prepare(
@@ -720,10 +813,11 @@ export function upsertIdMap(
   trx();
 }
 
-export function getRemoteIdsByClientTempIds(db: QueueDB, clientTempIds: readonly string[]): Readonly<Record<string, string>> {
-  const ids = clientTempIds
-    .map((x) => (typeof x === 'string' ? x.trim() : ''))
-    .filter((x) => x.length > 0);
+export function getRemoteIdsByClientTempIds(
+  db: QueueDB,
+  clientTempIds: readonly string[],
+): Readonly<Record<string, string>> {
+  const ids = clientTempIds.map((x) => (typeof x === 'string' ? x.trim() : '')).filter((x) => x.length > 0);
   if (ids.length === 0) return {};
 
   const uniq: string[] = [];
@@ -1010,7 +1104,12 @@ export function extendLease(
       .prepare(`SELECT status, attempt_id, locked_by, lease_expires_at FROM queue_ops WHERE op_id=?`)
       .get(params.opId) as any;
     if (!current) {
-      return { ok: false, op_id: params.opId, attempt_id: params.attemptId, reason: 'not_found' } satisfies LeaseExtendResult;
+      return {
+        ok: false,
+        op_id: params.opId,
+        attempt_id: params.attemptId,
+        reason: 'not_found',
+      } satisfies LeaseExtendResult;
     }
 
     const cur = {
@@ -1040,7 +1139,8 @@ export function extendLease(
       } satisfies LeaseExtendResult;
     }
 
-    const prevLease = typeof cur.lease_expires_at === 'number' && Number.isFinite(cur.lease_expires_at) ? cur.lease_expires_at : 0;
+    const prevLease =
+      typeof cur.lease_expires_at === 'number' && Number.isFinite(cur.lease_expires_at) ? cur.lease_expires_at : 0;
     const nextLease = Math.max(prevLease, t + extendMs);
 
     const res = db
@@ -1075,7 +1175,12 @@ export function extendLease(
       detail: { extended_at: t, extend_ms: extendMs, lease_expires_at: nextLease },
     });
 
-    return { ok: true, op_id: params.opId, attempt_id: params.attemptId, lease_expires_at: nextLease } satisfies LeaseExtendResult;
+    return {
+      ok: true,
+      op_id: params.opId,
+      attempt_id: params.attemptId,
+      lease_expires_at: nextLease,
+    } satisfies LeaseExtendResult;
   });
 
   return trx();

@@ -7,4 +7,3 @@ import { writeTableRecordUpdateCommand } from './update.js';
 export const writeTableRecordCommand = Command.make('record', {}).pipe(
   Command.withSubcommands([writeTableRecordAddCommand, writeTableRecordUpdateCommand, writeTableRecordDeleteCommand]),
 );
-

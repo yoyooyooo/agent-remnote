@@ -45,4 +45,3 @@ export const migration = {
     renameTable(db, 'consumers', 'queue_consumers');
   },
 } as const;
-

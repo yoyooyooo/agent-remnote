@@ -10,4 +10,3 @@ export type StatusLineModel = {
   readonly selection: StatusLineSelection;
   readonly queueOutstanding: number;
 };
-

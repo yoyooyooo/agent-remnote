@@ -31,4 +31,3 @@ export const dailySummaryCommand = Command.make('summary', { days, maxLines }, (
     yield* writeSuccess({ data: result, md: (result as any).markdown ?? '' });
   }).pipe(Effect.catchAll(writeFailure)),
 );
-

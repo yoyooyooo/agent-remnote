@@ -8,4 +8,3 @@ export type WriteFootprint = {
 export function deriveWriteFootprint(opTypeRaw: unknown, payload: unknown): WriteFootprint {
   return { conflict_keys: deriveConflictKeys(opTypeRaw, payload) };
 }
-

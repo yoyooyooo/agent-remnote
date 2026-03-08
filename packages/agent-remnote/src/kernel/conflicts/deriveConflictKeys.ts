@@ -109,7 +109,9 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
   if (isStructureOp(opType)) {
     if (remId) keys.push(`rem:${remId}`);
 
-    const parents = [parentId, newParentId, toParentId, fromParentId].filter((x): x is string => typeof x === 'string' && x.length > 0);
+    const parents = [parentId, newParentId, toParentId, fromParentId].filter(
+      (x): x is string => typeof x === 'string' && x.length > 0,
+    );
     for (const pid of parents) keys.push(`children:${pid}`);
 
     if (!remId && parents.length === 0) {

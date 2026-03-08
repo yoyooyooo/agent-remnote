@@ -30,6 +30,13 @@ export type ResolvedConfig = {
   readonly statusLineMinIntervalMs: number;
   readonly statusLineDebug: boolean;
   readonly statusLineJsonFile: string;
+  readonly apiBaseUrl?: string | undefined;
+  readonly apiHost?: string | undefined;
+  readonly apiPort?: number | undefined;
+  readonly apiBasePath?: string | undefined;
+  readonly apiPidFile?: string | undefined;
+  readonly apiLogFile?: string | undefined;
+  readonly apiStateFile?: string | undefined;
 };
 
 type RawConfig = {
@@ -54,6 +61,13 @@ type RawConfig = {
   readonly statusLineMinIntervalMs: number;
   readonly statusLineDebug: boolean;
   readonly statusLineJsonFile: string;
+  readonly apiBaseUrl: string;
+  readonly apiHost?: string | undefined;
+  readonly apiPort?: number | undefined;
+  readonly apiBasePath?: string | undefined;
+  readonly apiPidFile?: string | undefined;
+  readonly apiLogFile?: string | undefined;
+  readonly apiStateFile?: string | undefined;
 };
 
 function defaultStoreDbPath(): string {
@@ -74,6 +88,50 @@ function defaultStatusLineFilePath(): string {
 
 function defaultStatusLineJsonFilePath(): string {
   return path.join(homeDir(), '.agent-remnote', 'status-line.json');
+}
+
+function defaultApiPidFilePath(): string {
+  return path.join(homeDir(), '.agent-remnote', 'api.pid');
+}
+
+function defaultApiLogFilePath(): string {
+  return path.join(homeDir(), '.agent-remnote', 'api.log');
+}
+
+function defaultApiStateFilePath(): string {
+  return path.join(homeDir(), '.agent-remnote', 'api.state.json');
+}
+
+function normalizeApiBasePath(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '/v1';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+function normalizeApiBaseUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Invalid apiBaseUrl: ${trimmed}`,
+      exitCode: 2,
+      details: { api_base_url: trimmed },
+    });
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `apiBaseUrl protocol must be http/https: ${trimmed}`,
+      exitCode: 2,
+      details: { api_base_url: trimmed },
+    });
+  }
+  const normalized = trimmed.replace(/\/+$/, '');
+  return normalized;
 }
 
 function resolveWsStateFile(spec: string): { readonly disabled: boolean; readonly path: string } {
@@ -129,7 +187,6 @@ function pickFormat(raw: Pick<RawConfig, 'json' | 'md' | 'ids'>): OutputFormat {
   }
   if (json) return 'json';
   if (ids) return 'ids';
-  // Default output: md
   return 'md';
 }
 
@@ -164,7 +221,10 @@ const rawConfigSpec = Config.all({
   wsStateFile: Config.string('wsStateFile').pipe(Config.withDefault('')),
   wsStateStaleMs: Config.integer('wsStateStaleMs').pipe(
     Config.withDefault(60_000),
-    Config.validate({ message: 'wsStateStaleMs must be a positive integer', validation: (n) => Number.isFinite(n) && n > 0 }),
+    Config.validate({
+      message: 'wsStateStaleMs must be a positive integer',
+      validation: (n) => Number.isFinite(n) && n > 0,
+    }),
   ),
 
   tmuxRefresh: Config.boolean('tmuxRefresh').pipe(Config.withDefault(true)),
@@ -186,6 +246,14 @@ const rawConfigSpec = Config.all({
   ),
   statusLineDebug: Config.boolean('statusLineDebug').pipe(Config.withDefault(false)),
   statusLineJsonFile: Config.string('statusLineJsonFile').pipe(Config.withDefault(defaultStatusLineJsonFilePath())),
+
+  apiBaseUrl: Config.string('apiBaseUrl').pipe(Config.withDefault('')),
+  apiHost: Config.string('apiHost').pipe(Config.withDefault('0.0.0.0')),
+  apiPort: Config.port('apiPort').pipe(Config.withDefault(3000)),
+  apiBasePath: Config.string('apiBasePath').pipe(Config.withDefault('/v1')),
+  apiPidFile: Config.string('apiPidFile').pipe(Config.withDefault(defaultApiPidFilePath())),
+  apiLogFile: Config.string('apiLogFile').pipe(Config.withDefault(defaultApiLogFilePath())),
+  apiStateFile: Config.string('apiStateFile').pipe(Config.withDefault(defaultApiStateFilePath())),
 }) satisfies Config.Config<RawConfig>;
 
 function cliErrorFromConfigError(error: ConfigError.ConfigError): CliError {
@@ -238,6 +306,8 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
             }),
     });
 
+    const apiBaseUrl = optionalTrimmed(raw.apiBaseUrl) ? normalizeApiBaseUrl(raw.apiBaseUrl) : undefined;
+
     return {
       format,
       quiet: raw.quiet,
@@ -257,6 +327,13 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
       statusLineMinIntervalMs: raw.statusLineMinIntervalMs,
       statusLineDebug: raw.statusLineDebug,
       statusLineJsonFile: resolveUserFilePath(raw.statusLineJsonFile),
+      apiBaseUrl,
+      apiHost: raw.apiHost.trim() || '0.0.0.0',
+      apiPort: raw.apiPort,
+      apiBasePath: normalizeApiBasePath(raw.apiBasePath),
+      apiPidFile: resolveUserFilePath(raw.apiPidFile),
+      apiLogFile: resolveUserFilePath(raw.apiLogFile),
+      apiStateFile: resolveUserFilePath(raw.apiStateFile),
     };
   }).pipe(
     Effect.catchAll((error) => {

@@ -129,14 +129,16 @@ export const ChildProcessLive = Layer.succeed(ChildProcess, {
           }),
         ),
     ).pipe(
-      Effect.map((state): ChildHandle => ({
-        pid: state.child?.pid ?? null,
-        wait: Deferred.await(state.outcome),
-        kill: (signal) =>
-          Effect.sync(() => {
-            if (!state.child) return;
-            unsafeKill(state.child, signal);
-          }),
-      })),
+      Effect.map(
+        (state): ChildHandle => ({
+          pid: state.child?.pid ?? null,
+          wait: Deferred.await(state.outcome),
+          kill: (signal) =>
+            Effect.sync(() => {
+              if (!state.child) return;
+              unsafeKill(state.child, signal);
+            }),
+        }),
+      ),
     ),
 } satisfies ChildProcessService);

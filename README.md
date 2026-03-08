@@ -77,6 +77,31 @@ agent-remnote --json daemon status
 
 You should see a `remnote-plugin` client and an `activeWorkerConnId`.
 
+### Host API (authoritative on host, reusable from containers)
+
+If you want container agents to access RemNote through the host, do not mount `remnote.db` / `store.sqlite` directly. Prefer:
+
+```bash
+agent-remnote stack ensure
+agent-remnote api status --json
+```
+
+Direct HTTP:
+
+```bash
+curl http://127.0.0.1:3000/v1/health
+```
+
+Remote CLI mode:
+
+```bash
+agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
+REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current --compact
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
+```
+
 ## Quick start (users)
 
 Plugin RPC (fast candidates, requires an active RemNote window + plugin):
@@ -290,6 +315,8 @@ flowchart LR
 ## Troubleshooting
 
 - `agent-remnote daemon ensure` prints `started: false`: it can mean “already healthy, nothing to start”; use `agent-remnote --json daemon status` to confirm.
+- `agent-remnote stack ensure`: one command to make both `daemon + api` ready.
+- If you want to wait until the plugin worker becomes active again: `agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000`
 - No `remnote-plugin` client in `daemon status`: reinstall the plugin zip and keep a RemNote window open.
 - Plugin RPC fails / no `activeWorkerConnId`: click inside the target RemNote window to refresh UI activity.
 
@@ -298,6 +325,10 @@ flowchart LR
 - RemNote DB (read-only): `--remnote-db` / `REMNOTE_DB`
 - Store DB: `--store-db` / `REMNOTE_STORE_DB` / `STORE_DB` (default: `~/.agent-remnote/store.sqlite`; legacy: `--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`)
 - WS endpoint: `--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL` (or `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`, default port 6789)
+- Host API remote mode: `--api-base-url` / `REMNOTE_API_BASE_URL`
+- Host API listen host: `REMNOTE_API_HOST` (default `0.0.0.0`)
+- Host API port: `PORT` (default `3000`)
+- Host API pid/log/state (env-only): `REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` (default: `~/.agent-remnote/ws.bridge.state.json`)
 - Daemon pidfile (env-only): `REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE` (default: `~/.agent-remnote/ws.pid`)
 - Daemon log file (env-only): `REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE` (default: `~/.agent-remnote/ws.log`)

@@ -59,4 +59,3 @@ describe('cli contract: daemon stop respects REMNOTE_DAEMON_PID_FILE when --pid-
     }
   });
 });
-

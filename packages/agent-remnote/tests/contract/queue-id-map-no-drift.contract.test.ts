@@ -17,7 +17,9 @@ describe('queue contract: id_map does not drift', () => {
         upsertIdMap(db, [{ client_temp_id: 'tmp-1', remote_id: 'remote-a', remote_type: 'rem', source_txn: 'txn-2' }]);
 
         expect(() =>
-          upsertIdMap(db, [{ client_temp_id: 'tmp-1', remote_id: 'remote-b', remote_type: 'rem', source_txn: 'txn-3' }]),
+          upsertIdMap(db, [
+            { client_temp_id: 'tmp-1', remote_id: 'remote-b', remote_type: 'rem', source_txn: 'txn-3' },
+          ]),
         ).toThrow(IdMapConflictError);
 
         const row = db

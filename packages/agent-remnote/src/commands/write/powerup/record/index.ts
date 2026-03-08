@@ -5,6 +5,9 @@ import { writePowerupRecordDeleteCommand } from './delete.js';
 import { writePowerupRecordUpdateCommand } from './update.js';
 
 export const writePowerupRecordCommand = Command.make('record', {}).pipe(
-  Command.withSubcommands([writePowerupRecordAddCommand, writePowerupRecordUpdateCommand, writePowerupRecordDeleteCommand]),
+  Command.withSubcommands([
+    writePowerupRecordAddCommand,
+    writePowerupRecordUpdateCommand,
+    writePowerupRecordDeleteCommand,
+  ]),
 );
-

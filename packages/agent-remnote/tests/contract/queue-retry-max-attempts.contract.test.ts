@@ -31,7 +31,9 @@ describe('queue contract: retry respects max_attempts', () => {
         expect(ack.ok).toBe(true);
 
         const op = db
-          .prepare(`SELECT status, attempt_count, dead_reason, locked_at, lease_expires_at FROM queue_ops WHERE op_id=?`)
+          .prepare(
+            `SELECT status, attempt_count, dead_reason, locked_at, lease_expires_at FROM queue_ops WHERE op_id=?`,
+          )
           .get(claimed!.op_id) as any;
         expect(String(op.status)).toBe('dead');
         expect(Number(op.attempt_count)).toBe(1);
@@ -49,4 +51,3 @@ describe('queue contract: retry respects max_attempts', () => {
     }
   });
 });
-

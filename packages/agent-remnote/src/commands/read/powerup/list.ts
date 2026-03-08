@@ -34,7 +34,9 @@ function summarizeTitle(doc: Record<string, unknown> | null | undefined): string
 }
 
 function normalizeQuery(q: string | undefined): string | null {
-  const normalized = String(q ?? '').trim().toLowerCase();
+  const normalized = String(q ?? '')
+    .trim()
+    .toLowerCase();
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -67,70 +69,67 @@ function buildMarkdown(items: readonly PowerupItem[]): string {
   return lines.join('\n');
 }
 
-export const readPowerupListCommand = Command.make(
-  'list',
-  { query, limit, offset },
-  ({ query, limit, offset }) =>
-    Effect.gen(function* () {
-      const q = normalizeQuery(query);
-      const effectiveLimit = limit ?? 200;
-      const effectiveOffset = offset ?? 0;
+export const readPowerupListCommand = Command.make('list', { query, limit, offset }, ({ query, limit, offset }) =>
+  Effect.gen(function* () {
+    const q = normalizeQuery(query);
+    const effectiveLimit = limit ?? 200;
+    const effectiveOffset = offset ?? 0;
 
-      const cfg = yield* AppConfig;
-      const remDb = yield* RemDb;
+    const cfg = yield* AppConfig;
+    const remDb = yield* RemDb;
 
-      const { result, info } = yield* remDb.withDb(cfg.remnoteDb, (db) => {
-        const rows = db
-          .prepare(
-            `SELECT _id AS id, doc
+    const { result, info } = yield* remDb.withDb(cfg.remnoteDb, (db) => {
+      const rows = db
+        .prepare(
+          `SELECT _id AS id, doc
                FROM quanta
               WHERE json_extract(doc, '$.parent') IS NULL
                 AND json_extract(doc, '$.rcrt') IS NOT NULL
               ORDER BY COALESCE(CAST(json_extract(doc, '$.createdAt') AS INTEGER), 0) ASC`,
-          )
-          .all() as Array<{ id: string; doc: string }>;
+        )
+        .all() as Array<{ id: string; doc: string }>;
 
-        const items: PowerupItem[] = [];
-        for (const row of rows) {
-          const doc = safeJsonParse<Record<string, unknown>>(row.doc) ?? {};
-          const title = summarizeTitle(doc) || row.id;
-          const rcrt = typeof (doc as any).rcrt === 'string' ? ((doc as any).rcrt as string) : String((doc as any).rcrt);
-          const createdAt = typeof (doc as any).createdAt === 'number' ? ((doc as any).createdAt as number) : null;
-          const item: PowerupItem = { id: row.id, title, rcrt, createdAt };
-          if (q) {
-            if (!item.title.toLowerCase().includes(q) && !item.rcrt.toLowerCase().includes(q)) continue;
-          }
-          items.push(item);
+      const items: PowerupItem[] = [];
+      for (const row of rows) {
+        const doc = safeJsonParse<Record<string, unknown>>(row.doc) ?? {};
+        const title = summarizeTitle(doc) || row.id;
+        const rcrt = typeof (doc as any).rcrt === 'string' ? ((doc as any).rcrt as string) : String((doc as any).rcrt);
+        const createdAt = typeof (doc as any).createdAt === 'number' ? ((doc as any).createdAt as number) : null;
+        const item: PowerupItem = { id: row.id, title, rcrt, createdAt };
+        if (q) {
+          if (!item.title.toLowerCase().includes(q) && !item.rcrt.toLowerCase().includes(q)) continue;
         }
+        items.push(item);
+      }
 
-        const total = items.length;
-        const visible = items.slice(effectiveOffset, effectiveOffset + effectiveLimit);
-        const hasMore = effectiveOffset + effectiveLimit < total;
-        const nextOffset = hasMore ? effectiveOffset + effectiveLimit : null;
-        const guidance = q
-          ? `Matched ${total} powerups (query="${q}"). Showing ${visible.length} (offset=${effectiveOffset}, limit=${effectiveLimit}).`
-          : `Found ${total} powerups. Showing ${visible.length} (offset=${effectiveOffset}, limit=${effectiveLimit}).`;
+      const total = items.length;
+      const visible = items.slice(effectiveOffset, effectiveOffset + effectiveLimit);
+      const hasMore = effectiveOffset + effectiveLimit < total;
+      const nextOffset = hasMore ? effectiveOffset + effectiveLimit : null;
+      const guidance = q
+        ? `Matched ${total} powerups (query="${q}"). Showing ${visible.length} (offset=${effectiveOffset}, limit=${effectiveLimit}).`
+        : `Found ${total} powerups. Showing ${visible.length} (offset=${effectiveOffset}, limit=${effectiveLimit}).`;
 
-        return {
-          guidance,
-          query: query ?? null,
-          limit: effectiveLimit,
-          offset: effectiveOffset,
-          total,
-          hasMore,
-          nextOffset,
-          items: visible,
-          markdown: buildMarkdown(visible),
-        };
-      });
-
-      const payload = {
-        dbPath: info.dbPath,
-        resolution: info.source,
-        dirName: info.dirName,
-        ...result,
+      return {
+        guidance,
+        query: query ?? null,
+        limit: effectiveLimit,
+        offset: effectiveOffset,
+        total,
+        hasMore,
+        nextOffset,
+        items: visible,
+        markdown: buildMarkdown(visible),
       };
+    });
 
-      yield* writeSuccess({ data: payload, md: payload.markdown ?? '' });
-    }).pipe(Effect.catchAll(writeFailure)),
+    const payload = {
+      dbPath: info.dbPath,
+      resolution: info.source,
+      dirName: info.dirName,
+      ...result,
+    };
+
+    yield* writeSuccess({ data: payload, md: payload.markdown ?? '' });
+  }).pipe(Effect.catchAll(writeFailure)),
 );

@@ -76,7 +76,9 @@ export const writeOpsCommand = Command.make(
 
       const rawOps = parsed.ops;
       if (rawOps.length === 0) {
-        return yield* Effect.fail(new CliError({ code: 'INVALID_PAYLOAD', message: 'ops must not be empty', exitCode: 2 }));
+        return yield* Effect.fail(
+          new CliError({ code: 'INVALID_PAYLOAD', message: 'ops must not be empty', exitCode: 2 }),
+        );
       }
       if (rawOps.length > 500) {
         return yield* Effect.fail(

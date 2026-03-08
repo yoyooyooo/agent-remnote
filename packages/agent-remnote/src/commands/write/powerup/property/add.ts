@@ -32,7 +32,23 @@ export const writePowerupPropertyAddCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ tagId, powerup, name, type, options, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    tagId,
+    powerup,
+    name,
+    type,
+    options,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -120,7 +136,16 @@ export const writePowerupPropertyAddCommand = Command.make(
           data: {
             dry_run: true,
             tag_id: resolvedTagId,
-            ...(resolved ? { powerup: { query: resolved.query, matchedBy: resolved.matchedBy, title: resolved.title, code: resolved.rcrt } } : {}),
+            ...(resolved
+              ? {
+                  powerup: {
+                    query: resolved.query,
+                    matchedBy: resolved.matchedBy,
+                    title: resolved.title,
+                    code: resolved.rcrt,
+                  },
+                }
+              : {}),
             ops: [op],
             meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
           },
@@ -155,4 +180,3 @@ export const writePowerupPropertyAddCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

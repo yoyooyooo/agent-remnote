@@ -15,4 +15,3 @@ export const todoCommand = Command.make('todo', {}).pipe(
     writePowerupTodoRemoveCommand,
   ]),
 );
-

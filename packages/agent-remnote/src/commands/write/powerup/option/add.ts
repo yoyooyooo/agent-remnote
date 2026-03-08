@@ -28,7 +28,20 @@ export const writePowerupOptionAddCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ property, text, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    property,
+    text,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -52,7 +65,8 @@ export const writePowerupOptionAddCommand = Command.make(
       const payloadSvc = yield* Payload;
 
       const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'add_option', payload: { propertyId: property, text } }, payloadSvc.normalizeKeys),
+        try: () =>
+          normalizeOp({ type: 'add_option', payload: { propertyId: property, text } }, payloadSvc.normalizeKeys),
         catch: (e) =>
           isCliError(e)
             ? e
@@ -100,4 +114,3 @@ export const writePowerupOptionAddCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

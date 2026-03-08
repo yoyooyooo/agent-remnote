@@ -31,4 +31,3 @@ export function renderStatusLine(model: StatusLineModel): string {
   if (queue) return queue;
   return base;
 }
-

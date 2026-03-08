@@ -16,4 +16,3 @@ export const tableCommand = Command.make('table', {}).pipe(
     writeTableOptionCommand,
   ]),
 );
-

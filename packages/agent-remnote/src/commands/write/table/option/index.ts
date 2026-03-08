@@ -6,4 +6,3 @@ import { writeTableOptionRemoveCommand } from './remove.js';
 export const writeTableOptionCommand = Command.make('option', {}).pipe(
   Command.withSubcommands([writeTableOptionAddCommand, writeTableOptionRemoveCommand]),
 );
-

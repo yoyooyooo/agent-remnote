@@ -27,7 +27,10 @@ function parseAliasRef(value: unknown): Alias | null {
   return isAlias(name) ? name : null;
 }
 
-function collectAliasRefs(value: unknown, pathPrefix: string): ReadonlyArray<{ readonly path: string; readonly alias: Alias }> {
+function collectAliasRefs(
+  value: unknown,
+  pathPrefix: string,
+): ReadonlyArray<{ readonly path: string; readonly alias: Alias }> {
   const out: Array<{ path: string; alias: Alias }> = [];
 
   const alias = parseAliasRef(value);
@@ -317,4 +320,3 @@ export function compileWritePlanV1(
 
   return { alias_map: aliasMap, ops };
 }
-

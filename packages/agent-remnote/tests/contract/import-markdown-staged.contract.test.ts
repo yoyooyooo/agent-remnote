@@ -19,4 +19,3 @@ describe('cli contract: import markdown staged', () => {
     expect(parsed.data?.ops?.[0]?.payload?.staged).toBe(true);
   });
 });
-

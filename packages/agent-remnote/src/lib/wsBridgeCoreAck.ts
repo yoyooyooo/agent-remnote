@@ -25,7 +25,12 @@ export function handleOpAckMessage(params: {
   readonly connId: WsConnId;
   readonly msg: any;
 }): OpAckHandlingResult {
-  const opId = typeof params.msg?.op_id === 'string' ? params.msg.op_id : typeof params.msg?.opId === 'string' ? params.msg.opId : '';
+  const opId =
+    typeof params.msg?.op_id === 'string'
+      ? params.msg.op_id
+      : typeof params.msg?.opId === 'string'
+        ? params.msg.opId
+        : '';
   const attemptId =
     typeof params.msg?.attempt_id === 'string'
       ? params.msg.attempt_id
@@ -61,11 +66,20 @@ export function handleOpAckMessage(params: {
           opId,
           attemptId,
           lockedBy,
-          error: { code: params.msg.error_code, message: params.msg.error_message, retryAfterMs: params.msg.retry_after_ms },
+          error: {
+            code: params.msg.error_code,
+            message: params.msg.error_message,
+            retryAfterMs: params.msg.retry_after_ms,
+          },
         });
       }
       if (status === 'failed' || status === 'dead') {
-        return ackDead(params.db, { opId, attemptId, lockedBy, error: { code: params.msg.error_code, message: params.msg.error_message } });
+        return ackDead(params.db, {
+          opId,
+          attemptId,
+          lockedBy,
+          error: { code: params.msg.error_code, message: params.msg.error_message },
+        });
       }
       return { ok: false as const, op_id: opId, attempt_id: attemptId, reason: 'stale_ack' as const };
     } catch {
@@ -222,7 +236,11 @@ export function handleOpAckMessage(params: {
     }
   }
 
-  actions.push({ _tag: 'SendJson', connId: params.connId, msg: { type: 'AckOk', ok: true, op_id: opId, attempt_id: attemptId } });
+  actions.push({
+    _tag: 'SendJson',
+    connId: params.connId,
+    msg: { type: 'AckOk', ok: true, op_id: opId, attempt_id: attemptId },
+  });
 
   return { actions, touchAckTimestamp: true, invalidateStatusLineReason: 'op_acked' };
 }

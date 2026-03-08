@@ -105,10 +105,13 @@ describe('cli contract: daemon status self-heals stale pidfile and cleans displa
         'utf8',
       );
 
-      const res = await runCli(['--json', '--daemon-url', `ws://127.0.0.1:${port}/ws`, 'daemon', 'status', '--pid-file', pidFile], {
-        env: { HOME: tmpDir, REMNOTE_TMUX_REFRESH: '0' },
-        timeoutMs: 15_000,
-      });
+      const res = await runCli(
+        ['--json', '--daemon-url', `ws://127.0.0.1:${port}/ws`, 'daemon', 'status', '--pid-file', pidFile],
+        {
+          env: { HOME: tmpDir, REMNOTE_TMUX_REFRESH: '0' },
+          timeoutMs: 15_000,
+        },
+      );
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
 

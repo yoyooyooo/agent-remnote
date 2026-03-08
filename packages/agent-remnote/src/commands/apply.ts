@@ -3,7 +3,9 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
+import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
+import { HostApiClient } from '../services/HostApiClient.js';
 import { Payload } from '../services/Payload.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { enqueueOps, normalizeOps, parseEnqueuePayload } from './_enqueue.js';
@@ -41,6 +43,8 @@ export const applyCommand = Command.make(
   },
   ({ payload, notify, ensureDaemon, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
+      const cfg = yield* AppConfig;
+      const hostApi = yield* HostApiClient;
       const payloadSvc = yield* Payload;
 
       const raw = yield* payloadSvc.readJson(payload);
@@ -91,15 +95,28 @@ export const applyCommand = Command.make(
         return;
       }
 
-      const data = yield* enqueueOps({
-        ops,
-        priority: resolvedPriority,
-        clientId: resolvedClientId,
-        idempotencyKey: resolvedIdempotencyKey,
-        meta: metaValue,
-        notify,
-        ensureDaemon,
-      });
+      const data = cfg.apiBaseUrl
+        ? yield* hostApi.writeOps({
+            baseUrl: cfg.apiBaseUrl,
+            body: {
+              ops: rawOps,
+              priority: resolvedPriority,
+              clientId: resolvedClientId,
+              idempotencyKey: resolvedIdempotencyKey,
+              meta: metaValue,
+              notify,
+              ensureDaemon,
+            },
+          })
+        : yield* enqueueOps({
+            ops,
+            priority: resolvedPriority,
+            clientId: resolvedClientId,
+            idempotencyKey: resolvedIdempotencyKey,
+            meta: metaValue,
+            notify,
+            ensureDaemon,
+          });
 
       yield* writeSuccess({
         data,

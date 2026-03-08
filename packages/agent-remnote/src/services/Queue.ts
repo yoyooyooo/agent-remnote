@@ -43,13 +43,19 @@ export interface QueueService {
     readonly dbPath: string;
     readonly ops: readonly EnqueueOpInput[];
     readonly options?: EnqueueTxnOptions | undefined;
-  }) => Effect.Effect<{ readonly txn_id: string; readonly op_ids: readonly string[]; readonly deduped?: boolean }, CliError>;
+  }) => Effect.Effect<
+    { readonly txn_id: string; readonly op_ids: readonly string[]; readonly deduped?: boolean },
+    CliError
+  >;
   readonly stats: (params: { readonly dbPath: string }) => Effect.Effect<QueueStats, CliError>;
   readonly conflicts: (params: {
     readonly dbPath: string;
     readonly limit?: number | undefined;
     readonly maxClusters?: number | undefined;
-  }) => Effect.Effect<QueueConflictsReport & { readonly warnings?: readonly string[]; readonly nextActions?: readonly string[] }, CliError>;
+  }) => Effect.Effect<
+    QueueConflictsReport & { readonly warnings?: readonly string[]; readonly nextActions?: readonly string[] },
+    CliError
+  >;
   readonly inspect: (params: {
     readonly dbPath: string;
     readonly txnId?: string | undefined;
@@ -104,16 +110,22 @@ export const QueueLive = Layer.succeed(Queue, {
         try {
           try {
             const txn_id = enqueueTxn(db, ops as any, options as any);
-            const opRows = db.prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`).all(txn_id) as any[];
+            const opRows = db
+              .prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`)
+              .all(txn_id) as any[];
             const op_ids = opRows.map((r) => String(r.op_id));
             return { txn_id, op_ids };
           } catch (error) {
             const idempotencyKey = options?.idempotencyKey?.trim();
             if (idempotencyKey && isTxnIdempotencyKeyConflict(error)) {
-              const existing = db.prepare(`SELECT txn_id FROM queue_txns WHERE idempotency_key=?`).get(idempotencyKey) as any;
+              const existing = db
+                .prepare(`SELECT txn_id FROM queue_txns WHERE idempotency_key=?`)
+                .get(idempotencyKey) as any;
               const txn_id = existing?.txn_id ? String(existing.txn_id) : '';
               if (txn_id) {
-                const opRows = db.prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`).all(txn_id) as any[];
+                const opRows = db
+                  .prepare(`SELECT op_id FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`)
+                  .all(txn_id) as any[];
                 const op_ids = opRows.map((r) => String(r.op_id));
                 return { txn_id, op_ids, deduped: true };
               }
@@ -251,7 +263,9 @@ export const QueueLive = Layer.succeed(Queue, {
             });
           }
 
-          const ops = db.prepare(`SELECT * FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`).all(resolvedTxnId) as any[];
+          const ops = db
+            .prepare(`SELECT * FROM queue_ops WHERE txn_id=? ORDER BY op_seq ASC`)
+            .all(resolvedTxnId) as any[];
           const results =
             ops.length === 0
               ? []

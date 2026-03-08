@@ -22,4 +22,3 @@ export const powerupCommand = Command.make('powerup', {}).pipe(
     writePowerupOptionCommand,
   ]),
 );
-

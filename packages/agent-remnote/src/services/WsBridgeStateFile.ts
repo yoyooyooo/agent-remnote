@@ -11,7 +11,10 @@ export interface WsBridgeStateFileService {
   readonly write: (params: { readonly filePath: string; readonly json: unknown }) => Effect.Effect<void, CliError>;
 }
 
-export class WsBridgeStateFile extends Context.Tag('WsBridgeStateFile')<WsBridgeStateFile, WsBridgeStateFileService>() {}
+export class WsBridgeStateFile extends Context.Tag('WsBridgeStateFile')<
+  WsBridgeStateFile,
+  WsBridgeStateFileService
+>() {}
 
 async function ensureDir(filePath: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -42,4 +45,3 @@ export const WsBridgeStateFileLive = Layer.succeed(WsBridgeStateFile, {
       },
     }),
 } satisfies WsBridgeStateFileService);
-

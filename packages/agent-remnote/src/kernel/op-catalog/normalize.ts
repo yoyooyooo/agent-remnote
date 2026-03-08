@@ -25,4 +25,3 @@ export function resolveOpCatalogEntry(opTypeRaw: unknown): OpCatalogEntry | unde
   if (!canonicalType) return undefined;
   return (OP_CATALOG as Record<string, OpCatalogEntry>)[canonicalType];
 }
-

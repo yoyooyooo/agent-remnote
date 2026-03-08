@@ -18,7 +18,10 @@ export type LogWriter = {
 };
 
 export interface LogWriterFactoryService {
-  readonly open: (params: { readonly filePath: string; readonly options: LogWriterOptions }) => Effect.Effect<LogWriter, CliError, Scope.Scope>;
+  readonly open: (params: {
+    readonly filePath: string;
+    readonly options: LogWriterOptions;
+  }) => Effect.Effect<LogWriter, CliError, Scope.Scope>;
 }
 
 export class LogWriterFactory extends Context.Tag('LogWriterFactory')<LogWriterFactory, LogWriterFactoryService>() {}

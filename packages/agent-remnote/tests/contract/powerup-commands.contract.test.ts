@@ -192,8 +192,28 @@ describe('cli contract: write powerup --dry-run', () => {
 describe('cli contract: read todos list sort', () => {
   it('accepts --sort updatedAtDesc and createdAtDesc', async () => {
     await withTmpDb(async (dbPath) => {
-      const res1 = await runCli(['--json', '--remnote-db', dbPath, 'todo', 'list', '--sort', 'updatedAtDesc', '--limit', '20']);
-      const res2 = await runCli(['--json', '--remnote-db', dbPath, 'todo', 'list', '--sort', 'createdAtDesc', '--limit', '20']);
+      const res1 = await runCli([
+        '--json',
+        '--remnote-db',
+        dbPath,
+        'todo',
+        'list',
+        '--sort',
+        'updatedAtDesc',
+        '--limit',
+        '20',
+      ]);
+      const res2 = await runCli([
+        '--json',
+        '--remnote-db',
+        dbPath,
+        'todo',
+        'list',
+        '--sort',
+        'createdAtDesc',
+        '--limit',
+        '20',
+      ]);
 
       expect(res1.exitCode).toBe(0);
       expect(res1.stderr).toBe('');
@@ -204,7 +224,17 @@ describe('cli contract: read todos list sort', () => {
 
   it('status=all returns table rows and parses timestamps', async () => {
     await withTmpDb(async (dbPath) => {
-      const res = await runCli(['--json', '--remnote-db', dbPath, 'todo', 'list', '--status', 'all', '--sort', 'updatedAtDesc']);
+      const res = await runCli([
+        '--json',
+        '--remnote-db',
+        dbPath,
+        'todo',
+        'list',
+        '--status',
+        'all',
+        '--sort',
+        'updatedAtDesc',
+      ]);
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');

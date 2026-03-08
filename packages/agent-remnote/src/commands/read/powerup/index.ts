@@ -6,5 +6,10 @@ import { readPowerupSchemaCommand } from './schema.js';
 import { readPowerupTodoCommand } from './todo/index.js';
 
 export const readPowerupCommand = Command.make('powerup', {}).pipe(
-  Command.withSubcommands([readPowerupListCommand, readPowerupResolveCommand, readPowerupSchemaCommand, readPowerupTodoCommand]),
+  Command.withSubcommands([
+    readPowerupListCommand,
+    readPowerupResolveCommand,
+    readPowerupSchemaCommand,
+    readPowerupTodoCommand,
+  ]),
 );

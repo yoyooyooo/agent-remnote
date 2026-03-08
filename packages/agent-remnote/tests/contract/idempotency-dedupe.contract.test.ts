@@ -33,7 +33,9 @@ describe('cli contract: idempotency-key dedupe', () => {
         idem,
       ] as const;
 
-      const res1 = await runCli(baseArgs, { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' } });
+      const res1 = await runCli(baseArgs, {
+        env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },
+      });
       expect(res1.exitCode).toBe(0);
       expect(res1.stderr).toBe('');
 
@@ -42,7 +44,9 @@ describe('cli contract: idempotency-key dedupe', () => {
       const txnId1 = String(env1.data?.txn_id ?? '');
       expect(txnId1).toMatch(/[0-9a-f-]{36}/);
 
-      const res2 = await runCli(baseArgs, { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' } });
+      const res2 = await runCli(baseArgs, {
+        env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },
+      });
       expect(res2.exitCode).toBe(0);
       expect(res2.stderr).toBe('');
 

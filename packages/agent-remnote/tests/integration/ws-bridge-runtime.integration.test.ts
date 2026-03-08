@@ -172,11 +172,7 @@ function createJsonQueue(ws: WebSocket) {
   return { next, close };
 }
 
-async function waitForStateFile(
-  filePath: string,
-  predicate: (json: any) => boolean,
-  timeoutMs = 2000,
-): Promise<any> {
+async function waitForStateFile(filePath: string, predicate: (json: any) => boolean, timeoutMs = 2000): Promise<any> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
@@ -208,118 +204,133 @@ describe('WsBridgeRuntime (integration)', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
         yield* runWsBridgeRuntime({ host: '127.0.0.1', port, path: '/ws' }).pipe(Effect.forkScoped);
 
         yield* Effect.promise(async () => {
-            const cli = await connectWsWithRetry(wsUrl, 3000);
-            const plugin = await connectWsWithRetry(wsUrl, 3000);
-            const cliQ = createJsonQueue(cli);
-            const pluginQ = createJsonQueue(plugin);
+          const cli = await connectWsWithRetry(wsUrl, 3000);
+          const plugin = await connectWsWithRetry(wsUrl, 3000);
+          const cliQ = createJsonQueue(cli);
+          const pluginQ = createJsonQueue(plugin);
 
+          try {
+            cli.send(JSON.stringify({ type: 'Hello' }));
+            const cliHello = await cliQ.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+            expect(typeof cliHello.connId).toBe('string');
+
+            // No active worker yet.
+            cli.send(JSON.stringify({ type: 'TriggerStartSync' }));
+            const noActive = await cliQ.next((m) => m?.type === 'StartSyncTriggered');
+            expect(noActive.sent).toBe(0);
+            expect(noActive.reason).toBe('no_active_worker');
+
+            plugin.send(JSON.stringify({ type: 'Hello' }));
+            const pluginHello = await pluginQ.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+            const pluginConnId = String(pluginHello.connId);
+
+            plugin.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'test',
+                capabilities: { control: true, worker: true, readRpc: true, batchPull: true },
+              }),
+            );
+            await pluginQ.next((m) => m?.type === 'Registered');
+
+            // Trigger sync: should notify the active worker.
+            cli.send(JSON.stringify({ type: 'TriggerStartSync' }));
+            const [startSyncMsg, triggered] = await Promise.all([
+              pluginQ.next((m) => m?.type === 'StartSync'),
+              cliQ.next((m) => m?.type === 'StartSyncTriggered' && m?.sent === 1),
+            ]);
+            expect(startSyncMsg.type).toBe('StartSync');
+            expect(triggered.activeConnId).toBe(pluginConnId);
+
+            // SearchRequest: forward to plugin with a different requestId, then map back to caller.
+            const originalRequestId = 'req-1';
+            cli.send(
+              JSON.stringify({
+                type: 'SearchRequest',
+                requestId: originalRequestId,
+                queryText: 'hello world',
+                limit: 20,
+                timeoutMs: 1000,
+              }),
+            );
+            const forwarded = await pluginQ.next(
+              (m) => m?.type === 'SearchRequest' && typeof m?.requestId === 'string',
+            );
+            expect(forwarded.requestId).not.toBe(originalRequestId);
+
+            plugin.send(
+              JSON.stringify({
+                type: 'SearchResponse',
+                requestId: forwarded.requestId,
+                ok: true,
+                budget: { maxPreviewChars: 200 },
+                results: [],
+              }),
+            );
+            const okResp = await cliQ.next((m) => m?.type === 'SearchResponse' && m?.requestId === originalRequestId);
+            expect(okResp.ok).toBe(true);
+            expect(Array.isArray(okResp.results)).toBe(true);
+
+            // Timeout behavior (clamped by runtime): plugin receives request, but we don't respond.
+            const originalTimeoutId = 'req-timeout';
+            cli.send(
+              JSON.stringify({
+                type: 'SearchRequest',
+                requestId: originalTimeoutId,
+                queryText: 'timeout-test',
+                limit: 10,
+                timeoutMs: 50,
+              }),
+            );
+            await pluginQ.next((m) => m?.type === 'SearchRequest' && m?.queryText === 'timeout-test');
+            const timeoutResp = await cliQ.next(
+              (m) => m?.type === 'SearchResponse' && m?.requestId === originalTimeoutId,
+              2000,
+            );
+            expect(timeoutResp.ok).toBe(false);
+            expect(timeoutResp.error?.code).toBe('TIMEOUT');
+
+            // State file snapshot should eventually reflect the active worker.
+            const snap = await waitForStateFile(
+              cfg.wsStateFile.path,
+              (j) => j?.activeWorkerConnId === pluginConnId,
+              2000,
+            );
+            expect(snap.server?.port).toBe(port);
+            expect(Array.isArray(snap.clients)).toBe(true);
+            expect(snap.queue?.dbPath).toBe(cfg.storeDb);
+            expect(typeof snap.queue?.stats?.pending).toBe('number');
+            expect(typeof snap.queue?.stats?.in_flight).toBe('number');
+
+            // QueryClients should return the same activeWorkerConnId.
+            cli.send(JSON.stringify({ type: 'QueryClients' }));
+            const clientsMsg = await cliQ.next((m) => m?.type === 'Clients' && Array.isArray(m?.clients));
+            expect(clientsMsg.activeWorkerConnId).toBe(pluginConnId);
+          } finally {
+            cliQ.close();
+            pluginQ.close();
             try {
-              cli.send(JSON.stringify({ type: 'Hello' }));
-              const cliHello = await cliQ.next((m) => m?.type === 'HelloAck' && m?.ok === true);
-              expect(typeof cliHello.connId).toBe('string');
-
-              // No active worker yet.
-              cli.send(JSON.stringify({ type: 'TriggerStartSync' }));
-              const noActive = await cliQ.next((m) => m?.type === 'StartSyncTriggered');
-              expect(noActive.sent).toBe(0);
-              expect(noActive.reason).toBe('no_active_worker');
-
-              plugin.send(JSON.stringify({ type: 'Hello' }));
-              const pluginHello = await pluginQ.next((m) => m?.type === 'HelloAck' && m?.ok === true);
-              const pluginConnId = String(pluginHello.connId);
-
-              plugin.send(
-                JSON.stringify({
-                  type: 'Register',
-                  protocolVersion: 2,
-                  clientType: 'remnote-plugin',
-                  clientInstanceId: 'test',
-                  capabilities: { control: true, worker: true, readRpc: true, batchPull: true },
-                }),
-              );
-              await pluginQ.next((m) => m?.type === 'Registered');
-
-              // Trigger sync: should notify the active worker.
-              cli.send(JSON.stringify({ type: 'TriggerStartSync' }));
-              const [startSyncMsg, triggered] = await Promise.all([
-                pluginQ.next((m) => m?.type === 'StartSync'),
-                cliQ.next((m) => m?.type === 'StartSyncTriggered' && m?.sent === 1),
-              ]);
-              expect(startSyncMsg.type).toBe('StartSync');
-              expect(triggered.activeConnId).toBe(pluginConnId);
-
-              // SearchRequest: forward to plugin with a different requestId, then map back to caller.
-              const originalRequestId = 'req-1';
-              cli.send(
-                JSON.stringify({
-                  type: 'SearchRequest',
-                  requestId: originalRequestId,
-                  queryText: 'hello world',
-                  limit: 20,
-                  timeoutMs: 1000,
-                }),
-              );
-              const forwarded = await pluginQ.next((m) => m?.type === 'SearchRequest' && typeof m?.requestId === 'string');
-              expect(forwarded.requestId).not.toBe(originalRequestId);
-
-              plugin.send(
-                JSON.stringify({
-                  type: 'SearchResponse',
-                  requestId: forwarded.requestId,
-                  ok: true,
-                  budget: { maxPreviewChars: 200 },
-                  results: [],
-                }),
-              );
-              const okResp = await cliQ.next((m) => m?.type === 'SearchResponse' && m?.requestId === originalRequestId);
-              expect(okResp.ok).toBe(true);
-              expect(Array.isArray(okResp.results)).toBe(true);
-
-              // Timeout behavior (clamped by runtime): plugin receives request, but we don't respond.
-              const originalTimeoutId = 'req-timeout';
-              cli.send(
-                JSON.stringify({
-                  type: 'SearchRequest',
-                  requestId: originalTimeoutId,
-                  queryText: 'timeout-test',
-                  limit: 10,
-                  timeoutMs: 50,
-                }),
-              );
-              await pluginQ.next((m) => m?.type === 'SearchRequest' && m?.queryText === 'timeout-test');
-              const timeoutResp = await cliQ.next((m) => m?.type === 'SearchResponse' && m?.requestId === originalTimeoutId, 2000);
-              expect(timeoutResp.ok).toBe(false);
-              expect(timeoutResp.error?.code).toBe('TIMEOUT');
-
-              // State file snapshot should eventually reflect the active worker.
-              const snap = await waitForStateFile(cfg.wsStateFile.path, (j) => j?.activeWorkerConnId === pluginConnId, 2000);
-              expect(snap.server?.port).toBe(port);
-              expect(Array.isArray(snap.clients)).toBe(true);
-              expect(snap.queue?.dbPath).toBe(cfg.storeDb);
-              expect(typeof snap.queue?.stats?.pending).toBe('number');
-              expect(typeof snap.queue?.stats?.in_flight).toBe('number');
-
-              // QueryClients should return the same activeWorkerConnId.
-              cli.send(JSON.stringify({ type: 'QueryClients' }));
-              const clientsMsg = await cliQ.next((m) => m?.type === 'Clients' && Array.isArray(m?.clients));
-              expect(clientsMsg.activeWorkerConnId).toBe(pluginConnId);
-            } finally {
-              cliQ.close();
-              pluginQ.close();
-              try {
-                cli.terminate();
-              } catch {}
-              try {
-                plugin.terminate();
-              } catch {}
-            }
-          });
+              cli.terminate();
+            } catch {}
+            try {
+              plugin.terminate();
+            } catch {}
+          }
+        });
       }).pipe(Effect.provide(live));
 
       await Effect.runPromise(Effect.scoped(program));
@@ -352,7 +363,13 @@ describe('WsBridgeRuntime (integration)', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
         yield* runWsBridgeRuntime({
@@ -387,7 +404,9 @@ describe('WsBridgeRuntime (integration)', () => {
 
             // Claim op as worker 1 with a short lease.
             w1.send(JSON.stringify({ type: 'RequestOps', leaseMs: 80, maxOps: 1 }));
-            const batch1 = await q1.next((m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length > 0);
+            const batch1 = await q1.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length > 0,
+            );
             const op1 = (batch1 as any).ops[0];
             const opId = String(op1.op_id);
             const attempt1 = String(op1.attempt_id);
@@ -432,12 +451,28 @@ describe('WsBridgeRuntime (integration)', () => {
             expect(attempt2).not.toBe(attempt1);
 
             // Late ack from worker 1 must be rejected and must not affect the current attempt.
-            w1.send(JSON.stringify({ type: 'OpAck', op_id: opId, attempt_id: attempt1, status: 'success', result: { ok: true } }));
+            w1.send(
+              JSON.stringify({
+                type: 'OpAck',
+                op_id: opId,
+                attempt_id: attempt1,
+                status: 'success',
+                result: { ok: true },
+              }),
+            );
             const rej1 = await q1.next((m) => m?.type === 'AckRejected' && m?.op_id === opId);
             expect(rej1.reason).toBe('stale_attempt');
 
             // Current worker ack should succeed.
-            w2.send(JSON.stringify({ type: 'OpAck', op_id: opId, attempt_id: attempt2, status: 'success', result: { ok: true } }));
+            w2.send(
+              JSON.stringify({
+                type: 'OpAck',
+                op_id: opId,
+                attempt_id: attempt2,
+                status: 'success',
+                result: { ok: true },
+              }),
+            );
             const ok2 = await q2.next((m) => m?.type === 'AckOk' && m?.op_id === opId);
             expect(ok2.ok).toBe(true);
             expect(ok2.attempt_id).toBe(attempt2);
@@ -512,7 +547,13 @@ describe('WsBridgeRuntime (integration)', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
         yield* runWsBridgeRuntime({
@@ -547,7 +588,9 @@ describe('WsBridgeRuntime (integration)', () => {
 
             // Claim op as worker 1 with a short lease, then extend it.
             w1.send(JSON.stringify({ type: 'RequestOps', leaseMs: 200, maxOps: 1, maxBytes: 2048, maxOpBytes: 2048 }));
-            const batch1 = await q1.next((m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1);
+            const batch1 = await q1.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1,
+            );
             const op1 = (batch1 as any).ops[0];
             const opId = String(op1.op_id);
             const attempt1 = String(op1.attempt_id);
@@ -588,12 +631,22 @@ describe('WsBridgeRuntime (integration)', () => {
             expect(rej1.reason).toBe('stale_attempt');
 
             // Wrong attempt id must be rejected.
-            w1.send(JSON.stringify({ type: 'LeaseExtend', op_id: opId, attempt_id: `${attempt1}-wrong`, extendMs: 2000 }));
+            w1.send(
+              JSON.stringify({ type: 'LeaseExtend', op_id: opId, attempt_id: `${attempt1}-wrong`, extendMs: 2000 }),
+            );
             const rej2 = await q1.next((m) => m?.type === 'LeaseExtendRejected' && m?.op_id === opId);
             expect(rej2.reason).toBe('stale_attempt');
 
             // After success ack, further extends are rejected as not_in_flight.
-            w1.send(JSON.stringify({ type: 'OpAck', op_id: opId, attempt_id: attempt1, status: 'success', result: { ok: true } }));
+            w1.send(
+              JSON.stringify({
+                type: 'OpAck',
+                op_id: opId,
+                attempt_id: attempt1,
+                status: 'success',
+                result: { ok: true },
+              }),
+            );
             const ackOk = await q1.next((m) => m?.type === 'AckOk' && m?.op_id === opId);
             expect(ackOk.ok).toBe(true);
 
@@ -651,7 +704,13 @@ describe('WsBridgeRuntime (integration)', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
         yield* runWsBridgeRuntime({
@@ -679,12 +738,16 @@ describe('WsBridgeRuntime (integration)', () => {
               }),
             );
             await q.next((m) => m?.type === 'Registered');
-            plugin.send(JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }));
+            plugin.send(
+              JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }),
+            );
             await q.next((m) => m?.type === 'SelectionAck');
 
             // Pull and ack op1 (create_rem).
             plugin.send(JSON.stringify({ type: 'RequestOps', leaseMs: 5000, maxOps: 1 }));
-            const batch1 = await q.next((m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1);
+            const batch1 = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1,
+            );
             const op1 = (batch1 as any).ops[0];
             plugin.send(
               JSON.stringify({
@@ -699,7 +762,9 @@ describe('WsBridgeRuntime (integration)', () => {
 
             // Pull op2; payload.rem_id must be substituted to remoteId.
             plugin.send(JSON.stringify({ type: 'RequestOps', leaseMs: 5000, maxOps: 1 }));
-            const batch2 = await q.next((m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1);
+            const batch2 = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1,
+            );
             const op2 = (batch2 as any).ops[0];
             expect(op2.op_type).toBe('update_text');
             expect(op2.payload?.rem_id).toBe(remoteId);

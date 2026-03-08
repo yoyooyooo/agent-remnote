@@ -40,7 +40,10 @@ const wait = Options.boolean('wait');
 const timeoutMs = Options.integer('timeout-ms').pipe(Options.optional, Options.map(optionToUndefined));
 const pollMs = Options.integer('poll-ms').pipe(Options.optional, Options.map(optionToUndefined));
 
-const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(Options.optional, Options.map(optionToUndefined));
+const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(
+  Options.optional,
+  Options.map(optionToUndefined),
+);
 const bundleTitle = readOptionalText('bundle-title');
 
 const BULK_THRESHOLD_LINES = 80;

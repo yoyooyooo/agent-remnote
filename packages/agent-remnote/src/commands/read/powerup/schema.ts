@@ -64,7 +64,13 @@ export const readPowerupSchemaCommand = Command.make(
 
       const out = resolved
         ? {
-            powerup: { query: resolved.query, matchedBy: resolved.matchedBy, id: resolved.id, title: resolved.title, code: resolved.rcrt },
+            powerup: {
+              query: resolved.query,
+              matchedBy: resolved.matchedBy,
+              id: resolved.id,
+              title: resolved.title,
+              code: resolved.rcrt,
+            },
             ...(payload as any),
           }
         : payload;

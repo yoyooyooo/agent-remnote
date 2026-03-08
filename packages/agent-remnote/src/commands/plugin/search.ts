@@ -4,6 +4,7 @@ import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
 import { AppConfig } from '../../services/AppConfig.js';
+import { HostApiClient } from '../../services/HostApiClient.js';
 import { WsClient } from '../../services/WsClient.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from '../ws/_shared.js';
@@ -29,23 +30,35 @@ export const pluginSearchCommand = Command.make(
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
       const ws = yield* WsClient;
-
-      if (ensureDaemon) {
-        yield* ensureWsSupervisor({ waitMs: WS_START_WAIT_DEFAULT_MS });
-      }
+      const hostApi = yield* HostApiClient;
 
       const limitEffective = clampInt(limit, 1, 100);
       const rpcTimeoutMs = clampInt(timeoutMs, 1, 5000);
       const wsTimeoutMs = clampInt(rpcTimeoutMs + 2000, 2000, 15_000);
 
-      const result = yield* ws.search({
-        url: cfg.wsUrl,
-        timeoutMs: wsTimeoutMs,
-        queryText: query,
-        searchContextRemId,
-        limit: limitEffective,
-        rpcTimeoutMs,
-      });
+      const result = cfg.apiBaseUrl
+        ? yield* hostApi.searchPlugin({
+            baseUrl: cfg.apiBaseUrl,
+            query,
+            searchContextRemId,
+            limit: limitEffective,
+            timeoutMs: rpcTimeoutMs,
+            ensureDaemon,
+          })
+        : yield* Effect.gen(function* () {
+            if (ensureDaemon) {
+              yield* ensureWsSupervisor({ waitMs: WS_START_WAIT_DEFAULT_MS });
+            }
+
+            return yield* ws.search({
+              url: cfg.wsUrl,
+              timeoutMs: wsTimeoutMs,
+              queryText: query,
+              searchContextRemId,
+              limit: limitEffective,
+              rpcTimeoutMs,
+            });
+          });
 
       const results = Array.isArray((result as any).results) ? ((result as any).results as any[]) : [];
       const mdLines = [`- ok: ${(result as any).ok === true ? 'true' : 'false'}`, `- results: ${results.length}`];
@@ -61,4 +74,3 @@ export const pluginSearchCommand = Command.make(
       yield* writeSuccess({ data: result, md: mdLines.join('\n') });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

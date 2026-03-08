@@ -99,4 +99,3 @@ export const writeRemDeleteCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

@@ -50,6 +50,8 @@ const root = Command.make('demo', {}).pipe(Command.withSubcommands([a]));
 const cli = Command.run(root, { name: 'demo', version: '0.0.0' });
 
 NodeRuntime.runMain(
-  cli(process.argv).pipe(Effect.provide(Layer.mergeAll(NodeContext.layer, Console.setConsole(makeConsole()))), Effect.scoped),
+  cli(process.argv).pipe(
+    Effect.provide(Layer.mergeAll(NodeContext.layer, Console.setConsole(makeConsole()))),
+    Effect.scoped,
+  ),
 );
-

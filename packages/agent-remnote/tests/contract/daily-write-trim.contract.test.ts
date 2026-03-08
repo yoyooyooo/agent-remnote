@@ -20,4 +20,3 @@ describe('cli contract: daily write trims boundary blank lines', () => {
     expect(parsed.data?.ops?.[0]?.payload?.text).toBe('hello\nworld');
   });
 });
-

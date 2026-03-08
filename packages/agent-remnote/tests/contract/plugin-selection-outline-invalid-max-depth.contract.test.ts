@@ -52,4 +52,3 @@ describe('cli contract: plugin selection outline invalid max-depth', () => {
     expect(String(parsed.error?.message ?? '')).toContain('maxDepth');
   });
 });
-

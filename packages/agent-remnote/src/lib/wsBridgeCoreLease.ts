@@ -31,10 +31,24 @@ export function handleLeaseExtendMessage(params: {
     ];
   }
 
-  const opId = typeof params.msg?.op_id === 'string' ? params.msg.op_id : typeof params.msg?.opId === 'string' ? params.msg.opId : '';
+  const opId =
+    typeof params.msg?.op_id === 'string'
+      ? params.msg.op_id
+      : typeof params.msg?.opId === 'string'
+        ? params.msg.opId
+        : '';
   const attemptId =
-    typeof params.msg?.attempt_id === 'string' ? params.msg.attempt_id : typeof params.msg?.attemptId === 'string' ? params.msg.attemptId : '';
-  const extendMsRaw = typeof params.msg?.extendMs === 'number' ? params.msg.extendMs : typeof params.msg?.extend_ms === 'number' ? params.msg.extend_ms : undefined;
+    typeof params.msg?.attempt_id === 'string'
+      ? params.msg.attempt_id
+      : typeof params.msg?.attemptId === 'string'
+        ? params.msg.attemptId
+        : '';
+  const extendMsRaw =
+    typeof params.msg?.extendMs === 'number'
+      ? params.msg.extendMs
+      : typeof params.msg?.extend_ms === 'number'
+        ? params.msg.extend_ms
+        : undefined;
   const extendMsRequested = Number.isFinite(extendMsRaw) && extendMsRaw > 0 ? Math.floor(extendMsRaw) : 0;
   const extendMsEffective = clampInt(extendMsRequested, 1000, 120_000);
 

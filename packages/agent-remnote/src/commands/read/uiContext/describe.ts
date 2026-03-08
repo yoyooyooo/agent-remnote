@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import type { BetterSqliteInstance } from '../../../adapters/core.js';
 
 import { AppConfig } from '../../../services/AppConfig.js';
+import { HostApiClient } from '../../../services/HostApiClient.js';
 import type { CliError } from '../../../services/Errors.js';
 import { RemDb } from '../../../services/RemDb.js';
 
@@ -109,6 +110,35 @@ export const readUiContextDescribeCommand = Command.make(
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
       const remDb = yield* RemDb;
+      const hostApi = yield* HostApiClient;
+
+      if (cfg.apiBaseUrl) {
+        const data = yield* hostApi.uiContextDescribe({ baseUrl: cfg.apiBaseUrl, stateFile, staleMs, selectionLimit });
+        const ids = uniqueNonEmpty([data.portal?.id, data.page?.id, data.focus?.id, data.anchor?.id].filter(Boolean));
+        const mdLines: string[] = [];
+        mdLines.push(
+          `Portal: ${data.portal?.title ? `(${data.portal.kind}) ${data.portal.title} [id=${data.portal.id}]` : data.portal?.id ? `(${data.portal.kind}) [id=${data.portal.id}]` : '(unavailable)'}`,
+        );
+        mdLines.push(
+          `Page: ${data.page?.title ? `${data.page.title} [id=${data.page.id}]` : data.page?.id ? `[id=${data.page.id}]` : '(unavailable)'}`,
+        );
+        mdLines.push(
+          `Focus: ${data.focus?.title ? `${data.focus.title} [id=${data.focus.id}]` : data.focus?.id ? `[id=${data.focus.id}]` : '(none)'}`,
+        );
+        if (!data.focus?.id && data.anchor?.source && data.anchor?.source !== 'none') {
+          mdLines.push(
+            `Anchor: (${data.anchor.source}) ${data.anchor?.title ? `${data.anchor.title} [id=${data.anchor.id}]` : `[id=${data.anchor.id}]`}`,
+          );
+        }
+        if (data.selection_items?.kind === 'none' || !data.selection_items?.total_count)
+          mdLines.push('Selection: (none)');
+        else
+          mdLines.push(
+            `Selection: ${data.selection_items.total_count}${data.selection_items.truncated ? ' (truncated)' : ''}`,
+          );
+        yield* writeSuccess({ data, ids, md: `${mdLines.join('\n')}\n` });
+        return;
+      }
 
       const uiSnapshot = loadBridgeUiContextSnapshot({ stateFile, staleMs });
       const selectionSnapshot = loadBridgeSelectionSnapshot({ stateFile, staleMs });

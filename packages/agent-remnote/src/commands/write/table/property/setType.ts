@@ -28,7 +28,20 @@ export const writeTablePropertySetTypeCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ property, type, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    property,
+    type,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -52,7 +65,8 @@ export const writeTablePropertySetTypeCommand = Command.make(
       const payloadSvc = yield* Payload;
 
       const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'set_property_type', payload: { propertyId: property, type } }, payloadSvc.normalizeKeys),
+        try: () =>
+          normalizeOp({ type: 'set_property_type', payload: { propertyId: property, type } }, payloadSvc.normalizeKeys),
         catch: (e) =>
           isCliError(e)
             ? e

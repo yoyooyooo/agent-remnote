@@ -31,4 +31,3 @@ describe('cli contract: legacy --queue-db flag', () => {
     }
   });
 });
-

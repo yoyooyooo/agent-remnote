@@ -17,10 +17,14 @@ const status = Options.choice('status', ['unfinished', 'finished', 'all'] as con
   Options.optional,
   Options.map(optionToUndefined),
 );
-const sort = Options.choice(
-  'sort',
-  ['dueAsc', 'dueDesc', 'updatedAtAsc', 'updatedAtDesc', 'createdAtAsc', 'createdAtDesc'] as const,
-).pipe(Options.optional, Options.map(optionToUndefined));
+const sort = Options.choice('sort', [
+  'dueAsc',
+  'dueDesc',
+  'updatedAtAsc',
+  'updatedAtDesc',
+  'createdAtAsc',
+  'createdAtDesc',
+] as const).pipe(Options.optional, Options.map(optionToUndefined));
 const tagId = Options.text('tag-id').pipe(Options.repeated);
 const tagTitle = Options.text('tag-title').pipe(Options.repeated);
 const preferTodoOnly = Options.boolean('prefer-todo-only');
@@ -107,10 +111,13 @@ export function makeTodosListCommand() {
               statusAttrTitles: statusAttrTitle && statusAttrTitle.length > 0 ? statusAttrTitle : undefined,
               unfinishedOptionTitles:
                 unfinishedOptionTitle && unfinishedOptionTitle.length > 0 ? unfinishedOptionTitle : undefined,
-              finishedOptionTitles: finishedOptionTitle && finishedOptionTitle.length > 0 ? finishedOptionTitle : undefined,
+              finishedOptionTitles:
+                finishedOptionTitle && finishedOptionTitle.length > 0 ? finishedOptionTitle : undefined,
               dueDateAttrTitles: dueDateAttrTitle && dueDateAttrTitle.length > 0 ? dueDateAttrTitle : undefined,
               alwaysIncludeTagOnlyTitles:
-                alwaysIncludeTagOnlyTitle && alwaysIncludeTagOnlyTitle.length > 0 ? alwaysIncludeTagOnlyTitle : undefined,
+                alwaysIncludeTagOnlyTitle && alwaysIncludeTagOnlyTitle.length > 0
+                  ? alwaysIncludeTagOnlyTitle
+                  : undefined,
               snippetLength: snippetLength as any,
               limit: limit as any,
               offset: offset as any,

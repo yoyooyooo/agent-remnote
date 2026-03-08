@@ -17,7 +17,11 @@ import { WsBridgeStateFileLive } from '../../src/services/WsBridgeStateFile.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
 import { runWsBridgeRuntime } from '../../src/runtime/ws-bridge/runWsBridgeRuntime.js';
 
-function makeTestConfig(params: { readonly storeDb: string; readonly wsUrl: string; readonly wsStateFilePath: string }): ResolvedConfig {
+function makeTestConfig(params: {
+  readonly storeDb: string;
+  readonly wsUrl: string;
+  readonly wsStateFilePath: string;
+}): ResolvedConfig {
   return {
     format: 'md',
     quiet: true,
@@ -179,12 +183,21 @@ describe('ws protocol contract: legacy RequestOp is rejected', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
-        yield* runWsBridgeRuntime({ host: '127.0.0.1', port, path: '/ws', kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 } }).pipe(
-          Effect.forkScoped,
-        );
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
 
         yield* Effect.promise(async () => {
           const ws = await connectWsWithRetry(wsUrl, 3000);

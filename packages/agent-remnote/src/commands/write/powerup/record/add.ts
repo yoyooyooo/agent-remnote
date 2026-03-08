@@ -123,12 +123,7 @@ export const writePowerupRecordAddCommand = Command.make(
       const tableTagId = resolved ? resolved.id : normalizeRemIdInput(tagId!);
 
       const resolvedRef = ref ?? 'daily:today';
-      const parentId =
-        typeof parent === 'string'
-          ? parent
-          : dryRun
-            ? resolvedRef
-            : yield* refs.resolve(resolvedRef);
+      const parentId = typeof parent === 'string' ? parent : dryRun ? resolvedRef : yield* refs.resolve(resolvedRef);
 
       const rowClientTempId = makeTempId();
 
@@ -234,7 +229,16 @@ export const writePowerupRecordAddCommand = Command.make(
             dry_run: true,
             row_client_temp_id: rowClientTempId,
             tag_id: tableTagId,
-            ...(resolved ? { powerup: { query: resolved.query, matchedBy: resolved.matchedBy, title: resolved.title, code: resolved.rcrt } } : {}),
+            ...(resolved
+              ? {
+                  powerup: {
+                    query: resolved.query,
+                    matchedBy: resolved.matchedBy,
+                    title: resolved.title,
+                    code: resolved.rcrt,
+                  },
+                }
+              : {}),
             op_count: ops.length,
             ops,
             meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
@@ -259,17 +263,15 @@ export const writePowerupRecordAddCommand = Command.make(
       const queue = yield* Queue;
       const created =
         waited && (waited as any).is_success === true
-          ? yield* queue
-              .inspect({ dbPath: cfg.storeDb, txnId: data.txn_id })
-              .pipe(
-                Effect.map((inspected) => {
-                  const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-                  const match = idMap.find((r) => String(r?.client_temp_id ?? '') === rowClientTempId);
-                  const remoteId = match?.remote_id ? String(match.remote_id) : '';
-                  return remoteId ? { row_rem_id: remoteId } : {};
-                }),
-                Effect.catchAll(() => Effect.succeed({})),
-              )
+          ? yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
+              Effect.map((inspected) => {
+                const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
+                const match = idMap.find((r) => String(r?.client_temp_id ?? '') === rowClientTempId);
+                const remoteId = match?.remote_id ? String(match.remote_id) : '';
+                return remoteId ? { row_rem_id: remoteId } : {};
+              }),
+              Effect.catchAll(() => Effect.succeed({})),
+            )
           : {};
 
       const out = waited
@@ -278,11 +280,11 @@ export const writePowerupRecordAddCommand = Command.make(
 
       yield* writeSuccess({
         data: out,
-        ids: [data.txn_id, ...data.op_ids, ...(created as any).row_rem_id ? [(created as any).row_rem_id] : []],
+        ids: [data.txn_id, ...data.op_ids, ...((created as any).row_rem_id ? [(created as any).row_rem_id] : [])],
         md: [
           `- txn_id: ${data.txn_id}`,
           `- op_ids: ${data.op_ids.length}`,
-          ...(created as any).row_rem_id ? [`- row_rem_id: ${(created as any).row_rem_id}`] : [],
+          ...((created as any).row_rem_id ? [`- row_rem_id: ${(created as any).row_rem_id}`] : []),
           `- notified: ${data.notified}`,
           `- sent: ${data.sent ?? ''}`,
           ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),

@@ -111,19 +111,7 @@ describe('cli contract: write table record', () => {
       const values = JSON.stringify([{ propertyName: 'Status', value: 'Todo' }]);
 
       const res = await runCli(
-        [
-          '--json',
-          'table',
-          'record',
-          'add',
-          '--table-tag',
-          tagId,
-          '--parent',
-          'p1',
-          '--dry-run',
-          '--values',
-          values,
-        ],
+        ['--json', 'table', 'record', 'add', '--table-tag', tagId, '--parent', 'p1', '--dry-run', '--values', values],
         { env: { HOME: tmpHome, REMNOTE_DB: dbPath, REMNOTE_TMUX_REFRESH: '0' } },
       );
 
@@ -181,17 +169,7 @@ describe('cli contract: write table record', () => {
   });
 
   it('write table record delete --dry-run --json emits delete_rem op', async () => {
-    const res = await runCli([
-      '--json',
-      'table',
-      'record',
-      'delete',
-      '--table-tag',
-      't1',
-      '--row',
-      'r1',
-      '--dry-run',
-    ]);
+    const res = await runCli(['--json', 'table', 'record', 'delete', '--table-tag', 't1', '--row', 'r1', '--dry-run']);
 
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');

@@ -55,10 +55,9 @@ describe('cli contract: write plan', () => {
         ],
       });
 
-      const res = await runCli(
-        ['--ids', 'plan', 'apply', '--payload', payload, '--no-notify', '--no-ensure-daemon'],
-        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' } },
-      );
+      const res = await runCli(['--ids', 'plan', 'apply', '--payload', payload, '--no-notify', '--no-ensure-daemon'], {
+        env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },
+      });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');

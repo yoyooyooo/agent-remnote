@@ -108,15 +108,19 @@ describe('store contract: legacy queue tables are renamed to queue_*', () => {
           );
         `);
 
-        seedDb.prepare(
-          `INSERT INTO txns(txn_id, status, priority, idempotency_key, client_id, meta_json, op_count, next_seq, created_at, updated_at, committed_at, finished_at)
+        seedDb
+          .prepare(
+            `INSERT INTO txns(txn_id, status, priority, idempotency_key, client_id, meta_json, op_count, next_seq, created_at, updated_at, committed_at, finished_at)
            VALUES(@txn_id, 'ready', 0, NULL, NULL, '{}', 1, 1, @t, @t, @t, NULL)`,
-        ).run({ txn_id: txnId, t });
+          )
+          .run({ txn_id: txnId, t });
 
-        seedDb.prepare(
-          `INSERT INTO ops(op_id, txn_id, op_seq, type, payload_json, status, idempotency_key, op_hash, attempt_count, max_attempts, deliver_after, next_attempt_at, locked_by, locked_at, lease_expires_at, dead_reason, created_at, updated_at)
+        seedDb
+          .prepare(
+            `INSERT INTO ops(op_id, txn_id, op_seq, type, payload_json, status, idempotency_key, op_hash, attempt_count, max_attempts, deliver_after, next_attempt_at, locked_by, locked_at, lease_expires_at, dead_reason, created_at, updated_at)
            VALUES(@op_id, @txn_id, 1, 'update_text', '{}', 'pending', NULL, 'hash', 0, 10, 0, @t, NULL, NULL, NULL, NULL, @t, @t)`,
-        ).run({ op_id: opId, txn_id: txnId, t });
+          )
+          .run({ op_id: opId, txn_id: txnId, t });
 
         seedDb.pragma('wal_checkpoint(TRUNCATE)');
       } finally {

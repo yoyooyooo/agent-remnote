@@ -95,24 +95,22 @@ export const writeTableRecordAddCommand = Command.make(
           ? parent
           : dryRun
             ? resolvedRef
-            : yield* refs
-                .resolve(resolvedRef)
-                .pipe(
-                  Effect.catchAll((e) =>
-                    Effect.fail(
-                      new CliError({
-                        code: e.code === 'INVALID_ARGS' ? 'INVALID_ARGS' : e.code,
-                        message:
-                          resolvedRef.startsWith('daily:') && e.message.startsWith('No Rem found for ref:')
-                            ? 'Daily document not found for that date. Please open it in RemNote first.'
-                            : e.message,
-                        exitCode: e.exitCode,
-                        details: e.details,
-                        hint: e.hint,
-                      }),
-                    ),
+            : yield* refs.resolve(resolvedRef).pipe(
+                Effect.catchAll((e) =>
+                  Effect.fail(
+                    new CliError({
+                      code: e.code === 'INVALID_ARGS' ? 'INVALID_ARGS' : e.code,
+                      message:
+                        resolvedRef.startsWith('daily:') && e.message.startsWith('No Rem found for ref:')
+                          ? 'Daily document not found for that date. Please open it in RemNote first.'
+                          : e.message,
+                      exitCode: e.exitCode,
+                      details: e.details,
+                      hint: e.hint,
+                    }),
                   ),
-                );
+                ),
+              );
 
       const rowClientTempId = makeTempId();
 
@@ -237,17 +235,15 @@ export const writeTableRecordAddCommand = Command.make(
       const queue = yield* Queue;
       const created =
         waited && (waited as any).is_success === true
-          ? yield* queue
-              .inspect({ dbPath: cfg.storeDb, txnId: data.txn_id })
-              .pipe(
-                Effect.map((inspected) => {
-                  const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-                  const match = idMap.find((r) => String(r?.client_temp_id ?? '') === rowClientTempId);
-                  const remoteId = match?.remote_id ? String(match.remote_id) : '';
-                  return remoteId ? { row_rem_id: remoteId } : {};
-                }),
-                Effect.catchAll(() => Effect.succeed({})),
-              )
+          ? yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
+              Effect.map((inspected) => {
+                const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
+                const match = idMap.find((r) => String(r?.client_temp_id ?? '') === rowClientTempId);
+                const remoteId = match?.remote_id ? String(match.remote_id) : '';
+                return remoteId ? { row_rem_id: remoteId } : {};
+              }),
+              Effect.catchAll(() => Effect.succeed({})),
+            )
           : {};
       const out = waited
         ? ({ ...data, ...waited, row_client_temp_id: rowClientTempId, ...created } as any)

@@ -41,4 +41,3 @@ export const tableShowCommand = Command.make(
       yield* writeSuccess({ data: payload, md: (payload as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

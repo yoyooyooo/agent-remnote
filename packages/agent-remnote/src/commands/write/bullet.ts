@@ -50,7 +50,21 @@ export const writeBulletCommand = Command.make(
     idempotencyKey,
     meta: metaSpec,
   },
-  ({ parent, ref, text, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    parent,
+    ref,
+    text,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -81,7 +95,8 @@ export const writeBulletCommand = Command.make(
       const textValue = trimBoundaryBlankLines(text);
 
       const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'create_rem', payload: { parentId, text: textValue } }, payloadSvc.normalizeKeys),
+        try: () =>
+          normalizeOp({ type: 'create_rem', payload: { parentId, text: textValue } }, payloadSvc.normalizeKeys),
         catch: (e) =>
           isCliError(e)
             ? e

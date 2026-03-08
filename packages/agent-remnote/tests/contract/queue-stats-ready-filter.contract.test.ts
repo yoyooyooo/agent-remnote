@@ -22,7 +22,9 @@ describe('queue contract: stats only counts dispatchable pending ops', () => {
         expect(stats.pending).toBe(1);
         expect(stats.ready_txns).toBe(1);
 
-        const pendingRows = db.prepare(`SELECT txn_id FROM queue_ops WHERE status='pending' ORDER BY txn_id`).all() as any[];
+        const pendingRows = db
+          .prepare(`SELECT txn_id FROM queue_ops WHERE status='pending' ORDER BY txn_id`)
+          .all() as any[];
         expect(pendingRows.length).toBe(2);
         expect(pendingRows.map((r) => String(r.txn_id))).toContain(readyTxn);
         expect(pendingRows.map((r) => String(r.txn_id))).toContain(failedTxn);
@@ -34,4 +36,3 @@ describe('queue contract: stats only counts dispatchable pending ops', () => {
     }
   });
 });
-

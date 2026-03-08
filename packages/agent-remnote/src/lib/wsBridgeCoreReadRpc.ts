@@ -1,6 +1,11 @@
 import type { WsConnId } from '../kernel/ws-bridge/index.js';
 
-import type { WsBridgeCoreAction, WsBridgeCoreClientState, WsBridgeCoreConfig, WsBridgeCoreState } from './wsBridgeCoreTypes.js';
+import type {
+  WsBridgeCoreAction,
+  WsBridgeCoreClientState,
+  WsBridgeCoreConfig,
+  WsBridgeCoreState,
+} from './wsBridgeCoreTypes.js';
 import { clampInt } from './wsBridgeCoreUtils.js';
 
 function makeSearchTimeoutTimerId(forwardedRequestId: string): string {
@@ -40,7 +45,11 @@ export function abortPendingSearchForConnId(params: {
           durationMs: params.now - pending.startedAt,
         },
         error: { code: 'BRIDGE_ERROR', message: 'connection closed' },
-        nextActions: ['Retry later', 'Reconnect the RemNote plugin', params.config.buildDbFallbackNextAction(pending.queryText)],
+        nextActions: [
+          'Retry later',
+          'Reconnect the RemNote plugin',
+          params.config.buildDbFallbackNextAction(pending.queryText),
+        ],
       },
     });
   }
@@ -95,7 +104,8 @@ export function handleSearchRequestMessage(params: {
   const startedAt = params.now;
   const originalRequestId = typeof params.msg?.requestId === 'string' ? params.msg.requestId.trim() : '';
   const queryText = typeof params.msg?.queryText === 'string' ? params.msg.queryText : '';
-  const searchContextRemIdRaw = typeof params.msg?.searchContextRemId === 'string' ? params.msg.searchContextRemId.trim() : '';
+  const searchContextRemIdRaw =
+    typeof params.msg?.searchContextRemId === 'string' ? params.msg.searchContextRemId.trim() : '';
 
   const maxPreviewChars = 200;
   const limitRequested = clampInt(typeof params.msg?.limit === 'number' ? params.msg.limit : 20, 1, 10_000);
@@ -130,7 +140,13 @@ export function handleSearchRequestMessage(params: {
   };
 
   if (!originalRequestId) {
-    return [{ _tag: 'SendJson', connId: params.client.connId, msg: { type: 'Error', message: 'invalid SearchRequest: missing requestId' } }];
+    return [
+      {
+        _tag: 'SendJson',
+        connId: params.client.connId,
+        msg: { type: 'Error', message: 'invalid SearchRequest: missing requestId' },
+      },
+    ];
   }
   if (!queryText.trim()) {
     return [replyError({ code: 'VALIDATION_ERROR', message: 'queryText must not be empty' })];
@@ -175,9 +191,7 @@ export function handleSearchRequestMessage(params: {
       },
       onResult: (ok) => {
         if (!ok) {
-          return [
-            replyError({ code: 'BRIDGE_ERROR', message: 'failed to forward request to plugin' }),
-          ];
+          return [replyError({ code: 'BRIDGE_ERROR', message: 'failed to forward request to plugin' })];
         }
 
         params.state.pendingSearchByForwardedRequestId.set(forwardedRequestId, {
@@ -195,7 +209,14 @@ export function handleSearchRequestMessage(params: {
           timeoutTimerId,
         });
 
-        return [{ _tag: 'SetTimer', id: timeoutTimerId, delayMs: timeoutMs, event: { _tag: 'SearchTimeout', forwardedRequestId } }];
+        return [
+          {
+            _tag: 'SetTimer',
+            id: timeoutTimerId,
+            delayMs: timeoutMs,
+            event: { _tag: 'SearchTimeout', forwardedRequestId },
+          },
+        ];
       },
     },
   ];
@@ -209,7 +230,13 @@ export function handleSearchResponseMessage(params: {
 }): readonly WsBridgeCoreAction[] {
   const forwardedRequestId = typeof params.msg?.requestId === 'string' ? params.msg.requestId.trim() : '';
   if (!forwardedRequestId) {
-    return [{ _tag: 'SendJson', connId: params.clientConnId, msg: { type: 'Error', message: 'invalid SearchResponse: missing requestId' } }];
+    return [
+      {
+        _tag: 'SendJson',
+        connId: params.clientConnId,
+        msg: { type: 'Error', message: 'invalid SearchResponse: missing requestId' },
+      },
+    ];
   }
 
   const pending = params.state.pendingSearchByForwardedRequestId.get(forwardedRequestId);
@@ -221,7 +248,9 @@ export function handleSearchResponseMessage(params: {
   const budgetFromPlugin = params.msg?.budget && typeof params.msg.budget === 'object' ? params.msg.budget : {};
   const maxPreviewCharsRaw = Number((budgetFromPlugin as any)?.maxPreviewChars ?? pending.maxPreviewChars);
   const maxPreviewChars =
-    Number.isFinite(maxPreviewCharsRaw) && maxPreviewCharsRaw > 0 ? Math.floor(maxPreviewCharsRaw) : pending.maxPreviewChars;
+    Number.isFinite(maxPreviewCharsRaw) && maxPreviewCharsRaw > 0
+      ? Math.floor(maxPreviewCharsRaw)
+      : pending.maxPreviewChars;
 
   const outMsg: any = {
     type: 'SearchResponse',
@@ -241,7 +270,9 @@ export function handleSearchResponseMessage(params: {
     outMsg.results = Array.isArray(params.msg?.results) ? params.msg.results : [];
   } else {
     outMsg.error =
-      params.msg?.error && typeof params.msg.error === 'object' ? params.msg.error : { code: 'PLUGIN_ERROR', message: 'unknown error' };
+      params.msg?.error && typeof params.msg.error === 'object'
+        ? params.msg.error
+        : { code: 'PLUGIN_ERROR', message: 'unknown error' };
     outMsg.nextActions = Array.isArray(params.msg?.nextActions) ? params.msg.nextActions : undefined;
   }
 

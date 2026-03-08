@@ -15,10 +15,12 @@ import { normalizeRemIdInput } from '../../../_powerup.js';
 import { optionToUndefined, writeCommonOptions } from '../../_shared.js';
 
 function pickTodoTagId(schemas: readonly any[], tagId?: string): string | null {
-  const mapped = schemas.map((s: any) => ({ tagId: String(s?.tagId ?? ''), tagName: String(s?.tagName ?? '') })).filter((s) => s.tagId);
+  const mapped = schemas
+    .map((s: any) => ({ tagId: String(s?.tagId ?? ''), tagName: String(s?.tagName ?? '') }))
+    .filter((s) => s.tagId);
   if (tagId) return mapped.find((s) => s.tagId === tagId)?.tagId ?? null;
   const byName = mapped.find((s) => s.tagName.trim().toLowerCase() === 'todo');
-  return byName?.tagId ?? (mapped[0]?.tagId ?? null);
+  return byName?.tagId ?? mapped[0]?.tagId ?? null;
 }
 
 export const writePowerupTodoRemoveCommand = Command.make(
@@ -40,7 +42,21 @@ export const writePowerupTodoRemoveCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, tagId, removeProperties, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    rem,
+    tagId,
+    removeProperties,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -154,4 +170,3 @@ export const writePowerupTodoRemoveCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

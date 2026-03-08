@@ -99,4 +99,3 @@ export const writePowerupOptionRemoveCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

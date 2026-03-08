@@ -42,13 +42,17 @@ function resolvePropertyId(input: TableValueInput, properties: readonly TablePro
   const exact = properties.filter((p) => normalizeName(p.name) === normalizeName(propertyName));
   if (exact.length === 1) return exact[0]!.id;
   if (exact.length > 1) {
-    throw new Error(`Ambiguous propertyName "${propertyName}" (matched ${exact.length} properties). Use propertyId instead.`);
+    throw new Error(
+      `Ambiguous propertyName "${propertyName}" (matched ${exact.length} properties). Use propertyId instead.`,
+    );
   }
 
   const loose = properties.filter((p) => normalizeNameLoose(p.name) === normalizeNameLoose(propertyName));
   if (loose.length === 1) return loose[0]!.id;
   if (loose.length > 1) {
-    throw new Error(`Ambiguous propertyName "${propertyName}" (matched ${loose.length} properties). Use propertyId instead.`);
+    throw new Error(
+      `Ambiguous propertyName "${propertyName}" (matched ${loose.length} properties). Use propertyId instead.`,
+    );
   }
 
   throw new Error(`Unknown propertyName "${propertyName}". Use propertyId instead.`);

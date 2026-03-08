@@ -18,4 +18,3 @@ export type CompiledWritePlan = {
     readonly payload: Record<string, unknown>;
   }>;
 };
-

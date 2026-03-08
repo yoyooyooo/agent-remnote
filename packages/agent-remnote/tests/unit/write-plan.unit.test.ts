@@ -86,4 +86,3 @@ describe('write plan kernel: parse/compile', () => {
     expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/does not support/i);
   });
 });
-

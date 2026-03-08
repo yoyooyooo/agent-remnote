@@ -65,7 +65,8 @@ function makeWriteRemTextCommand(name: 'set-text' | 'text') {
         const textValue = trimBoundaryBlankLines(text);
 
         const op = yield* Effect.try({
-          try: () => normalizeOp({ type: 'update_text', payload: { remId, text: textValue } }, payloadSvc.normalizeKeys),
+          try: () =>
+            normalizeOp({ type: 'update_text', payload: { remId, text: textValue } }, payloadSvc.normalizeKeys),
           catch: (e) =>
             isCliError(e)
               ? e

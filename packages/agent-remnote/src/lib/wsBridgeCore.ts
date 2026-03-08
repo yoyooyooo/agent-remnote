@@ -6,7 +6,12 @@ import { queueStats, recoverExpiredLeases } from '../internal/queue/index.js';
 import { handleOpAckMessage } from './wsBridgeCoreAck.js';
 import { selectOpsForDispatch } from './wsBridgeCoreDispatch.js';
 import { handleLeaseExtendMessage } from './wsBridgeCoreLease.js';
-import { abortPendingSearchForConnId, handleSearchRequestMessage, handleSearchResponseMessage, handleSearchTimeout } from './wsBridgeCoreReadRpc.js';
+import {
+  abortPendingSearchForConnId,
+  handleSearchRequestMessage,
+  handleSearchResponseMessage,
+  handleSearchTimeout,
+} from './wsBridgeCoreReadRpc.js';
 import { buildClientsSnapshot, buildWsBridgeStateSnapshot } from './wsBridgeCoreSnapshot.js';
 import type {
   WsBridgeCore,
@@ -252,7 +257,12 @@ export function makeWsBridgeCore(params: {
         event.now - state.lastNoProgressWarnAt >= config.kickConfig.cooldownMs
       ) {
         state.lastNoProgressWarnAt = event.now;
-        actions.push({ _tag: 'Log', level: 'warn', event: 'no_progress_warn', details: { activeConnId, noProgressForMs } });
+        actions.push({
+          _tag: 'Log',
+          level: 'warn',
+          event: 'no_progress_warn',
+          details: { activeConnId, noProgressForMs },
+        });
         actions.push(...recomputeActiveWorker(event.now));
       }
 
@@ -293,7 +303,9 @@ export function makeWsBridgeCore(params: {
       }
 
       if (event.event._tag === 'SearchTimeout') {
-        actions.push(...handleSearchTimeout({ now: event.now, state, config, forwardedRequestId: event.event.forwardedRequestId }));
+        actions.push(
+          ...handleSearchTimeout({ now: event.now, state, config, forwardedRequestId: event.event.forwardedRequestId }),
+        );
         return actions;
       }
 
@@ -419,7 +431,11 @@ export function makeWsBridgeCore(params: {
           ackCount = 0;
         }
 
-        client.selection = normalizeSelectionForUiContext({ selection: client.selection, uiContext: client.uiContext, now: event.now });
+        client.selection = normalizeSelectionForUiContext({
+          selection: client.selection,
+          uiContext: client.uiContext,
+          now: event.now,
+        });
 
         actions.push(...recomputeActiveWorker(event.now));
         actions.push(...scheduleStateWrite(event.now));
@@ -455,7 +471,11 @@ export function makeWsBridgeCore(params: {
           updatedAt: event.now,
         };
 
-        client.selection = normalizeSelectionForUiContext({ selection: client.selection, uiContext: client.uiContext, now: event.now });
+        client.selection = normalizeSelectionForUiContext({
+          selection: client.selection,
+          uiContext: client.uiContext,
+          now: event.now,
+        });
 
         actions.push(...recomputeActiveWorker(event.now));
         actions.push(...scheduleStateWrite(event.now));
@@ -508,15 +528,26 @@ export function makeWsBridgeCore(params: {
         const leaseMsRaw = typeof msg?.leaseMs === 'number' ? msg.leaseMs : undefined;
         const leaseMsRequested = Number.isFinite(leaseMsRaw) && leaseMsRaw > 0 ? Math.floor(leaseMsRaw) : undefined;
 
-        const maxOpsRaw = typeof msg?.maxOps === 'number' ? msg.maxOps : typeof msg?.max_ops === 'number' ? msg.max_ops : 1;
+        const maxOpsRaw =
+          typeof msg?.maxOps === 'number' ? msg.maxOps : typeof msg?.max_ops === 'number' ? msg.max_ops : 1;
         const maxOpsRequested = Number.isFinite(maxOpsRaw) && maxOpsRaw > 0 ? Math.floor(maxOpsRaw) : 1;
 
-        const maxBytesRaw = typeof msg?.maxBytes === 'number' ? msg.maxBytes : typeof msg?.max_bytes === 'number' ? msg.max_bytes : undefined;
+        const maxBytesRaw =
+          typeof msg?.maxBytes === 'number'
+            ? msg.maxBytes
+            : typeof msg?.max_bytes === 'number'
+              ? msg.max_bytes
+              : undefined;
         const maxBytesRequested = Number.isFinite(maxBytesRaw) && maxBytesRaw > 0 ? Math.floor(maxBytesRaw) : undefined;
 
         const maxOpBytesRaw =
-          typeof msg?.maxOpBytes === 'number' ? msg.maxOpBytes : typeof msg?.max_op_bytes === 'number' ? msg.max_op_bytes : undefined;
-        const maxOpBytesRequested = Number.isFinite(maxOpBytesRaw) && maxOpBytesRaw > 0 ? Math.floor(maxOpBytesRaw) : undefined;
+          typeof msg?.maxOpBytes === 'number'
+            ? msg.maxOpBytes
+            : typeof msg?.max_op_bytes === 'number'
+              ? msg.max_op_bytes
+              : undefined;
+        const maxOpBytesRequested =
+          Number.isFinite(maxOpBytesRaw) && maxOpBytesRaw > 0 ? Math.floor(maxOpBytesRaw) : undefined;
 
         const selected = selectOpsForDispatch({
           db,
@@ -615,7 +646,10 @@ export function makeWsBridgeCore(params: {
                   sent: 0,
                   activeConnId,
                   reason: 'no_active_worker',
-                  nextActions: ['Reconnect the RemNote plugin control channel', 'Check daemon logs for connection churn'],
+                  nextActions: [
+                    'Reconnect the RemNote plugin control channel',
+                    'Check daemon logs for connection churn',
+                  ],
                 },
               },
               ...scheduleStateWrite(event.now),
@@ -679,7 +713,12 @@ export function makeWsBridgeCore(params: {
       }
 
       case 'WhoAmI': {
-        send(event.connId, { type: 'YouAre', connId: event.connId, clientType: client?.clientType, lastSeenAt: client?.lastSeenAt });
+        send(event.connId, {
+          type: 'YouAre',
+          connId: event.connId,
+          clientType: client?.clientType,
+          lastSeenAt: client?.lastSeenAt,
+        });
         return actions;
       }
 

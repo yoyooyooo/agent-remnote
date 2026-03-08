@@ -4,7 +4,11 @@ import * as Fiber from 'effect/Fiber';
 import * as Queue from 'effect/Queue';
 
 import { initialSupervisorState, planRestart } from '../../kernel/supervisor/restartPlan.js';
-import type { SupervisorLastExit, SupervisorRestartConfig, SupervisorStateFile } from '../../kernel/supervisor/model.js';
+import type {
+  SupervisorLastExit,
+  SupervisorRestartConfig,
+  SupervisorStateFile,
+} from '../../kernel/supervisor/model.js';
 
 import { AppConfig } from '../../services/AppConfig.js';
 import { ChildProcess, type ChildOutcome } from '../../services/ChildProcess.js';
@@ -77,7 +81,11 @@ export function runSupervisorRuntime(params: {
   readonly stateFilePath: string;
   readonly logWriter: { readonly maxBytes: number; readonly keep: number };
   readonly restart: SupervisorRestartConfig;
-  readonly child: { readonly command: string; readonly args: readonly string[]; readonly env?: NodeJS.ProcessEnv | undefined };
+  readonly child: {
+    readonly command: string;
+    readonly args: readonly string[];
+    readonly env?: NodeJS.ProcessEnv | undefined;
+  };
 }): Effect.Effect<void, CliError, AppConfig | ChildProcess | DaemonFiles | SupervisorState | LogWriterFactory> {
   return Effect.scoped(
     Effect.gen(function* () {
@@ -191,17 +199,17 @@ export function runSupervisorRuntime(params: {
         Effect.gen(function* () {
           yield* cancelRestart;
           if (state.stopping) return;
-	          const fiber = yield* Effect.forkScoped(
-	            Effect.sleep(delayMs).pipe(
-	              Effect.zipRight(
-	                Effect.sync(() => {
-	                  Queue.unsafeOffer(events, { _tag: 'RestartDue' });
-	                }),
-	              ),
-	            ),
-	          );
-	          state = { ...state, restartFiber: fiber };
-	        });
+          const fiber = yield* Effect.forkScoped(
+            Effect.sleep(delayMs).pipe(
+              Effect.zipRight(
+                Effect.sync(() => {
+                  Queue.unsafeOffer(events, { _tag: 'RestartDue' });
+                }),
+              ),
+            ),
+          );
+          state = { ...state, restartFiber: fiber };
+        });
 
       // Boot: write pid/state + start the first child.
       yield* writePidFile(null, null);

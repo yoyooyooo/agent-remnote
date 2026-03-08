@@ -114,7 +114,16 @@ export const writePowerupRemoveCommand = Command.make(
             dry_run: true,
             rem_id: remId,
             tag_id: resolvedTagId,
-            ...(resolved ? { powerup: { query: resolved.query, matchedBy: resolved.matchedBy, title: resolved.title, code: resolved.rcrt } } : {}),
+            ...(resolved
+              ? {
+                  powerup: {
+                    query: resolved.query,
+                    matchedBy: resolved.matchedBy,
+                    title: resolved.title,
+                    code: resolved.rcrt,
+                  },
+                }
+              : {}),
             ops: [op],
             meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
           },
@@ -149,4 +158,3 @@ export const writePowerupRemoveCommand = Command.make(
       });
     }).pipe(Effect.catchAll(writeFailure)),
 );
-

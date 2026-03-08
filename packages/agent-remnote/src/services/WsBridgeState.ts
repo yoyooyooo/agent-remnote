@@ -83,7 +83,8 @@ export const WsBridgeStateLive = Layer.succeed(WsBridgeState, {
       const isStale = !Number.isFinite(updatedAt) || updatedAt <= 0 || now - updatedAt > staleMs;
 
       const clients = Array.isArray((parsed as any)?.clients) ? (parsed as any).clients : [];
-      const activeConnId = typeof (parsed as any)?.activeWorkerConnId === 'string' ? (parsed as any).activeWorkerConnId : undefined;
+      const activeConnId =
+        typeof (parsed as any)?.activeWorkerConnId === 'string' ? (parsed as any).activeWorkerConnId : undefined;
       const client = pickClient(clients, activeConnId);
 
       if (!client) {
@@ -115,4 +116,3 @@ export const WsBridgeStateLive = Layer.succeed(WsBridgeState, {
       }),
     ),
 } satisfies WsBridgeStateService);
-

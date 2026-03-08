@@ -19,7 +19,11 @@ import { WsBridgeStateFileLive } from '../../src/services/WsBridgeStateFile.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
 import { runWsBridgeRuntime } from '../../src/runtime/ws-bridge/runWsBridgeRuntime.js';
 
-function makeTestConfig(params: { readonly storeDb: string; readonly wsUrl: string; readonly wsStateFilePath: string }): ResolvedConfig {
+function makeTestConfig(params: {
+  readonly storeDb: string;
+  readonly wsUrl: string;
+  readonly wsStateFilePath: string;
+}): ResolvedConfig {
   return {
     format: 'md',
     quiet: true,
@@ -174,7 +178,11 @@ describe('ws protocol contract: oversize op fails fast', () => {
       const port = await getFreePort();
       const wsUrl = `ws://127.0.0.1:${port}/ws`;
       const storeDbPath = path.join(tmpDir, 'store.sqlite');
-      const cfg = makeTestConfig({ storeDb: storeDbPath, wsUrl, wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json') });
+      const cfg = makeTestConfig({
+        storeDb: storeDbPath,
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+      });
 
       const seedDb = openQueueDb(cfg.storeDb);
       let opId: string = '';
@@ -194,7 +202,13 @@ describe('ws protocol contract: oversize op fails fast', () => {
 
       const cfgLayer = Layer.succeed(AppConfig, cfg);
       const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
-      const live = Layer.mergeAll(cfgLayer, WsBridgeServerLive, WsBridgeStateFileLive, StatusLineFileLive, statusLineStub);
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
 
       const program = Effect.gen(function* () {
         yield* runWsBridgeRuntime({

@@ -9,7 +9,11 @@ function clampInt(value: number, min: number, fallback: number): number {
   return Math.max(min, Math.floor(value));
 }
 
-function computeDelayMs(params: { readonly restartCount: number; readonly baseBackoffMs: number; readonly maxBackoffMs: number }): number {
+function computeDelayMs(params: {
+  readonly restartCount: number;
+  readonly baseBackoffMs: number;
+  readonly maxBackoffMs: number;
+}): number {
   const base = clampInt(params.baseBackoffMs, 1, 500);
   const max = clampInt(params.maxBackoffMs, 1, 10_000);
   const pow = Math.max(0, clampInt(params.restartCount, 0, 0) - 1);
@@ -71,4 +75,3 @@ export function planRestart(params: {
 
   return { _tag: 'restart', delayMs, nextState };
 }
-

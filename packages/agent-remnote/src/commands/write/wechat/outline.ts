@@ -233,10 +233,18 @@ function outlineify(params: { title: string; url: string; content: string; maxDe
   return renderMarkdown(root);
 }
 
-function agentBrowser(cdpPort: number, args: readonly string[], timeoutMs: number): Effect.Effect<void, CliError, Subprocess> {
+function agentBrowser(
+  cdpPort: number,
+  args: readonly string[],
+  timeoutMs: number,
+): Effect.Effect<void, CliError, Subprocess> {
   return Effect.gen(function* () {
     const subprocess = yield* Subprocess;
-    const res = yield* subprocess.run({ command: 'agent-browser', args: ['--cdp', String(cdpPort), ...args], timeoutMs });
+    const res = yield* subprocess.run({
+      command: 'agent-browser',
+      args: ['--cdp', String(cdpPort), ...args],
+      timeoutMs,
+    });
     if (res.exitCode === 0) return;
     return yield* Effect.fail(
       new CliError({
@@ -249,7 +257,11 @@ function agentBrowser(cdpPort: number, args: readonly string[], timeoutMs: numbe
   });
 }
 
-function agentBrowserJson(cdpPort: number, args: readonly string[], timeoutMs: number): Effect.Effect<any, CliError, Subprocess> {
+function agentBrowserJson(
+  cdpPort: number,
+  args: readonly string[],
+  timeoutMs: number,
+): Effect.Effect<any, CliError, Subprocess> {
   return Effect.gen(function* () {
     const subprocess = yield* Subprocess;
     const res = yield* subprocess.run({

@@ -6,7 +6,11 @@ import * as Schedule from 'effect/Schedule';
 import * as Scope from 'effect/Scope';
 
 import type { WsBridgeKickConfig } from '../../kernel/ws-bridge/index.js';
-import { makeWsBridgeCore, type WsBridgeCoreAction, type WsBridgeCoreTimerEvent } from '../../internal/ws-bridge/index.js';
+import {
+  makeWsBridgeCore,
+  type WsBridgeCoreAction,
+  type WsBridgeCoreTimerEvent,
+} from '../../internal/ws-bridge/index.js';
 
 import { openQueueDb, QueueSchemaError } from '../../internal/queue/index.js';
 
@@ -47,7 +51,11 @@ export function runWsBridgeRuntime(params: {
   readonly host?: string | undefined;
   readonly heartbeatIntervalMs?: number | undefined;
   readonly kickConfig?: WsBridgeKickConfig | undefined;
-}): Effect.Effect<void, CliError, AppConfig | StatusLineFile | WsBridgeServer | WsBridgeStateFile | StatusLineController> {
+}): Effect.Effect<
+  void,
+  CliError,
+  AppConfig | StatusLineFile | WsBridgeServer | WsBridgeStateFile | StatusLineController
+> {
   return Effect.scoped(
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
@@ -107,7 +115,11 @@ export function runWsBridgeRuntime(params: {
       });
 
       const inbox = yield* Queue.unbounded<BridgeEvent>();
-      const offer = (evt: BridgeEvent) => Queue.offer(inbox, evt).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void));
+      const offer = (evt: BridgeEvent) =>
+        Queue.offer(inbox, evt).pipe(
+          Effect.asVoid,
+          Effect.catchAll(() => Effect.void),
+        );
 
       yield* Effect.acquireRelease(
         Effect.sync(() => {
@@ -136,7 +148,11 @@ export function runWsBridgeRuntime(params: {
           yield* Fiber.interrupt(fiber).pipe(Effect.catchAll(() => Effect.void));
         });
 
-      const scheduleTimer = (id: string, delayMs: number, event: WsBridgeCoreTimerEvent): Effect.Effect<void, never, Scope.Scope> =>
+      const scheduleTimer = (
+        id: string,
+        delayMs: number,
+        event: WsBridgeCoreTimerEvent,
+      ): Effect.Effect<void, never, Scope.Scope> =>
         Effect.gen(function* () {
           yield* cancelTimer(id);
           const fiber = yield* Effect.forkScoped(
@@ -161,7 +177,10 @@ export function runWsBridgeRuntime(params: {
       const runAction = (action: WsBridgeCoreAction): Effect.Effect<void, never, Scope.Scope> => {
         switch (action._tag) {
           case 'SendJson':
-            return server.sendJson(action.connId, action.msg).pipe(Effect.asVoid, Effect.catchAll(() => Effect.void));
+            return server.sendJson(action.connId, action.msg).pipe(
+              Effect.asVoid,
+              Effect.catchAll(() => Effect.void),
+            );
           case 'SendJsonWithResult':
             return server.sendJson(action.connId, action.msg).pipe(
               Effect.catchAll(() => Effect.succeed(false)),
@@ -177,11 +196,15 @@ export function runWsBridgeRuntime(params: {
             return cancelTimer(action.id).pipe(Effect.catchAll(() => Effect.void));
           case 'WriteState':
             if (cfg.wsStateFile.disabled) return Effect.void;
-            return stateFile.write({ filePath: cfg.wsStateFile.path, json: action.snapshot }).pipe(Effect.catchAll(() => Effect.void));
+            return stateFile
+              .write({ filePath: cfg.wsStateFile.path, json: action.snapshot })
+              .pipe(Effect.catchAll(() => Effect.void));
           case 'InvalidateStatusLine':
             return invalidateStatusLine(action.reason);
           case 'Log':
-            return Effect.sync(() => wsLog(action.level, action.event, action.details)).pipe(Effect.catchAll(() => Effect.void));
+            return Effect.sync(() => wsLog(action.level, action.event, action.details)).pipe(
+              Effect.catchAll(() => Effect.void),
+            );
         }
       };
 
@@ -191,12 +214,7 @@ export function runWsBridgeRuntime(params: {
       );
 
       // Heartbeat loop.
-      yield* Effect.forkScoped(
-        Effect.repeat(
-          offer({ _tag: 'HeartbeatTick' }),
-          Schedule.spaced(heartbeatIntervalMs),
-        ),
-      );
+      yield* Effect.forkScoped(Effect.repeat(offer({ _tag: 'HeartbeatTick' }), Schedule.spaced(heartbeatIntervalMs)));
 
       // Kick loop.
       if (kickConfig.enabled && kickConfig.intervalMs > 0) {
@@ -237,7 +255,13 @@ export function runWsBridgeRuntime(params: {
         const event = evt.event;
         if (event._tag === 'Connected') {
           yield* runActions(
-            core.handle({ _tag: 'Connected', now, connId: event.connId, remoteAddr: event.remoteAddr, userAgent: event.userAgent }),
+            core.handle({
+              _tag: 'Connected',
+              now,
+              connId: event.connId,
+              remoteAddr: event.remoteAddr,
+              userAgent: event.userAgent,
+            }),
           );
           continue;
         }

@@ -7,10 +7,10 @@ import { CliError, isCliError } from './Errors.js';
 import { resolveUserFilePath } from '../lib/paths.js';
 
 export interface FileInputService {
-  readonly readTextFromFileSpec: (params: { readonly spec: string; readonly maxBytes?: number | undefined }) => Effect.Effect<
-    string,
-    CliError
-  >;
+  readonly readTextFromFileSpec: (params: {
+    readonly spec: string;
+    readonly maxBytes?: number | undefined;
+  }) => Effect.Effect<string, CliError>;
 }
 
 export class FileInput extends Context.Tag('FileInput')<FileInput, FileInputService>() {}
@@ -89,7 +89,8 @@ export const FileInputLive = Layer.succeed(FileInput, {
   readTextFromFileSpec: ({ spec, maxBytes }) =>
     Effect.tryPromise({
       try: async () => {
-        const limit = typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : DEFAULT_MAX_BYTES;
+        const limit =
+          typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : DEFAULT_MAX_BYTES;
         const normalized = normalizeFileSpec(spec);
         if (normalized === '-') return await readAllStdin(limit);
         return await readTextFromFilePath(normalized, limit);
@@ -105,4 +106,3 @@ export const FileInputLive = Layer.succeed(FileInput, {
       },
     }),
 } satisfies FileInputService);
-

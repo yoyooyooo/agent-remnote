@@ -43,7 +43,9 @@ export const wsStatusCommand = Command.make('status', { pidFile }, ({ pidFile })
           pidInfo.state_file ?? path.join(path.dirname(pidFilePath), 'ws.state.json'),
         );
         yield* supervisorState.deleteStateFile(staleStateFilePath);
-        selfHealCleanup = yield* cleanupStatuslineArtifacts(resolveStatuslineArtifactPaths({ cfg, pidInfo: stalePidInfo }));
+        selfHealCleanup = yield* cleanupStatuslineArtifacts(
+          resolveStatuslineArtifactPaths({ cfg, pidInfo: stalePidInfo }),
+        );
         yield* Effect.sync(() => refreshTmuxStatusLine());
         pidInfo = undefined;
       }
@@ -88,7 +90,7 @@ export const wsStatusCommand = Command.make('status', { pidFile }, ({ pidFile })
         rtt_ms: Either.isRight(health) ? health.right.rtt_ms : undefined,
         error: Either.isLeft(health) ? health.left.message : undefined,
       },
-      active_worker_conn_id: Either.isRight(clientsRes) ? clientsRes.right.activeWorkerConnId ?? null : null,
+      active_worker_conn_id: Either.isRight(clientsRes) ? (clientsRes.right.activeWorkerConnId ?? null) : null,
       clients: Either.isRight(clientsRes) ? clientsRes.right.clients : [],
     };
 

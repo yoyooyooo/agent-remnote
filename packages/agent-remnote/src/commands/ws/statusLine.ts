@@ -88,7 +88,8 @@ export const wsStatusLineCommand = Command.make('status-line', { stateFile, stal
     const queue = yield* Queue;
     const fsAccess = yield* FsAccess;
 
-    const stateQueueDbPath = typeof (state as any)?.queue?.dbPath === 'string' ? String((state as any).queue.dbPath) : undefined;
+    const stateQueueDbPath =
+      typeof (state as any)?.queue?.dbPath === 'string' ? String((state as any).queue.dbPath) : undefined;
     const stateQueueStats = (state as any)?.queue?.stats;
     const stateQueueStatsOk = !!stateQueueStats && typeof stateQueueStats === 'object';
     const stateQueueOutstanding = stateQueueStatsOk ? safeQueueOutstandingCount(stateQueueStats) : 0;

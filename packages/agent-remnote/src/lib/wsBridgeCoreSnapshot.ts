@@ -43,7 +43,9 @@ export function buildWsBridgeStateSnapshot(params: {
   })();
 
   const workerCandidates = clients.filter((c) => c.readyState === 1 && !!c.capabilities?.worker);
-  const staleWorkers = workerCandidates.filter((c) => params.now - toNonNegativeInt(c.lastSeenAt) > params.config.activeWorkerStaleMs);
+  const staleWorkers = workerCandidates.filter(
+    (c) => params.now - toNonNegativeInt(c.lastSeenAt) > params.config.activeWorkerStaleMs,
+  );
   const quarantinedWorkers = workerCandidates.filter((c) => {
     const quarantineUntil = params.state.workerQuarantineUntilByConnId.get(c.connId);
     return typeof quarantineUntil === 'number' && quarantineUntil > params.now;
@@ -84,9 +86,10 @@ export function buildWsBridgeStateSnapshot(params: {
   };
 }
 
-export function buildClientsSnapshot(params: {
-  readonly state: WsBridgeCoreState;
-}): { readonly clients: readonly WsBridgeClient[]; readonly activeWorkerConnId: WsConnId | undefined } {
+export function buildClientsSnapshot(params: { readonly state: WsBridgeCoreState }): {
+  readonly clients: readonly WsBridgeClient[];
+  readonly activeWorkerConnId: WsConnId | undefined;
+} {
   const clients = Array.from(params.state.clients.values()).map(toWsBridgeClient);
   return { clients, activeWorkerConnId: params.state.activeWorkerConnId };
 }

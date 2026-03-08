@@ -25,20 +25,18 @@ export const wsSyncCommand = Command.make('sync', { ensureDaemon }, ({ ensureDae
       timeoutMs: WS_HEALTH_TIMEOUT_MS,
     });
 
-    const conflictData = yield* queue
-      .stats({ dbPath: cfg.storeDb })
-      .pipe(
-        Effect.flatMap((stats) => {
-          const pending = Number((stats as any)?.pending ?? 0);
-          if (!Number.isFinite(pending) || pending < 2) {
-            return Effect.succeed({ stats, summary: undefined as any });
-          }
-          return queue
-            .conflicts({ dbPath: cfg.storeDb, limit: 200, maxClusters: 20 })
-            .pipe(Effect.map((report) => ({ stats, summary: report })));
-        }),
-        Effect.catchAll(() => Effect.succeed({ stats: undefined as any, summary: undefined as any })),
-      );
+    const conflictData = yield* queue.stats({ dbPath: cfg.storeDb }).pipe(
+      Effect.flatMap((stats) => {
+        const pending = Number((stats as any)?.pending ?? 0);
+        if (!Number.isFinite(pending) || pending < 2) {
+          return Effect.succeed({ stats, summary: undefined as any });
+        }
+        return queue
+          .conflicts({ dbPath: cfg.storeDb, limit: 200, maxClusters: 20 })
+          .pipe(Effect.map((report) => ({ stats, summary: report })));
+      }),
+      Effect.catchAll(() => Effect.succeed({ stats: undefined as any, summary: undefined as any })),
+    );
 
     const warnings: string[] = [];
     const extraNextActions: string[] = [];
@@ -57,7 +55,9 @@ export const wsSyncCommand = Command.make('sync', { ensureDaemon }, ({ ensureDae
       }
 
       const fromReport = Array.isArray((conflictData.summary as any)?.nextActions)
-        ? (((conflictData.summary as any).nextActions as any[]).map((x) => String(x ?? '').trim()).filter(Boolean) as string[])
+        ? (((conflictData.summary as any).nextActions as any[])
+            .map((x) => String(x ?? '').trim())
+            .filter(Boolean) as string[])
         : [];
       extraNextActions.push(...fromReport);
     }

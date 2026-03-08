@@ -33,9 +33,11 @@ export function resolveStatuslineArtifactPaths(params: {
   readonly pidInfo?: WsPidFile | undefined;
 }): StatuslineArtifactPaths {
   const pidInfo = params.pidInfo;
-  const wsBridgeStateFilePath = normalizeOptionalPath((pidInfo as any)?.ws_bridge_state_file) ?? params.cfg.wsStateFile.path;
+  const wsBridgeStateFilePath =
+    normalizeOptionalPath((pidInfo as any)?.ws_bridge_state_file) ?? params.cfg.wsStateFile.path;
   const statusLineFilePath = normalizeOptionalPath((pidInfo as any)?.status_line_file) ?? params.cfg.statusLineFile;
-  const statusLineJsonFilePath = normalizeOptionalPath((pidInfo as any)?.status_line_json_file) ?? params.cfg.statusLineJsonFile;
+  const statusLineJsonFilePath =
+    normalizeOptionalPath((pidInfo as any)?.status_line_json_file) ?? params.cfg.statusLineJsonFile;
   return { wsBridgeStateFilePath, statusLineFilePath, statusLineJsonFilePath };
 }
 
@@ -51,11 +53,9 @@ function deleteFileIfExists(filePath: string): Effect.Effect<CleanupOutcome, nev
   });
 }
 
-export function cleanupStatuslineArtifacts(paths: StatuslineArtifactPaths): Effect.Effect<
-  StatuslineArtifactsCleanupReport,
-  never,
-  StatusLineFile
-> {
+export function cleanupStatuslineArtifacts(
+  paths: StatuslineArtifactPaths,
+): Effect.Effect<StatuslineArtifactsCleanupReport, never, StatusLineFile> {
   return Effect.gen(function* () {
     const statusLineFile = yield* StatusLineFile;
 
@@ -69,7 +69,11 @@ export function cleanupStatuslineArtifacts(paths: StatuslineArtifactPaths): Effe
         ? cleared.right.wrote
           ? { action: 'cleared', file: cleared.right.textFilePath }
           : { action: 'skipped', file: cleared.right.textFilePath }
-        : { action: 'failed', file: paths.statusLineFilePath, error: String((cleared.left as any)?.message || cleared.left) };
+        : {
+            action: 'failed',
+            file: paths.statusLineFilePath,
+            error: String((cleared.left as any)?.message || cleared.left),
+          };
 
     const statusLineJsonFile = yield* deleteFileIfExists(paths.statusLineJsonFilePath);
 

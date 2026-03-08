@@ -81,7 +81,27 @@ export function buildCliEnvConfigProvider(params: {
     map.set('wsDispatchMaxOpBytes', envWsDispatchMaxOpBytes);
   }
 
-  // CLI flags override env
+  const envApiBaseUrl = env.REMNOTE_API_BASE_URL;
+  if (typeof envApiBaseUrl === 'string' && envApiBaseUrl.trim()) map.set('apiBaseUrl', envApiBaseUrl);
+
+  const envApiHost = env.REMNOTE_API_HOST;
+  if (typeof envApiHost === 'string' && envApiHost.trim()) map.set('apiHost', envApiHost);
+
+  const envApiPort = env.PORT || env.REMNOTE_API_PORT;
+  if (typeof envApiPort === 'string' && envApiPort.trim()) map.set('apiPort', envApiPort);
+
+  const envApiBasePath = env.REMNOTE_API_BASE_PATH;
+  if (typeof envApiBasePath === 'string' && envApiBasePath.trim()) map.set('apiBasePath', envApiBasePath);
+
+  const envApiPidFile = env.REMNOTE_API_PID_FILE;
+  if (typeof envApiPidFile === 'string' && envApiPidFile.trim()) map.set('apiPidFile', envApiPidFile);
+
+  const envApiLogFile = env.REMNOTE_API_LOG_FILE;
+  if (typeof envApiLogFile === 'string' && envApiLogFile.trim()) map.set('apiLogFile', envApiLogFile);
+
+  const envApiStateFile = env.REMNOTE_API_STATE_FILE;
+  if (typeof envApiStateFile === 'string' && envApiStateFile.trim()) map.set('apiStateFile', envApiStateFile);
+
   for (const [k, v] of params.cli.entries()) {
     map.set(k, v);
   }

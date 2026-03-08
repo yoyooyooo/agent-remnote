@@ -7,6 +7,7 @@
 1. 操作队列 schema：`docs/ssot/agent-remnote/queue-schema.md`
 2. WS bridge 协议与插件集成：`docs/ssot/agent-remnote/ws-bridge-protocol.md`
 3. CLI 对外契约：`docs/ssot/agent-remnote/cli-contract.md`
-4. UI 上下文与持久化：`docs/ssot/agent-remnote/ui-context-and-persistence.md`
-5. 写入工具语义：`docs/ssot/agent-remnote/tools-write.md`
-6. SQLite 性能排查与优化：`docs/ssot/agent-remnote/performance-sqlite.md`
+4. Host API 契约：`docs/ssot/agent-remnote/http-api-contract.md`
+5. UI 上下文与持久化：`docs/ssot/agent-remnote/ui-context-and-persistence.md`
+6. 写入工具语义：`docs/ssot/agent-remnote/tools-write.md`
+7. SQLite 性能排查与优化：`docs/ssot/agent-remnote/performance-sqlite.md`

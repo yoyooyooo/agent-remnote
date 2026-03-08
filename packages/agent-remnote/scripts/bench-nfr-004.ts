@@ -155,16 +155,19 @@ async function runNodeCliOnce(params: {
       });
     }
 
-    timeout = setTimeout(() => {
-      try {
-        child.kill('SIGTERM');
-      } catch {}
-      setTimeout(() => {
+    timeout = setTimeout(
+      () => {
         try {
-          child.kill('SIGKILL');
+          child.kill('SIGTERM');
         } catch {}
-      }, 200).unref();
-    }, Math.max(1, params.timeoutMs)).unref();
+        setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {}
+        }, 200).unref();
+      },
+      Math.max(1, params.timeoutMs),
+    ).unref();
 
     child.on('close', (code) => finish(typeof code === 'number' ? code : 1));
   });
@@ -267,7 +270,13 @@ async function startStubWsServer(): Promise<{
       }
 
       if (msg?.type === 'TriggerStartSync') {
-        send({ type: 'StartSyncTriggered', sent: 0, activeConnId: undefined, reason: 'no_active_worker', nextActions: [] });
+        send({
+          type: 'StartSyncTriggered',
+          sent: 0,
+          activeConnId: undefined,
+          reason: 'no_active_worker',
+          nextActions: [],
+        });
         return;
       }
 
@@ -427,7 +436,9 @@ async function main() {
   const baseline =
     mode === 'check'
       ? await readJsonFile<Nfr004Payload>(baselinePath).catch(() => {
-          throw new Error(`Baseline not found: ${baselinePath}. Run \`npm run bench:nfr-004 --workspace agent-remnote\` first.`);
+          throw new Error(
+            `Baseline not found: ${baselinePath}. Run \`npm run bench:nfr-004 --workspace agent-remnote\` first.`,
+          );
         })
       : null;
 
@@ -478,7 +489,17 @@ async function main() {
     },
     {
       name: 'enqueue_write_bullet',
-      args: ['--json', 'write', 'bullet', '--parent', 'dummy-parent', '--text', 'hello', '--no-notify', '--no-ensure-daemon'],
+      args: [
+        '--json',
+        'write',
+        'bullet',
+        '--parent',
+        'dummy-parent',
+        '--text',
+        'hello',
+        '--no-notify',
+        '--no-ensure-daemon',
+      ],
       warmupRuns: benchConfig.warmupRuns,
       runs: benchConfig.runs,
       timeoutMs: benchConfig.timeoutMs,
@@ -633,7 +654,13 @@ async function main() {
     for (const [name, b] of baselineCases) {
       const cur = currentCases.get(name);
       if (!cur) {
-        regressions.push({ name, metric: 'p95_ms', baseline: b.stats.p95_ms, current: Infinity, limit: b.stats.p95_ms });
+        regressions.push({
+          name,
+          metric: 'p95_ms',
+          baseline: b.stats.p95_ms,
+          current: Infinity,
+          limit: b.stats.p95_ms,
+        });
         continue;
       }
       const limit = b.stats.p95_ms * (1 + p95Ratio) + p95Ms;
@@ -644,7 +671,12 @@ async function main() {
 
     const bReady = baseline?.daemon.ready_ms;
     const cReady = payload.daemon.ready_ms;
-    if (typeof bReady === 'number' && Number.isFinite(bReady) && typeof cReady === 'number' && Number.isFinite(cReady)) {
+    if (
+      typeof bReady === 'number' &&
+      Number.isFinite(bReady) &&
+      typeof cReady === 'number' &&
+      Number.isFinite(cReady)
+    ) {
       const limit = bReady * (1 + readyRatio) + readyMs;
       if (cReady > limit) {
         regressions.push({ name: 'daemon_ready', metric: 'ready_ms', baseline: bReady, current: cReady, limit });

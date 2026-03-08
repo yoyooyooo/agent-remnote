@@ -3,6 +3,8 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
+import { AppConfig } from '../../../services/AppConfig.js';
+import { HostApiClient } from '../../../services/HostApiClient.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { loadBridgeSelectionSnapshot } from './_shared.js';
 
@@ -15,7 +17,11 @@ const staleMs = Options.integer('stale-ms').pipe(Options.optional, Options.map(o
 
 export const readSelectionSnapshotCommand = Command.make('snapshot', { stateFile, staleMs }, ({ stateFile, staleMs }) =>
   Effect.gen(function* () {
-    const snapshot = loadBridgeSelectionSnapshot({ stateFile, staleMs });
+    const cfg = yield* AppConfig;
+    const hostApi = yield* HostApiClient;
+    const snapshot = cfg.apiBaseUrl
+      ? yield* hostApi.selectionSnapshot({ baseUrl: cfg.apiBaseUrl, stateFile, staleMs })
+      : loadBridgeSelectionSnapshot({ stateFile, staleMs });
     const selection = snapshot.selection;
     const kind = selection?.kind ?? 'none';
     const selectionType = selection && 'selectionType' in selection ? (selection.selectionType ?? '') : '';

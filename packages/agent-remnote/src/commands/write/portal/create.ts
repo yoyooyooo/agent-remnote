@@ -190,17 +190,15 @@ export const writePortalCreateCommand = Command.make(
       const queue = yield* Queue;
       const created =
         waited && (waited as any).is_success === true
-          ? yield* queue
-              .inspect({ dbPath: cfg.storeDb, txnId: data.txn_id })
-              .pipe(
-                Effect.map((inspected) => {
-                  const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-                  const match = idMap.find((r) => String(r?.client_temp_id ?? '') === portalClientTempId);
-                  const remoteId = match?.remote_id ? String(match.remote_id) : '';
-                  return remoteId ? { portal_rem_id: remoteId } : {};
-                }),
-                Effect.catchAll(() => Effect.succeed({})),
-              )
+          ? yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
+              Effect.map((inspected) => {
+                const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
+                const match = idMap.find((r) => String(r?.client_temp_id ?? '') === portalClientTempId);
+                const remoteId = match?.remote_id ? String(match.remote_id) : '';
+                return remoteId ? { portal_rem_id: remoteId } : {};
+              }),
+              Effect.catchAll(() => Effect.succeed({})),
+            )
           : {};
 
       const out = waited

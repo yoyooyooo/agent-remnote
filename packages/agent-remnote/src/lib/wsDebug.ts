@@ -54,4 +54,3 @@ export function wsLog(level: WsLogLevel, msg: string, ctx?: unknown): void {
     fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${line}\n`);
   } catch {}
 }
-

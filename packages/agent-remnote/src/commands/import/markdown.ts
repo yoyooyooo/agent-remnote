@@ -3,8 +3,10 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
+import { AppConfig } from '../../services/AppConfig.js';
 import { CliError, isCliError } from '../../services/Errors.js';
 import { FileInput } from '../../services/FileInput.js';
+import { HostApiClient } from '../../services/HostApiClient.js';
 import { Payload } from '../../services/Payload.js';
 import { RefResolver } from '../../services/RefResolver.js';
 import { waitForTxn } from '../_waitTxn.js';
@@ -27,11 +29,17 @@ const file = readOptionalText('file');
 const markdownInline = readOptionalText('markdown');
 const stdin = Options.boolean('stdin');
 
-const mode = Options.choice('mode', ['indent', 'native'] as const).pipe(Options.optional, Options.map(optionToUndefined));
+const mode = Options.choice('mode', ['indent', 'native'] as const).pipe(
+  Options.optional,
+  Options.map(optionToUndefined),
+);
 const indentSize = Options.integer('indent-size').pipe(Options.optional, Options.map(optionToUndefined));
 const position = Options.integer('position').pipe(Options.optional, Options.map(optionToUndefined));
 
-const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(Options.optional, Options.map(optionToUndefined));
+const bulk = Options.choice('bulk', ['auto', 'always', 'never'] as const).pipe(
+  Options.optional,
+  Options.map(optionToUndefined),
+);
 const bundleTitle = readOptionalText('bundle-title');
 const staged = Options.boolean('staged');
 
@@ -98,6 +106,9 @@ export const importMarkdownCommand = Command.make(
     meta,
   }) =>
     Effect.gen(function* () {
+      const cfg = yield* AppConfig;
+      const hostApi = yield* HostApiClient;
+
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({
@@ -171,13 +182,99 @@ export const importMarkdownCommand = Command.make(
         );
       }
 
+      const lines = markdownValue.split('\n').length;
+      const chars = markdownValue.length;
+      const shouldBundle =
+        bulkMode === 'always' ||
+        (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
+
+      const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
+
+      if (dryRun) {
+        const parentId = ref ? ref : parent!;
+        const payload: Record<string, unknown> = { parentId, markdown: markdownValue };
+        const resolvedMode: 'indent' | 'native' = mode ?? (indentSize !== undefined ? 'indent' : 'native');
+        if (resolvedMode === 'native') payload.indentMode = false;
+        if (indentSize !== undefined) payload.indentSize = indentSize;
+        if (position !== undefined) payload.position = position;
+        if (staged) payload.staged = true;
+        if (shouldBundle) {
+          const title = bundleTitleValue || `Imported (bundle) (${lines} lines, ${chars} chars)`;
+          payload.bundle = { enabled: true, title };
+        }
+        const op = yield* Effect.try({
+          try: () => normalizeOp({ type: 'create_tree_with_markdown', payload }, payloadSvc.normalizeKeys),
+          catch: (e) =>
+            isCliError(e)
+              ? e
+              : new CliError({
+                  code: 'INVALID_PAYLOAD',
+                  message: 'Failed to generate op',
+                  exitCode: 2,
+                  details: { error: String((e as any)?.message || e) },
+                }),
+        });
+        if (wait) {
+          return yield* Effect.fail(
+            new CliError({
+              code: 'INVALID_ARGS',
+              message: '--wait is not compatible with --dry-run',
+              exitCode: 2,
+            }),
+          );
+        }
+        yield* writeSuccess({
+          data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
+          md: `- dry_run: true\n- op: create_tree_with_markdown\n- parent_id: ${parentId}\n`,
+        });
+        return;
+      }
+
+      if (cfg.apiBaseUrl) {
+        const data = yield* hostApi.writeMarkdown({
+          baseUrl: cfg.apiBaseUrl,
+          body: {
+            parent,
+            ref,
+            markdown: markdownValue,
+            mode,
+            indentSize,
+            position,
+            bulk: bulkMode,
+            bundleTitle: bundleTitleValue || undefined,
+            staged,
+            priority,
+            clientId,
+            idempotencyKey,
+            meta: metaValue,
+            notify,
+            ensureDaemon,
+            wait,
+            timeoutMs,
+            pollMs,
+          },
+        });
+
+        const ids = Array.isArray(data?.op_ids) ? [data.txn_id, ...data.op_ids] : [data.txn_id];
+        yield* writeSuccess({
+          data,
+          ids,
+          md: [
+            `- txn_id: ${data.txn_id}`,
+            `- op_ids: ${Array.isArray(data.op_ids) ? data.op_ids.length : ''}`,
+            `- notified: ${data.notified}`,
+            `- sent: ${data.sent ?? ''}`,
+            ...(data.status ? [`- status: ${data.status}`, `- elapsed_ms: ${data.elapsed_ms ?? ''}`] : []),
+          ].join('\n'),
+        });
+        return;
+      }
+
       const parentId = ref
-        ? dryRun
-          ? ref
-          : yield* Effect.gen(function* () {
-              const refs = yield* RefResolver;
-              return yield* refs.resolve(ref);
-            })
+        ? yield* Effect.gen(function* () {
+            const refs = yield* RefResolver;
+            return yield* refs.resolve(ref);
+          })
         : parent!;
 
       const payload: Record<string, unknown> = { parentId, markdown: markdownValue };
@@ -186,12 +283,6 @@ export const importMarkdownCommand = Command.make(
       if (indentSize !== undefined) payload.indentSize = indentSize;
       if (position !== undefined) payload.position = position;
       if (staged) payload.staged = true;
-
-      const lines = markdownValue.split('\n').length;
-      const chars = markdownValue.length;
-      const shouldBundle =
-        bulkMode === 'always' ||
-        (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
       if (shouldBundle) {
         const title = bundleTitleValue || `Imported (bundle) (${lines} lines, ${chars} chars)`;
         payload.bundle = { enabled: true, title };
@@ -209,25 +300,6 @@ export const importMarkdownCommand = Command.make(
                 details: { error: String((e as any)?.message || e) },
               }),
       });
-
-      const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
-
-      if (dryRun) {
-        if (wait) {
-          return yield* Effect.fail(
-            new CliError({
-              code: 'INVALID_ARGS',
-              message: '--wait is not compatible with --dry-run',
-              exitCode: 2,
-            }),
-          );
-        }
-        yield* writeSuccess({
-          data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
-          md: `- dry_run: true\n- op: create_tree_with_markdown\n- parent_id: ${parentId}\n`,
-        });
-        return;
-      }
 
       const data = yield* enqueueOps({
         ops: [op],

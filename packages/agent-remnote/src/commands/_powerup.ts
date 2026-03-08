@@ -68,9 +68,10 @@ function parsePowerupSpec(spec: string): { readonly mode: 'auto' | 'id' | 'code'
   return { mode: 'auto', value: raw };
 }
 
-function pickUnique(
-  matches: readonly PowerupItem[],
-): { readonly item: PowerupItem | null; readonly ambiguous: readonly PowerupItem[] } {
+function pickUnique(matches: readonly PowerupItem[]): {
+  readonly item: PowerupItem | null;
+  readonly ambiguous: readonly PowerupItem[];
+} {
   if (matches.length === 1) return { item: matches[0]!, ambiguous: [] };
   if (matches.length > 1) return { item: null, ambiguous: matches };
   return { item: null, ambiguous: [] };

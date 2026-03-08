@@ -172,7 +172,8 @@ describe('module boundaries: no deep imports', () => {
         for (const spec of specs) {
           const allowedInternalService = spec.endsWith('/services/WorkerRunner.js');
           const forbiddenLayer = !allowedInternalService && /\/(commands|services)(\/|$)/.test(spec);
-          const forbiddenEffect = spec === '@effect/cli' || spec.startsWith('@effect/cli/') || spec.startsWith('effect/');
+          const forbiddenEffect =
+            spec === '@effect/cli' || spec.startsWith('@effect/cli/') || spec.startsWith('effect/');
           if (!forbiddenLayer && !forbiddenEffect) continue;
           violations.push({
             file: rel,

@@ -77,6 +77,31 @@ agent-remnote --json daemon status
 
 你应该能看到 `remnote-plugin` client 以及 `activeWorkerConnId`。
 
+### Host API（宿主机 authoritative，容器/本机 agent 复用）
+
+如果你希望容器内 agent 通过宿主机访问 RemNote，不要直接挂载 `remnote.db` / `store.sqlite`。推荐：
+
+```bash
+agent-remnote stack ensure
+agent-remnote api status --json
+```
+
+直接调 HTTP：
+
+```bash
+curl http://127.0.0.1:3000/v1/health
+```
+
+容器内或远端 CLI 走 remote API mode：
+
+```bash
+agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
+REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current --compact
+agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
+```
+
 ## 快速开始（用户）
 
 Plugin RPC（快速候选集，需要 RemNote 窗口 + 插件已连接）：
@@ -290,6 +315,8 @@ flowchart LR
 ## 常见问题 / 排障
 
 - `agent-remnote daemon ensure` 打印 `started: false`：可能表示“当前已经健康，无需启动”；用 `agent-remnote --json daemon status` 确认即可。
+- `agent-remnote stack ensure`：一条命令确保 `daemon + api` 都就绪。
+- 如需等插件 worker 真正回到 active 状态：`agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000`
 - `daemon status` 里看不到 `remnote-plugin`：重新安装插件 Zip，并保持 RemNote 窗口打开。
 - Plugin RPC 失败 / 没有 `activeWorkerConnId`：点一下目标 RemNote 窗口，让 UI 活跃度刷新。
 
@@ -298,6 +325,10 @@ flowchart LR
 - RemNote DB（只读）：`--remnote-db` / `REMNOTE_DB`
 - Store DB：`--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`（默认 `~/.agent-remnote/store.sqlite`；legacy：`--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`）
 - WS 地址：`--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL`（或 `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`，默认端口 6789）
+- Host API remote mode：`--api-base-url` / `REMNOTE_API_BASE_URL`
+- Host API 监听地址：`REMNOTE_API_HOST`（默认 `0.0.0.0`）
+- Host API 端口：`PORT`（默认 `3000`）
+- Host API pid/log/state（仅 env）：`REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`（默认 `~/.agent-remnote/ws.bridge.state.json`）
 - daemon pidfile（仅 env）：`REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`（默认 `~/.agent-remnote/ws.pid`）
 - daemon log file（仅 env）：`REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE`（默认 `~/.agent-remnote/ws.log`）

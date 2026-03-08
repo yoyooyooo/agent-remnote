@@ -71,9 +71,13 @@ export const queueConflictsCommand = Command.make(
         const key = String(c?.conflict_key ?? '');
         const opCount = String(c?.op_count ?? '');
         const txnCount = String(c?.txn_count ?? '');
-        const types = Array.isArray(c?.op_types) ? (c.op_types as any[]).map((t) => String(t ?? '')).filter(Boolean) : [];
+        const types = Array.isArray(c?.op_types)
+          ? (c.op_types as any[]).map((t) => String(t ?? '')).filter(Boolean)
+          : [];
         const note = typeof c?.note === 'string' ? c.note.trim() : '';
-        lines.push(`- [${risk}] ${key} (ops=${opCount} txns=${txnCount} types=${types.join(',')})${note ? ` — ${note}` : ''}`);
+        lines.push(
+          `- [${risk}] ${key} (ops=${opCount} txns=${txnCount} types=${types.join(',')})${note ? ` — ${note}` : ''}`,
+        );
       }
 
       yield* writeSuccess({ data: result, md: `${lines.join('\n')}\n` });

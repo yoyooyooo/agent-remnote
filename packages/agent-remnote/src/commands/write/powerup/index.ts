@@ -17,4 +17,3 @@ export const writePowerupCommand = Command.make('powerup', {}).pipe(
     writePowerupTodoCommand,
   ]),
 );
-

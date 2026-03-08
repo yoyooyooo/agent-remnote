@@ -45,7 +45,8 @@ export async function runWorkerJob(params: {
     };
 
     const fail = (error: unknown) => {
-      const err = error instanceof Error ? error : new Error(String((error as any)?.message || error || 'Unknown error'));
+      const err =
+        error instanceof Error ? error : new Error(String((error as any)?.message || error || 'Unknown error'));
       if ((err as any).details === undefined) (err as any).details = diag;
       reject(err);
     };

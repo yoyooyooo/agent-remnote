@@ -14,7 +14,13 @@ import { clampInt, safeParseJson } from './wsBridgeCoreUtils.js';
 
 export type RequestOpsSelection =
   | { readonly kind: 'none' }
-  | { readonly kind: 'oversize'; readonly opId: string; readonly opBytes: number; readonly maxBytesEffective: number; readonly maxOpBytesEffective: number }
+  | {
+      readonly kind: 'oversize';
+      readonly opId: string;
+      readonly opBytes: number;
+      readonly maxBytesEffective: number;
+      readonly maxOpBytesEffective: number;
+    }
   | { readonly kind: 'dispatch'; readonly msg: any; readonly firstOpId: string | null };
 
 export function selectOpsForDispatch(params: {
@@ -104,7 +110,10 @@ export function selectOpsForDispatch(params: {
   const candidates = peekEligibleOps(params.db, peekLimit).map((op) => {
     const op_id = String((op as any).op_id);
     const txn_id = String((op as any).txn_id);
-    const op_seq = typeof (op as any).op_seq === 'number' && Number.isFinite((op as any).op_seq) ? (op as any).op_seq : Number((op as any).op_seq ?? 0);
+    const op_seq =
+      typeof (op as any).op_seq === 'number' && Number.isFinite((op as any).op_seq)
+        ? (op as any).op_seq
+        : Number((op as any).op_seq ?? 0);
     const op_type = String((op as any).type);
     const txn_dispatch_mode = (op as any)?.txn_dispatch_mode ?? null;
     const payload_json = String((op as any).payload_json ?? '');
@@ -257,7 +266,12 @@ export function selectOpsForDispatch(params: {
 
     const nextCount = selectedOps.length + 1;
     const nextBytesSum = opBytesSum + c.opBytes;
-    const est = estimateBatchBytes({ opBytesSum: nextBytesSum, opCount: nextCount, budget: baseBudgetForEstimate, skipped });
+    const est = estimateBatchBytes({
+      opBytesSum: nextBytesSum,
+      opCount: nextCount,
+      budget: baseBudgetForEstimate,
+      skipped,
+    });
     // Safety margin to account for minor JSON size drift (budget/skipped digit changes, etc.).
     if (est + 256 > maxBytesEffective) {
       skipped.overBudget += 1;

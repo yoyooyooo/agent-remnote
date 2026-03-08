@@ -62,7 +62,13 @@ describe('SupervisorRuntime (integration)', () => {
     const stateFilePath = path.join(tmpDir, 'ws.state.json');
 
     const cfgLayer = Layer.succeed(AppConfig, makeTestConfig({ wsUrl: 'ws://localhost:0/ws' }));
-    const envLayer = Layer.mergeAll(cfgLayer, DaemonFilesLive, SupervisorStateLive, LogWriterFactoryLive, ChildProcessLive);
+    const envLayer = Layer.mergeAll(
+      cfgLayer,
+      DaemonFilesLive,
+      SupervisorStateLive,
+      LogWriterFactoryLive,
+      ChildProcessLive,
+    );
 
     try {
       const result = await Effect.runPromise(

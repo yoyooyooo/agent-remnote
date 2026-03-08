@@ -183,7 +183,10 @@ function migrationChecksum(spec: Pick<MigrationSpec, 'version' | 'name' | 'check
   return sha256Hex(`${spec.version}\n${spec.name}\n${spec.checksumInput}\n`);
 }
 
-function buildMigrationPlan(specs: readonly MigrationSpec[]): { readonly migrations: readonly Migration[]; readonly latestVersion: number } {
+function buildMigrationPlan(specs: readonly MigrationSpec[]): {
+  readonly migrations: readonly Migration[];
+  readonly latestVersion: number;
+} {
   if (specs.length === 0) {
     throw new StoreSchemaError({
       code: 'STORE_SCHEMA_UNKNOWN',
@@ -361,9 +364,12 @@ function readAppliedMigrations(db: StoreDB): Map<number, AppliedMigration> {
 }
 
 function ensureMigrationRecorded(db: StoreDB, migration: Migration, appliedAt: number, appVersion: string): void {
-  const existing = db.prepare(`SELECT name, checksum FROM store_migrations WHERE version=?`).get(migration.version) as any;
+  const existing = db
+    .prepare(`SELECT name, checksum FROM store_migrations WHERE version=?`)
+    .get(migration.version) as any;
   if (existing) {
-    const actualChecksum = typeof existing?.checksum === 'string' ? existing.checksum : String(existing?.checksum ?? '');
+    const actualChecksum =
+      typeof existing?.checksum === 'string' ? existing.checksum : String(existing?.checksum ?? '');
     if (actualChecksum !== migration.checksum) {
       throw new StoreSchemaError({
         code: 'STORE_SCHEMA_INVALID',
@@ -392,9 +398,12 @@ function ensureMigrationRecorded(db: StoreDB, migration: Migration, appliedAt: n
     });
   } catch (e) {
     const code = String((e as any)?.code || '');
-    if (code !== 'SQLITE_CONSTRAINT' && code !== 'SQLITE_CONSTRAINT_PRIMARYKEY' && code !== 'SQLITE_CONSTRAINT_UNIQUE') throw e;
+    if (code !== 'SQLITE_CONSTRAINT' && code !== 'SQLITE_CONSTRAINT_PRIMARYKEY' && code !== 'SQLITE_CONSTRAINT_UNIQUE')
+      throw e;
 
-    const again = db.prepare(`SELECT name, checksum FROM store_migrations WHERE version=?`).get(migration.version) as any;
+    const again = db
+      .prepare(`SELECT name, checksum FROM store_migrations WHERE version=?`)
+      .get(migration.version) as any;
     const actualChecksum = typeof again?.checksum === 'string' ? again.checksum : String(again?.checksum ?? '');
     if (actualChecksum !== migration.checksum) {
       throw new StoreSchemaError({
@@ -522,7 +531,10 @@ function sqliteStringLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function maybeInitializeDefaultStoreFromLegacy(resolvedStorePath: string, params: { readonly callerProvidedPath: string }): void {
+function maybeInitializeDefaultStoreFromLegacy(
+  resolvedStorePath: string,
+  params: { readonly callerProvidedPath: string },
+): void {
   const envStore = process.env.REMNOTE_STORE_DB || process.env.STORE_DB;
   const defaultStore = absoluteDefaultStorePath();
   const isDefaultTarget = resolveUserFilePath(params.callerProvidedPath) === resolveUserFilePath(defaultStore);

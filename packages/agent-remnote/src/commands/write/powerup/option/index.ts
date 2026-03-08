@@ -6,4 +6,3 @@ import { writePowerupOptionRemoveCommand } from './remove.js';
 export const writePowerupOptionCommand = Command.make('option', {}).pipe(
   Command.withSubcommands([writePowerupOptionAddCommand, writePowerupOptionRemoveCommand]),
 );
-

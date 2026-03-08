@@ -89,7 +89,11 @@ export const wsLogsCommand = Command.make(
         );
       }
 
-      const res = yield* subprocess.run({ command: 'tail', args: ['-n', String(lines), logFilePath], timeoutMs: 10_000 });
+      const res = yield* subprocess.run({
+        command: 'tail',
+        args: ['-n', String(lines), logFilePath],
+        timeoutMs: 10_000,
+      });
       if (res.exitCode !== 0) {
         return yield* Effect.fail(
           new CliError({

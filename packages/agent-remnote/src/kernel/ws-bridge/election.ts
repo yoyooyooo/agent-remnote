@@ -59,4 +59,3 @@ export function electActiveWorker(params: WsBridgeElectionParams): WsConnId | un
 
   return best?.connId;
 }
-

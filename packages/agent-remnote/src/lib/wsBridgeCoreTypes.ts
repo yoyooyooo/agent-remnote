@@ -123,5 +123,8 @@ export type WsBridgeCore = {
   readonly config: WsBridgeCoreConfig;
   readonly state: WsBridgeCoreState;
   readonly handle: (event: WsBridgeCoreEvent) => readonly WsBridgeCoreAction[];
-  readonly getClientsSnapshot: () => { readonly clients: readonly WsBridgeClient[]; readonly activeWorkerConnId: WsConnId | undefined };
+  readonly getClientsSnapshot: () => {
+    readonly clients: readonly WsBridgeClient[];
+    readonly activeWorkerConnId: WsConnId | undefined;
+  };
 };
