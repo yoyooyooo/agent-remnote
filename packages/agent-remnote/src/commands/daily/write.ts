@@ -10,7 +10,7 @@ import { CliError, isCliError } from '../../services/Errors.js';
 import { FileInput } from '../../services/FileInput.js';
 import { Payload } from '../../services/Payload.js';
 import { RemDb } from '../../services/RemDb.js';
-import { trimBoundaryBlankLines } from '../../lib/text.js';
+import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
 import { waitForTxn } from '../_waitTxn.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { enqueueOps, normalizeOp } from '../_enqueue.js';
@@ -24,7 +24,9 @@ function readOptionalText(name: string) {
 }
 
 const text = readOptionalText('text');
+const markdown = readOptionalText('markdown');
 const mdFile = readOptionalText('md-file');
+const stdin = Options.boolean('stdin');
 const date = readOptionalText('date');
 const offsetDays = Options.integer('offset-days').pipe(Options.optional, Options.map(optionToUndefined));
 const createIfMissing = Options.boolean('create-if-missing');
@@ -36,6 +38,7 @@ const metaSpec = readOptionalText('meta');
 const priority = Options.integer('priority').pipe(Options.optional, Options.map(optionToUndefined));
 const notify = Options.boolean('no-notify').pipe(Options.map((v) => !v));
 const ensureDaemon = Options.boolean('no-ensure-daemon').pipe(Options.map((v) => !v));
+const forceText = Options.boolean('force-text');
 const wait = Options.boolean('wait');
 const timeoutMs = Options.integer('timeout-ms').pipe(Options.optional, Options.map(optionToUndefined));
 const pollMs = Options.integer('poll-ms').pipe(Options.optional, Options.map(optionToUndefined));
@@ -66,7 +69,9 @@ export const dailyWriteCommand = Command.make(
   'write',
   {
     text,
+    markdown,
     mdFile,
+    stdin,
     date,
     offsetDays,
     prepend: Options.boolean('prepend'),
@@ -74,6 +79,7 @@ export const dailyWriteCommand = Command.make(
     noCreateIfMissing,
     notify,
     ensureDaemon,
+    forceText,
     dryRun: Options.boolean('dry-run'),
     bulk,
     bundleTitle,
@@ -88,7 +94,9 @@ export const dailyWriteCommand = Command.make(
   },
   ({
     text,
+    markdown: markdownInput,
     mdFile,
+    stdin,
     date,
     offsetDays,
     prepend,
@@ -96,6 +104,7 @@ export const dailyWriteCommand = Command.make(
     noCreateIfMissing,
     notify,
     ensureDaemon,
+    forceText,
     dryRun,
     bulk,
     bundleTitle,
@@ -118,14 +127,24 @@ export const dailyWriteCommand = Command.make(
         );
       }
 
-      if (text && mdFile) {
+      const inputModeCount =
+        Number(Boolean(text)) + Number(Boolean(markdownInput)) + Number(Boolean(mdFile)) + Number(Boolean(stdin));
+      if (inputModeCount > 1) {
         return yield* Effect.fail(
-          new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --text or --md-file', exitCode: 2 }),
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: 'Choose only one of --text, --markdown, --md-file, or --stdin',
+            exitCode: 2,
+          }),
         );
       }
-      if (!text && !mdFile) {
+      if (inputModeCount === 0) {
         return yield* Effect.fail(
-          new CliError({ code: 'INVALID_ARGS', message: 'You must provide --text or --md-file', exitCode: 2 }),
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: 'You must provide one of --text, --markdown, --md-file, or --stdin',
+            exitCode: 2,
+          }),
         );
       }
       if (date && offsetDays !== undefined) {
@@ -148,9 +167,24 @@ export const dailyWriteCommand = Command.make(
       const payloadSvc = yield* Payload;
       const remDb = yield* RemDb;
 
-      const markdownRaw = mdFile ? yield* fileInput.readTextFromFileSpec({ spec: mdFile }) : undefined;
+      const markdownRaw = mdFile
+        ? yield* fileInput.readTextFromFileSpec({ spec: mdFile })
+        : stdin
+          ? yield* fileInput.readTextFromFileSpec({ spec: '-' })
+          : markdownInput;
       const markdown = markdownRaw !== undefined ? trimBoundaryBlankLines(markdownRaw) : undefined;
       const textValue = text !== undefined ? trimBoundaryBlankLines(text) : undefined;
+
+      if (textValue && !forceText && looksLikeStructuredMarkdown(textValue)) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message:
+              'Input passed to --text looks like structured Markdown. Use --markdown, --stdin, or --md-file instead.',
+            exitCode: 2,
+          }),
+        );
+      }
 
       const bulkMode = bulk ?? 'auto';
       const bundleTitleValue = typeof bundleTitle === 'string' ? bundleTitle.trim() : '';

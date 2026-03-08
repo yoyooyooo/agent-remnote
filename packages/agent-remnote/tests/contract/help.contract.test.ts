@@ -75,6 +75,31 @@ describe('cli contract: --help', () => {
     expect(out).toContain('status');
   });
 
+  it('prints daily write help with markdown-friendly inputs', async () => {
+    const res = await runCli(['daily', 'write', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('--markdown');
+    expect(out).toContain('--stdin');
+    expect(out).toContain('--md-file');
+    expect(out).toContain('--force-text');
+  });
+
+  it('prints daily help with rem-id subcommand', async () => {
+    const res = await runCli(['daily', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('summary');
+    expect(out).toContain('rem-id');
+    expect(out).toContain('write');
+  });
+
   it('prints ui-context help with subcommands', async () => {
     const res = await runCli(['plugin', 'ui-context', '--help']);
 
