@@ -126,9 +126,21 @@ export const dailyWriteCommand = Command.make(
           }),
         );
       }
+      if (dryRun && wait) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--wait is not compatible with --dry-run',
+            exitCode: 2,
+          }),
+        );
+      }
 
       const inputModeCount =
-        Number(Boolean(text)) + Number(Boolean(markdownInput)) + Number(Boolean(mdFile)) + Number(Boolean(stdin));
+        Number(text !== undefined) +
+        Number(markdownInput !== undefined) +
+        Number(mdFile !== undefined) +
+        Number(stdin);
       if (inputModeCount > 1) {
         return yield* Effect.fail(
           new CliError({
@@ -259,15 +271,6 @@ export const dailyWriteCommand = Command.make(
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
 
       if (dryRun) {
-        if (wait) {
-          return yield* Effect.fail(
-            new CliError({
-              code: 'INVALID_ARGS',
-              message: '--wait is not compatible with --dry-run',
-              exitCode: 2,
-            }),
-          );
-        }
         yield* writeSuccess({
           data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
           md: `- dry_run: true\n- op: daily_note_write\n- date_string: ${dateString ?? ''}\n`,
