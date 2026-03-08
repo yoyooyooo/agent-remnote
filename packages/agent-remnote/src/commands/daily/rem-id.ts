@@ -4,6 +4,7 @@ import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
 import { executeSearchRemOverview, formatDateWithPattern, getDateFormatting } from '../../adapters/core.js';
+import type { SearchRemOverviewInput } from '../../internal/remdb-tools/searchRemOverview.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
 import { RefResolver } from '../../services/RefResolver.js';
@@ -54,16 +55,19 @@ export const dailyRemIdCommand = Command.make('rem-id', { date, offsetDays }, ({
           Effect.catchAll(() => Effect.succeed(formatDateWithPattern(target, 'yyyy/MM/dd'))),
         );
 
+      const searchInput: SearchRemOverviewInput = {
+        query: dateString,
+        dbPath: cfg.remnoteDb,
+        limit: 1,
+        preferExact: true,
+        exactFirstSingle: true,
+        // `daily rem-id` is intended to resolve the dated Daily Note entry Rem,
+        // not the top-level Daily Document container page.
+        excludePages: true,
+      };
+
       const result = yield* Effect.tryPromise({
-        try: async () =>
-          await executeSearchRemOverview({
-            query: dateString,
-            dbPath: cfg.remnoteDb,
-            limit: 1,
-            preferExact: true,
-            exactFirstSingle: true,
-            excludePages: true,
-          } as any),
+        try: async () => await executeSearchRemOverview(searchInput),
         catch: (e) => cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' }),
       });
       const first = Array.isArray((result as any).matches) ? (result as any).matches[0] : undefined;
