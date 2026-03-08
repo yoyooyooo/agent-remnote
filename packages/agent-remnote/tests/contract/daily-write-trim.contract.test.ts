@@ -78,4 +78,32 @@ describe('cli contract: daily write trims boundary blank lines', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.data?.ops?.[0]?.payload?.text).toBe('- root\n  - child');
   });
+
+  it('fails fast for --dry-run --wait before attempting stdin read', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--stdin', '--dry-run', '--wait'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error?.message ?? '').toContain('--wait is not compatible with --dry-run');
+  });
+
+  it('treats empty string text as provided for exclusivity checks', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--text', '', '--markdown', '- root', '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error?.message ?? '').toContain('Choose only one of --text, --markdown, --md-file, or --stdin');
+  });
 });
