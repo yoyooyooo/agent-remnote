@@ -384,7 +384,7 @@ This repo uses Changesets for npm releases.
 - Add a changeset for every release-worthy `agent-remnote` change
 - Merge to `master`
 - GitHub Actions opens/updates a version PR
-- Merging that PR publishes the new npm version and updates changelogs
+- Merging that PR publishes the new npm version via npm Trusted Publishing and updates changelogs
 
 Maintainer runbook: `docs/runbook/release.md`
 

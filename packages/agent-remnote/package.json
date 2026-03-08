@@ -47,5 +47,18 @@
     "unified": "^11.0.0",
     "vitest": "^2.1.8",
     "zod": "3.23.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yoyooyooo/agent-renmote.git",
+    "directory": "packages/agent-remnote"
+  },
+  "homepage": "https://github.com/yoyooyooo/agent-renmote",
+  "bugs": {
+    "url": "https://github.com/yoyooyooo/agent-renmote/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
