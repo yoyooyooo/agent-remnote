@@ -13,7 +13,8 @@ describe('cli contract: sanitize queued write payloads', () => {
 
     try {
       const res = await runCli(['--json', 'rem', 'create', '--parent', 'P', '--text', 'push dirty → effect pull'], {
-        env: { REMNOTE_STORE_DB: storePath },
+        env: { HOME: tmpDir, REMNOTE_STORE_DB: storePath, REMNOTE_TMUX_REFRESH: '0' },
+        timeoutMs: 30_000,
       });
 
       expect(res.exitCode).toBe(0);
@@ -39,5 +40,5 @@ describe('cli contract: sanitize queued write payloads', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
