@@ -173,7 +173,12 @@ export async function executeSearchRemOverviewWithDb(db: BetterSqliteInstance, p
     const offset = parsed.dateOffsetDays ?? 0;
     const now = new Date();
     const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-    const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
+    let format = 'yyyy/MM/dd';
+    try {
+      format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
+    } catch {
+      format = 'yyyy/MM/dd';
+    }
     effectiveQuery = formatDateWithPattern(target, format);
   }
 

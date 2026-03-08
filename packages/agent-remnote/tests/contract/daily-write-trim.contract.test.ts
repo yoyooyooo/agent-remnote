@@ -19,4 +19,63 @@ describe('cli contract: daily write trims boundary blank lines', () => {
     expect(parsed.data?.ops?.[0]?.type).toBe('daily_note_write');
     expect(parsed.data?.ops?.[0]?.payload?.text).toBe('hello\nworld');
   });
+
+  it('supports inline markdown via --markdown (dry-run)', async () => {
+    const markdown = '- root\n  - child\n';
+    const res = await runCli(['--json', 'daily', 'write', '--markdown', markdown, '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.ops?.[0]?.payload?.markdown).toBe('- root\n  - child');
+    expect(parsed.data?.ops?.[0]?.payload?.text).toBeUndefined();
+  });
+
+  it('supports markdown from stdin via --stdin (dry-run)', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--stdin', '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      stdin: '\n- root\n  - child\n\n',
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.ops?.[0]?.payload?.markdown).toBe('- root\n  - child');
+  });
+
+  it('rejects markdown-like content passed to --text', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--text', '- root\n  - child', '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error?.message ?? '').toContain('looks like structured Markdown');
+  });
+
+  it('allows markdown-like content passed to --text when --force-text is set', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--text', '- root\n  - child', '--force-text', '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.ops?.[0]?.payload?.text).toBe('- root\n  - child');
+  });
 });

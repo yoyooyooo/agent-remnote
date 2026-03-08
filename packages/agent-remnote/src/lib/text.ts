@@ -36,3 +36,11 @@ export function dropBlankLinesOutsideFences(input: string): string {
   }
   return out.join('\n');
 }
+
+const STRUCTURED_MARKDOWN_LINE_RE = /^\s{0,3}(?:#{1,6}\s+\S|[-*+]\s+\S|\d+\.\s+\S|```|~~~)/m;
+
+export function looksLikeStructuredMarkdown(input: string): boolean {
+  const normalized = input.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return false;
+  return STRUCTURED_MARKDOWN_LINE_RE.test(normalized);
+}

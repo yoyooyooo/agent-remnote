@@ -166,6 +166,18 @@ agent-remnote --json daily write --md-file ./daily.md --create-if-missing --idem
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
+Inline Markdown / stdin are also supported:
+
+```bash
+agent-remnote --json daily write --markdown $'- topic\n  - note' --wait
+cat <<'MD' | agent-remnote --json daily write --stdin --wait
+- topic
+  - note
+MD
+```
+
+Guardrail: if `--text` input looks like structured Markdown, the CLI fails fast and asks you to use `--markdown`, `--stdin`, or `--md-file`. Use `--force-text` only when you intentionally want literal Markdown text.
+
 ### 3) Import a WeChat article as an outline (optional)
 
 Requires a Chromium-based browser with CDP enabled (e.g. Chrome with `--remote-debugging-port=9222`).
@@ -271,9 +283,13 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Plugin candidate search (Top‑K) | `agent-remnote --json plugin search --query "..."` |
 | DB search (fallback) | `agent-remnote --json search --query "..."` |
 | UI context snapshot (IDs) | `agent-remnote --json plugin ui-context snapshot` |
+| Resolve today's Daily Note Rem ID | `agent-remnote --ids daily rem-id` |
+| Resolve a specific Daily Note Rem ID | `agent-remnote --json daily rem-id --date "2026-03-08"` |
 | Write Markdown to a page | `agent-remnote --json import markdown --ref "page:..." --file ./note.md` |
 | Write Markdown (insert at top) | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0` |
 | Write Markdown (staged insert) | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged` |
+| Write Daily Note Markdown inline | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait` |
+| Write Daily Note Markdown from stdin | `cat note.md \| agent-remnote --json daily write --stdin --wait` |
 | Create a Portal | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait` |
 | Create a Rem | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait` |
 | Move a Rem | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait` |

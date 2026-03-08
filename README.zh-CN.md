@@ -166,6 +166,18 @@ agent-remnote --json daily write --md-file ./daily.md --create-if-missing --idem
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
+也支持直接传 Markdown 或从 stdin 读取：
+
+```bash
+agent-remnote --json daily write --markdown $'- topic\n  - note' --wait
+cat <<'MD' | agent-remnote --json daily write --stdin --wait
+- topic
+  - note
+MD
+```
+
+护栏：如果 `--text` 的输入看起来像结构化 Markdown，CLI 会 fail-fast，并提示改用 `--markdown`、`--stdin` 或 `--md-file`。只有在你明确要保留字面 Markdown 时才用 `--force-text`。
+
 ### 3) 微信文章导入为大纲（可选）
 
 需要一个开启了 CDP 的 Chromium 浏览器（例如 Chrome 启动参数包含 `--remote-debugging-port=9222`）。
@@ -271,9 +283,13 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 插件候选集搜索（Top‑K） | `agent-remnote --json plugin search --query "..."` |
 | DB 搜索（回退） | `agent-remnote --json search --query "..."` |
 | 读取 UI 上下文（IDs） | `agent-remnote --json plugin ui-context snapshot` |
+| 解析今日 Daily Note 条目 ID | `agent-remnote --ids daily rem-id` |
+| 解析指定日期 Daily Note 条目 ID | `agent-remnote --json daily rem-id --date "2026-03-08"` |
 | 写入 Markdown 到页面 | `agent-remnote --json import markdown --ref "page:..." --file ./note.md` |
 | 写入 Markdown（插入顶部） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0` |
 | 写入 Markdown（staged 一次性插入） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged` |
+| 以内联 Markdown 写 Daily Note | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait` |
+| 从 stdin 写 Daily Note Markdown | `cat note.md \| agent-remnote --json daily write --stdin --wait` |
 | 创建 Portal（传送门） | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait` |
 | 创建 Rem | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait` |
 | 移动 Rem | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait` |

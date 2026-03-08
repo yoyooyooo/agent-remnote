@@ -19,4 +19,19 @@ describe('cli contract: import markdown trims boundary blank lines', () => {
     expect(parsed.data?.ops?.[0]?.type).toBe('create_tree_with_markdown');
     expect(parsed.data?.ops?.[0]?.payload?.markdown).toBe('- root\n  - child');
   });
+
+  it('keeps explicit id references for later rich-text fixing (dry-run)', async () => {
+    const md = '- ((ABCDEF12345678901))\n';
+    const res = await runCli(['--json', 'import', 'markdown', '--parent', 'PARENT_ID', '--markdown', md, '--dry-run'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data?.ops?.[0]?.payload?.markdown).toBe('- ((ABCDEF12345678901))');
+  });
 });

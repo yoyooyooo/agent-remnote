@@ -13,7 +13,8 @@
 
 ## 命令一览
 - `agent-remnote import markdown`：写 Markdown（树导入；支持 bundle；对应 `create_tree_with_markdown` 等）。
-- `agent-remnote daily write`：写入 Daily Note（支持 bundle；对应 `daily_note_write`）。
+- `agent-remnote daily write`：写入 Daily Note（支持 bundle；支持 `--markdown` / `--stdin` / `--md-file`；对应 `daily_note_write`）。
+- `agent-remnote daily rem-id`：解析 Daily Note 条目 Rem ID（用于把结构化内容精准写到当天条目下，而不是容器页）。
 - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`；`rem text` 为 `set-text` 兼容别名）。
 - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
 - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
@@ -94,9 +95,12 @@
       - 回执：result 会包含 `bundle.rem_id`（容器 Rem），并把顶层 `created_ids` 收敛为 `[bundle.rem_id]` 以便上游快速定位/回滚。
   - `daily_note_write`（写入 Daily Note；由插件侧定位当天 daily doc）
     - `markdown` / `text`：二选一（内容）
+    - CLI 层额外支持 `--stdin`（作为 `markdown` 输入）
     - `date` / `offset_days`：二选一（目标日期）
     - `prepend`（可选）：true 则插入到 daily doc 顶部
     - `bundle`（可选，同上）：当内容很大时建议启用；写入会先创建容器 Rem（容器文本为 bundle title），再把内容导入到容器下。
+    - `--text` 仅用于纯文本；若输入看起来像结构化 Markdown，CLI 必须 fail-fast 并提示改用 `--markdown` / `--stdin` / `--md-file`
+    - `--force-text` 允许显式保留字面 Markdown 文本
   - `replace_selection_with_markdown`（推荐替代“create + delete”的多 op 方案）
     - `markdown`：新内容
     - `target.mode`：`expected`（默认，更安全）/ `current` / `explicit`

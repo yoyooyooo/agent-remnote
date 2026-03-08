@@ -8,7 +8,7 @@ import { Payload } from '../../../services/Payload.js';
 import { Queue } from '../../../services/Queue.js';
 import { RefResolver } from '../../../services/RefResolver.js';
 import { tryParseRemnoteLink } from '../../../lib/remnote.js';
-import { trimBoundaryBlankLines } from '../../../lib/text.js';
+import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../../lib/text.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
@@ -35,6 +35,7 @@ export const writeRemCreateCommand = Command.make(
     tag,
     position: Options.integer('position').pipe(Options.optional, Options.map(optionToUndefined)),
     clientTempId: Options.text('client-temp-id').pipe(Options.optional, Options.map(optionToUndefined)),
+    forceText: Options.boolean('force-text'),
 
     notify: writeCommonOptions.notify,
     ensureDaemon: writeCommonOptions.ensureDaemon,
@@ -56,6 +57,7 @@ export const writeRemCreateCommand = Command.make(
     tag,
     position,
     clientTempId,
+    forceText,
     notify,
     ensureDaemon,
     wait,
@@ -131,6 +133,17 @@ export const writeRemCreateCommand = Command.make(
 
       const remClientTempId = clientTempId ? String(clientTempId).trim() : makeTempId();
       const textValue = text !== undefined ? trimBoundaryBlankLines(text) : undefined;
+
+      if (textValue && !forceText && looksLikeStructuredMarkdown(textValue)) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message:
+              'Input passed to --text looks like structured Markdown. Use import markdown --parent/--ref instead, or pass --force-text to keep it literal.',
+            exitCode: 2,
+          }),
+        );
+      }
 
       const payload: Record<string, unknown> = {
         parentId,
