@@ -25,10 +25,29 @@ curl -X POST http://127.0.0.1:3000/v1/search/db \
 
 ## Use CLI in remote API mode
 
-```bash
-agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
-REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn <txn_id>
+Recommended one-time config:
+
+```json
+{
+  "apiBaseUrl": "http://host.docker.internal:3000"
+}
 ```
+
+You can also write it through the CLI:
+
+```bash
+agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config validate
+```
+
+Save it to `~/.agent-remnote/config.json`, then keep using the same business commands:
+
+```bash
+agent-remnote search --query "keyword"
+agent-remnote queue wait --txn <txn_id>
+```
+
+Temporary overrides are still available with `--api-base-url` or `REMNOTE_API_BASE_URL`. Use `agent-remnote config path` to confirm the active file path.
 
 ## Logs
 

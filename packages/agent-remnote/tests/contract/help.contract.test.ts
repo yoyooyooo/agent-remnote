@@ -87,4 +87,20 @@ describe('cli contract: --help', () => {
     expect(out).toContain('focused-rem');
     expect(out).toContain('describe');
   });
+
+  it('prints config help with subcommands', async () => {
+    const res = await runCli(['config', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('print');
+    expect(out).toContain('path');
+    expect(out).toContain('list');
+    expect(out).toContain('get');
+    expect(out).toContain('set');
+    expect(out).toContain('unset');
+    expect(out).toContain('validate');
+  });
 });

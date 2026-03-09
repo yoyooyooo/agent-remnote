@@ -84,6 +84,9 @@ export function buildCliEnvConfigProvider(params: {
   const envApiBaseUrl = env.REMNOTE_API_BASE_URL;
   if (typeof envApiBaseUrl === 'string' && envApiBaseUrl.trim()) map.set('apiBaseUrl', envApiBaseUrl);
 
+  const envConfigFile = env.REMNOTE_CONFIG_FILE || env.AGENT_REMNOTE_CONFIG_FILE;
+  if (typeof envConfigFile === 'string' && envConfigFile.trim()) map.set('configFile', envConfigFile);
+
   const envApiHost = env.REMNOTE_API_HOST;
   if (typeof envApiHost === 'string' && envApiHost.trim()) map.set('apiHost', envApiHost);
 

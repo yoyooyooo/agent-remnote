@@ -50,6 +50,7 @@ import { WsBridgeStateLive } from '../services/WsBridgeState.js';
 import { WsBridgeStateFileLive } from '../services/WsBridgeStateFile.js';
 import { WsClientLive } from '../services/WsClient.js';
 import { HostApiClientLive } from '../services/HostApiClient.js';
+import { UserConfigFileLive } from '../services/UserConfigFile.js';
 
 import { StatusLineControllerLive } from '../runtime/status-line/StatusLineController.js';
 import { StatusLineUpdaterLive } from '../runtime/status-line/StatusLineUpdater.js';
@@ -64,6 +65,7 @@ const daemonUrl = Options.text('daemon-url').pipe(Options.optional, Options.map(
 const wsPort = Options.integer('ws-port').pipe(Options.optional, Options.map(optionToUndefined));
 const repo = Options.text('repo').pipe(Options.optional, Options.map(optionToUndefined));
 const apiBaseUrl = Options.text('api-base-url').pipe(Options.optional, Options.map(optionToUndefined));
+const configFile = Options.text('config-file').pipe(Options.optional, Options.map(optionToUndefined));
 
 const appConfigLive = Layer.effect(AppConfig, resolveConfig());
 
@@ -89,6 +91,7 @@ const servicesLive = Layer.mergeAll(
   ChildProcessLive,
   WsClientLive,
   HostApiClientLive,
+  UserConfigFileLive,
   QueueLive,
   RefResolverLive,
   RemDbLive,
@@ -113,6 +116,7 @@ export const rootCommand = Command.make('agent-remnote', {
   wsPort,
   repo,
   apiBaseUrl,
+  configFile,
 }).pipe(
   Command.withSubcommands([
     daemonCommand,

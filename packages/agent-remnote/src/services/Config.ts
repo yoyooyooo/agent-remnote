@@ -15,6 +15,7 @@ export type ResolvedConfig = {
   readonly format: OutputFormat;
   readonly quiet: boolean;
   readonly debug: boolean;
+  readonly configFile: string;
   readonly remnoteDb: string | undefined;
   readonly storeDb: string;
   readonly wsUrl: string;
@@ -45,6 +46,7 @@ type RawConfig = {
   readonly ids: boolean;
   readonly quiet: boolean;
   readonly debug: boolean;
+  readonly configFile: string;
   readonly remnoteDb: string;
   readonly storeDb: string;
   readonly daemonUrl: string;
@@ -72,6 +74,10 @@ type RawConfig = {
 
 function defaultStoreDbPath(): string {
   return path.join(homeDir(), '.agent-remnote', 'store.sqlite');
+}
+
+function defaultUserConfigFilePath(): string {
+  return path.join(homeDir(), '.agent-remnote', 'config.json');
 }
 
 function wsUrlFromPort(port: number): string {
@@ -102,13 +108,77 @@ function defaultApiStateFilePath(): string {
   return path.join(homeDir(), '.agent-remnote', 'api.state.json');
 }
 
+const ROOT_BOOL_FLAGS = new Set(['--json', '--md', '--ids', '--quiet', '--debug']);
+const BUILTIN_BOOL_FLAGS = new Set(['--help', '-h', '--wizard', '--version']);
+const BUILTIN_VALUE_FLAGS = new Set(['--completions', '--log-level']);
+const ROOT_VALUE_FLAGS = new Set([
+  '--remnote-db',
+  '--store-db',
+  '--daemon-url',
+  '--ws-port',
+  '--repo',
+  '--api-base-url',
+  '--config-file',
+  ...BUILTIN_VALUE_FLAGS,
+]);
+
+function isBooleanLiteralToken(token: string): boolean {
+  const v = token.trim().toLowerCase();
+  return v === 'true' || v === 'false';
+}
+
+function splitFlagInlineValue(token: string): { readonly flag: string; readonly inlineValue: string | null } {
+  if (!token.startsWith('--')) return { flag: token, inlineValue: null };
+  const eq = token.indexOf('=');
+  if (eq === -1) return { flag: token, inlineValue: null };
+  return { flag: token.slice(0, eq), inlineValue: token.slice(eq + 1) };
+}
+
+function isConfigCommandInvocation(argv: readonly string[]): boolean {
+  const tokens = argv.slice(2);
+  let i = 0;
+  while (i < tokens.length) {
+    const raw = String(tokens[i] ?? '');
+    if (!raw) break;
+    if (raw === '--') {
+      i += 1;
+      break;
+    }
+    if (!raw.startsWith('-')) break;
+
+    const { flag, inlineValue } = splitFlagInlineValue(raw);
+
+    if (ROOT_VALUE_FLAGS.has(flag)) {
+      i += inlineValue !== null ? 1 : 2;
+      continue;
+    }
+
+    if (ROOT_BOOL_FLAGS.has(flag) || BUILTIN_BOOL_FLAGS.has(flag)) {
+      if (inlineValue !== null) {
+        i += 1;
+        continue;
+      }
+      const next = tokens[i + 1];
+      if (typeof next === 'string' && isBooleanLiteralToken(next)) {
+        i += 2;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+
+    break;
+  }
+  return tokens[i] === 'config';
+}
+
 function normalizeApiBasePath(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '/v1';
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
-function normalizeApiBaseUrl(raw: string): string {
+export function normalizeApiBaseUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return trimmed;
   let parsed: URL;
@@ -196,6 +266,7 @@ const rawConfigSpec = Config.all({
   ids: Config.boolean('ids').pipe(Config.withDefault(false)),
   quiet: Config.boolean('quiet').pipe(Config.withDefault(false)),
   debug: Config.boolean('debug').pipe(Config.withDefault(false)),
+  configFile: Config.string('configFile').pipe(Config.withDefault(defaultUserConfigFilePath())),
 
   remnoteDb: Config.string('remnoteDb').pipe(Config.withDefault('')),
   storeDb: Config.string('storeDb').pipe(Config.withDefault(defaultStoreDbPath())),
@@ -278,9 +349,86 @@ function optionalTrimmed(s: string): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
+function readUserConfigFile(configFile: string): { readonly apiBaseUrl?: string | undefined } {
+  const file = resolveUserFilePath(configFile);
+
+  let rawText = '';
+  try {
+    rawText = fs.readFileSync(file, 'utf8');
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return {};
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Failed to read config file: ${file}`,
+      exitCode: 2,
+      details: { config_file: file, error: String(error?.message || error) },
+    });
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (error: any) {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Invalid JSON in config file: ${file}`,
+      exitCode: 2,
+      details: { config_file: file, error: String(error?.message || error) },
+    });
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Config file must contain a JSON object: ${file}`,
+      exitCode: 2,
+      details: { config_file: file },
+    });
+  }
+
+  const config = parsed as Record<string, unknown>;
+  const api = config.api;
+  const nestedBaseUrl =
+    api && typeof api === 'object' && !Array.isArray(api) ? (api as Record<string, unknown>).baseUrl : undefined;
+  const apiBaseUrl = config.apiBaseUrl ?? nestedBaseUrl;
+
+  if (apiBaseUrl === undefined) return {};
+  if (typeof apiBaseUrl !== 'string') {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Config key apiBaseUrl must be a string: ${file}`,
+      exitCode: 2,
+      details: { config_file: file },
+    });
+  }
+
+  return { apiBaseUrl };
+}
+
 export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
   return Effect.gen(function* () {
     const raw = yield* rawConfigSpec;
+    const configFile = resolveUserFilePath(raw.configFile);
+    const userConfigResult = yield* Effect.either(
+      Effect.try({
+        try: () => readUserConfigFile(configFile),
+        catch: (error) =>
+          isCliError(error)
+            ? error
+            : new CliError({
+                code: 'INVALID_ARGS',
+                message: `Failed to load config file: ${configFile}`,
+                exitCode: 2,
+                details: { config_file: configFile, error: String((error as any)?.message || error) },
+              }),
+      }),
+    );
+    const userConfig =
+      userConfigResult._tag === 'Right'
+        ? userConfigResult.right
+        : isConfigCommandInvocation(process.argv)
+          ? {}
+          : yield* Effect.fail(userConfigResult.left);
 
     const wsStateFile = resolveWsStateFile(raw.wsStateFile);
 
@@ -306,12 +454,14 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
             }),
     });
 
-    const apiBaseUrl = optionalTrimmed(raw.apiBaseUrl) ? normalizeApiBaseUrl(raw.apiBaseUrl) : undefined;
+    const apiBaseUrlRaw = optionalTrimmed(raw.apiBaseUrl) ?? optionalTrimmed(userConfig.apiBaseUrl ?? '');
+    const apiBaseUrl = apiBaseUrlRaw ? normalizeApiBaseUrl(apiBaseUrlRaw) : undefined;
 
     return {
       format,
       quiet: raw.quiet,
       debug: raw.debug,
+      configFile,
       remnoteDb,
       storeDb,
       wsUrl,

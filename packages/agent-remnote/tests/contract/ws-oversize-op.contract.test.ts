@@ -28,6 +28,7 @@ function makeTestConfig(params: {
     format: 'md',
     quiet: true,
     debug: false,
+    configFile: path.join(path.dirname(params.wsStateFilePath), 'config.json'),
     remnoteDb: undefined,
     storeDb: params.storeDb,
     wsUrl: params.wsUrl,

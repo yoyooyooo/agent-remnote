@@ -74,10 +74,12 @@
 
 - 参数：`--api-base-url <url>`
 - 环境变量：`REMNOTE_API_BASE_URL=<url>`
+- 用户配置文件：`~/.agent-remnote/config.json` 中的 `apiBaseUrl`
+- 配置文件路径覆盖：`REMNOTE_CONFIG_FILE=<path>`
 
 优先级：
 
-- 显式参数 `--api-base-url` 高于 `REMNOTE_API_BASE_URL`
+- `--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json`
 
 语义：
 

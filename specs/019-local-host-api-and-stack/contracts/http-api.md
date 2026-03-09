@@ -11,6 +11,7 @@ Base URL（容器内）：`http://host.docker.internal:3000`
 
 - `--api-base-url http://host.docker.internal:3000`
 - `REMNOTE_API_BASE_URL=http://host.docker.internal:3000`
+- `~/.agent-remnote/config.json` → `{ "apiBaseUrl": "http://host.docker.internal:3000" }`
 
 该 binding 适用于对等业务能力，不适用于 `api serve/start/stop/status/logs/restart/ensure` 这类 API lifecycle 命令。
 

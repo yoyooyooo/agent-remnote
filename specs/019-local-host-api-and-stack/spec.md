@@ -92,7 +92,7 @@
 - HTTP API 可以是“REST-ish / command-style JSON”，**不强求纯 REST**；优先满足 Agent 易调用、语义稳定、排障简单。
 - 对外错误码、英文 message、`nextActions[]` 必须与 CLI / SSoT 一致。
 - 现有业务命令（如 `search` / `plugin search` / `import markdown` / `queue wait`）在 remote API mode 下继续保留原命令名；`api` 命令组只负责 API 服务生命周期，不承担业务代理命名空间。
-- remote API mode 的优先级裁决：显式参数 `--api-base-url` 高于环境变量 `REMNOTE_API_BASE_URL`；未提供时走本地 direct mode。
+- remote API mode 的优先级裁决：显式参数 `--api-base-url` 高于环境变量 `REMNOTE_API_BASE_URL`，环境变量高于用户配置文件 `~/.agent-remnote/config.json` 中的 `apiBaseUrl`；未提供时走本地 direct mode。
 
 ## 用户场景与测试（必填）
 

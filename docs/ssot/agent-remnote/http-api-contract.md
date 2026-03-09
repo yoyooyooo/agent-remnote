@@ -4,7 +4,7 @@
 
 - `agent-remnote api serve` 提供本机 Host API（默认 `http://0.0.0.0:3000`）。
 - 该 API 面向“宿主机 + 本地容器 + 自己使用”的可信边界；当前版本不做鉴权。
-- 容器内 agent 的标准入口是 HTTP API；CLI 也可通过 `--api-base-url` / `REMNOTE_API_BASE_URL` 进入 remote API mode。
+- 容器内 agent 的标准入口是 HTTP API；业务 CLI 应保持同一套命令形状，remote API mode 通过用户配置层注入。
 - `api` 命令组只负责 API 生命周期；业务命令仍保留原命令名。
 
 ## 角色与边界
@@ -54,10 +54,12 @@
 
 - 参数：`--api-base-url <url>`
 - 环境变量：`REMNOTE_API_BASE_URL=<url>`
+- 用户配置文件：`~/.agent-remnote/config.json` 中的 `apiBaseUrl`
+- 配置文件路径覆盖：`REMNOTE_CONFIG_FILE=<path>`
 
 优先级：
 
-- `--api-base-url` > `REMNOTE_API_BASE_URL` > direct mode
+- `--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json` > direct mode
 
 ## HTTP Endpoints
 

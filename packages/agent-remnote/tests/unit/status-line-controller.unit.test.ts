@@ -13,6 +13,7 @@ import { StatusLineUpdater } from '../../src/runtime/status-line/StatusLineUpdat
 
 function makeTestConfig(overrides?: Partial<ResolvedConfig>): ResolvedConfig {
   const wsScheduler = overrides?.wsScheduler ?? true;
+  const configFile = overrides?.configFile ?? '/tmp/config.json';
   return {
     format: 'md',
     quiet: true,
@@ -32,6 +33,7 @@ function makeTestConfig(overrides?: Partial<ResolvedConfig>): ResolvedConfig {
     wsDispatchMaxBytes: 512_000,
     wsDispatchMaxOpBytes: 256_000,
     ...overrides,
+    configFile,
     wsScheduler,
   };
 }

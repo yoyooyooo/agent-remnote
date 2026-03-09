@@ -27,6 +27,7 @@
 - `PORT`：覆盖默认端口
 - `REMNOTE_API_HOST`：覆盖默认 host
 - `REMNOTE_API_BASE_URL`：让业务 CLI 走 remote API mode
+- `REMNOTE_CONFIG_FILE`：覆盖用户配置文件路径（默认 `~/.agent-remnote/config.json`）
 - `REMNOTE_API_PID_FILE`
 - `REMNOTE_API_LOG_FILE`
 - `REMNOTE_API_STATE_FILE`
@@ -35,18 +36,18 @@
 
 ### Direct Mode（默认）
 
-- 未提供 `--api-base-url` / `REMNOTE_API_BASE_URL`
+- 未提供 `--api-base-url` / `REMNOTE_API_BASE_URL` / 用户配置 `apiBaseUrl`
 - CLI 直接访问本地 `remnote.db`、`store.sqlite`、WS bridge
 
 ### Remote API Mode
 
-- 提供 `--api-base-url` 或 `REMNOTE_API_BASE_URL`
+- 提供 `--api-base-url`、`REMNOTE_API_BASE_URL`，或用户配置文件中的 `apiBaseUrl`
 - CLI 不再直接访问本地 RemNote 相关文件与 WS bridge
 - CLI 改为通过宿主机 Host API 完成读写与状态查询
 
 优先级：
 
-- `--api-base-url` > `REMNOTE_API_BASE_URL` > direct mode
+- `--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json` > direct mode
 
 ## 新增状态文件
 

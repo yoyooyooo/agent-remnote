@@ -92,14 +92,37 @@ agent-remnote api status --json
 curl http://127.0.0.1:3000/v1/health
 ```
 
-容器内或远端 CLI 走 remote API mode：
+容器内或远端 agent 推荐一次性写入用户配置：
+
+```json
+{
+  "apiBaseUrl": "http://host.docker.internal:3000"
+}
+```
+
+也可以直接用 CLI 写入：
 
 ```bash
-agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
+agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config validate
+```
+
+保存到 `~/.agent-remnote/config.json` 后，业务命令继续按原样调用：
+
+```bash
+agent-remnote search --query "keyword"
+agent-remnote queue wait --txn "<txn_id>"
+agent-remnote plugin selection current
+agent-remnote plugin selection current --compact
+agent-remnote plugin current --compact
+```
+
+需要临时覆盖时仍可使用：
+
+```bash
 REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
-agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current
-agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current --compact
 agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
+agent-remnote --json config print
 ```
 
 ## 快速开始（用户）
@@ -325,9 +348,10 @@ flowchart LR
 - RemNote DB（只读）：`--remnote-db` / `REMNOTE_DB`
 - Store DB：`--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`（默认 `~/.agent-remnote/store.sqlite`；legacy：`--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`）
 - WS 地址：`--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL`（或 `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`，默认端口 6789）
-- Host API remote mode：`--api-base-url` / `REMNOTE_API_BASE_URL`
+- Host API remote mode 来源：`--api-base-url` / `REMNOTE_API_BASE_URL` / `~/.agent-remnote/config.json`
 - Host API 监听地址：`REMNOTE_API_HOST`（默认 `0.0.0.0`）
 - Host API 端口：`PORT`（默认 `3000`）
+- 用户配置文件覆盖：`--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state（仅 env）：`REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`（默认 `~/.agent-remnote/ws.bridge.state.json`）
 - daemon pidfile（仅 env）：`REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`（默认 `~/.agent-remnote/ws.pid`）
@@ -339,7 +363,7 @@ flowchart LR
 - statusLine 文件模式（仅 env）：`REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline（右下角 RN 段）：见 `docs/guides/tmux-statusline.md`
 
-可用 `agent-remnote config print` 查看最终解析结果（含默认/派生的文件路径）。
+可用 `agent-remnote config path` 查看当前用户配置文件路径，用 `config list/get/set/unset/validate` 管理用户配置文件，用 `config print` 查看最终解析结果（含默认值与覆盖结果）。
 
 ## 从源码开发与调试（最后一环）
 

@@ -34,18 +34,35 @@ agent-remnote stack ensure
 agent-remnote api status --json
 ```
 
-业务命令可直接切到 remote mode：
+优先裁决：业务命令保持同一套调用方式，环境差异放到用户配置层。
+
+推荐一次性配置：
+
+```json
+{
+  "apiBaseUrl": "http://host.docker.internal:3000"
+}
+```
+
+优先用 CLI 写入：
 
 ```bash
-agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
-REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote plugin current --compact
+agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config validate
+```
+
+也可直接保存到 `~/.agent-remnote/config.json`，之后继续直接调用业务命令：
+
+```bash
+agent-remnote search --query "keyword"
+agent-remnote plugin current --compact
 ```
 
 裁决：
 
 - `api` 命令组只负责 API 生命周期
 - 业务命令仍保留原命令名
-- 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL`
+- 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json`
 
 ### 2）最推荐的“当前上下文”读取命令
 
@@ -286,7 +303,7 @@ agent-remnote --json rem inspect --id "<remId>"
 ## 机器执行 / JSON 使用注意事项
 
 - `--json` 结果应优先作为机器消费输出。
-- 若 Agent 不在宿主机：优先加 `--api-base-url http://host.docker.internal:3000`（或设置 `REMNOTE_API_BASE_URL`）。
+- 若 Agent 不在宿主机：优先让用户先执行 `config set` 写入用户配置；临时覆盖再用 `--api-base-url` 或 `REMNOTE_API_BASE_URL`。
 - 需要“最薄决策输入”时，优先 `plugin current --compact`，其次 `plugin selection current --compact`。
 - 若外层 shim / wrapper 混入 banner/help，脚本消费时应取最后一条 JSON，或直接切换到更纯净的 CLI 入口。
 - 在这套个人环境里，如果 `agent-remnote` 命中 dev shim 并报模块缺失，可优先尝试：

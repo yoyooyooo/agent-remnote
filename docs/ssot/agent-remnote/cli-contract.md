@@ -76,3 +76,15 @@ export type JsonEnvelope =
 - 其余 **只读** 能力优先直挂顶层实体子命令（例如 `search` / `query` / `db ...` / `powerup list/schema` / `todo list` / `rem outline`）
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
 - raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口为 `plan apply`）
+
+## 6) `config` 命令组契约
+
+- `config path`：输出当前生效的用户配置文件路径
+- `config list`：枚举用户配置文件中的显式配置项，返回 canonical key
+- `config get --key <key>`：读取单个配置项；未设置时返回 `exists=false`
+- `config set --key <key> --value <value>`：写入单个配置项；当前支持 `apiBaseUrl`
+- `config unset --key <key>`：删除单个配置项；若文件清空可直接删除配置文件
+- `config validate`：校验用户配置文件的 JSON 结构与已知 key 语义，返回 `valid` 布尔值与 `errors[]`
+- `config print`：输出最终解析后的运行时配置，包含默认值、用户配置、环境变量与 CLI 参数覆盖后的结果
+- 用户配置文件路径优先级：`--config-file` > `REMNOTE_CONFIG_FILE` > `~/.agent-remnote/config.json`
+- remote API base URL 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL` > 用户配置文件中的 `apiBaseUrl` > direct mode

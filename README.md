@@ -92,14 +92,37 @@ Direct HTTP:
 curl http://127.0.0.1:3000/v1/health
 ```
 
-Remote CLI mode:
+Recommended one-time config for container or remote agents:
+
+```json
+{
+  "apiBaseUrl": "http://host.docker.internal:3000"
+}
+```
+
+Or write it through the CLI:
 
 ```bash
-agent-remnote --api-base-url http://host.docker.internal:3000 search --query "keyword"
+agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config validate
+```
+
+Save it to `~/.agent-remnote/config.json`, then keep using the same business commands:
+
+```bash
+agent-remnote search --query "keyword"
+agent-remnote queue wait --txn "<txn_id>"
+agent-remnote plugin selection current
+agent-remnote plugin selection current --compact
+agent-remnote plugin current --compact
+```
+
+Overrides are still available when needed:
+
+```bash
 REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
-agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current
-agent-remnote --api-base-url http://host.docker.internal:3000 plugin selection current --compact
 agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
+agent-remnote --json config print
 ```
 
 ## Quick start (users)
@@ -325,9 +348,10 @@ flowchart LR
 - RemNote DB (read-only): `--remnote-db` / `REMNOTE_DB`
 - Store DB: `--store-db` / `REMNOTE_STORE_DB` / `STORE_DB` (default: `~/.agent-remnote/store.sqlite`; legacy: `--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`)
 - WS endpoint: `--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL` (or `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`, default port 6789)
-- Host API remote mode: `--api-base-url` / `REMNOTE_API_BASE_URL`
+- Host API remote mode sources: `--api-base-url` / `REMNOTE_API_BASE_URL` / `~/.agent-remnote/config.json`
 - Host API listen host: `REMNOTE_API_HOST` (default `0.0.0.0`)
 - Host API port: `PORT` (default `3000`)
+- User config file override: `--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state (env-only): `REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` (default: `~/.agent-remnote/ws.bridge.state.json`)
 - Daemon pidfile (env-only): `REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE` (default: `~/.agent-remnote/ws.pid`)
@@ -339,7 +363,7 @@ flowchart LR
 - status line file mode (env-only): `REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline (RN segment): see `docs/guides/tmux-statusline.md`
 
-Useful: `agent-remnote config print` shows the resolved values (including derived/default file paths).
+Useful: `agent-remnote config path` shows the active user config path; `config list/get/set/unset/validate` manage the user config file; `config print` shows the resolved values (including defaults and overrides).
 
 ## Development & debugging (from source)
 

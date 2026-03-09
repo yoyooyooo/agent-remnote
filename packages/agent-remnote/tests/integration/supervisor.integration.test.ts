@@ -17,6 +17,7 @@ import { SupervisorStateLive } from '../../src/services/SupervisorState.js';
 
 function makeTestConfig(overrides?: Partial<ResolvedConfig>): ResolvedConfig {
   const wsScheduler = overrides?.wsScheduler ?? true;
+  const configFile = overrides?.configFile ?? '/tmp/config.json';
   return {
     format: 'md',
     quiet: true,
@@ -36,6 +37,7 @@ function makeTestConfig(overrides?: Partial<ResolvedConfig>): ResolvedConfig {
     wsDispatchMaxBytes: 512_000,
     wsDispatchMaxOpBytes: 256_000,
     ...overrides,
+    configFile,
     wsScheduler,
   };
 }
