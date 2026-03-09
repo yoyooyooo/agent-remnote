@@ -59,8 +59,8 @@ agent-remnote --help
 
 You need the plugin for **writes** and **Plugin RPC** reads.
 
-1) Download `PluginZip.zip` (from Releases, if available), or build it from source (see “Development & debugging”).  
-2) In RemNote → Settings → Plugins → Developer → Install From Zip → select `PluginZip.zip`.
+1. Download `PluginZip.zip` (from Releases, if available), or build it from source (see “Development & debugging”).
+2. In RemNote → Settings → Plugins → Developer → Install From Zip → select `PluginZip.zip`.
 
 ### WS bridge (daemon)
 
@@ -104,6 +104,9 @@ Or write it through the CLI:
 
 ```bash
 agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config set --key apiHost --value 0.0.0.0
+agent-remnote config set --key apiPort --value 3001
+agent-remnote config set --key apiBasePath --value /v1
 agent-remnote config validate
 ```
 
@@ -122,7 +125,7 @@ Overrides are still available when needed:
 ```bash
 REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
 agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
-agent-remnote --json config print
+agent-remnote --api-host 127.0.0.1 --api-port 3001 --api-base-path /v2 --json config print
 ```
 
 ## Quick start (users)
@@ -210,15 +213,15 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 ### Read: two complementary channels
 
-1) **Plugin RPC (fast candidates)**  
-Requires a connected RemNote window + plugin (active worker). Returns Top‑K candidates with snippets.
+1. **Plugin RPC (fast candidates)**  
+   Requires a connected RemNote window + plugin (active worker). Returns Top‑K candidates with snippets.
 
 ```bash
 agent-remnote --json plugin search --query "keyword" --timeout-ms 3000
 ```
 
-2) **DB Pull (deterministic fallback)**  
-Read-only query against `remnote.db` (works without the plugin).
+2. **DB Pull (deterministic fallback)**  
+   Read-only query against `remnote.db` (works without the plugin).
 
 ```bash
 agent-remnote --json search --query "keyword" --timeout-ms 30000
@@ -276,39 +279,39 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 
 ## Command cheat sheet
 
-| Goal | Command |
-| --- | --- |
-| Health / liveness | `agent-remnote --json daemon health` |
-| Inspect daemon + clients + active worker | `agent-remnote --json daemon status` |
-| Plugin candidate search (Top‑K) | `agent-remnote --json plugin search --query "..."` |
-| DB search (fallback) | `agent-remnote --json search --query "..."` |
-| UI context snapshot (IDs) | `agent-remnote --json plugin ui-context snapshot` |
-| Resolve today's Daily Note Rem ID | `agent-remnote --ids daily rem-id` |
-| Resolve a specific Daily Note Rem ID | `agent-remnote --json daily rem-id --date "2026-03-08"` |
-| Write Markdown to a page | `agent-remnote --json import markdown --ref "page:..." --file ./note.md` |
-| Write Markdown (insert at top) | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0` |
-| Write Markdown (staged insert) | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged` |
-| Write Daily Note Markdown inline | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait` |
-| Write Daily Note Markdown from stdin | `cat note.md \| agent-remnote --json daily write --stdin --wait` |
-| Create a Portal | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait` |
-| Create a Rem | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait` |
-| Move a Rem | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait` |
-| Update Rem text | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait` |
-| Tag a Rem | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"` |
-| Un-tag a Rem | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"` |
-| Powerup schema (Tag + properties) | `agent-remnote --json powerup schema --powerup "Todo" --include-options` |
-| Powerup apply (tag + set values) | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
-| Todo: mark done | `agent-remnote --json todo done --rem "<rem_id>" --wait` |
-| Table: create a table | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait` |
-| Table: add a row | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."` |
-| Delete a Rem | `agent-remnote --json rem delete --rem "<rem_id>"` |
-| Batch write plan (multi-step) | `agent-remnote --json plan apply --payload @plan.json` |
-| Raw ops enqueue (advanced) | `agent-remnote --json apply --payload @ops.json` |
-| Wait for completion | `agent-remnote --json queue wait --txn "<txn_id>"` |
-| Queue stats | `agent-remnote --json queue stats` |
-| Queue stats (+ conflict summary) | `agent-remnote --json queue stats --include-conflicts` |
-| Conflict surface report | `agent-remnote --json queue conflicts` |
-| Debug logs | `agent-remnote daemon logs --lines 200` |
+| Goal                                     | Command                                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health / liveness                        | `agent-remnote --json daemon health`                                                                                                              |
+| Inspect daemon + clients + active worker | `agent-remnote --json daemon status`                                                                                                              |
+| Plugin candidate search (Top‑K)          | `agent-remnote --json plugin search --query "..."`                                                                                                |
+| DB search (fallback)                     | `agent-remnote --json search --query "..."`                                                                                                       |
+| UI context snapshot (IDs)                | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
+| Resolve today's Daily Note Rem ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
+| Resolve a specific Daily Note Rem ID     | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
+| Write Markdown to a page                 | `agent-remnote --json import markdown --ref "page:..." --file ./note.md`                                                                          |
+| Write Markdown (insert at top)           | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0`                                                             |
+| Write Markdown (staged insert)           | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged`                                                                 |
+| Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
+| Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --stdin --wait`                                                                                  |
+| Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| Create a Rem                             | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| Move a Rem                               | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
+| Update Rem text                          | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
+| Tag a Rem                                | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
+| Un-tag a Rem                             | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
+| Powerup schema (Tag + properties)        | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
+| Powerup apply (tag + set values)         | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
+| Todo: mark done                          | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
+| Table: create a table                    | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
+| Table: add a row                         | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
+| Delete a Rem                             | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
+| Batch write plan (multi-step)            | `agent-remnote --json plan apply --payload @plan.json`                                                                                            |
+| Raw ops enqueue (advanced)               | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
+| Wait for completion                      | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
+| Queue stats                              | `agent-remnote --json queue stats`                                                                                                                |
+| Queue stats (+ conflict summary)         | `agent-remnote --json queue stats --include-conflicts`                                                                                            |
+| Conflict surface report                  | `agent-remnote --json queue conflicts`                                                                                                            |
+| Debug logs                               | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
 Most write commands also support `--wait --timeout-ms <ms> --poll-ms <ms>` to close the loop in a single call.
 
@@ -364,9 +367,10 @@ flowchart LR
 - RemNote DB (read-only): `--remnote-db` / `REMNOTE_DB`
 - Store DB: `--store-db` / `REMNOTE_STORE_DB` / `STORE_DB` (default: `~/.agent-remnote/store.sqlite`; legacy: `--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`)
 - WS endpoint: `--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL` (or `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`, default port 6789)
-- Host API remote mode sources: `--api-base-url` / `REMNOTE_API_BASE_URL` / `~/.agent-remnote/config.json`
-- Host API listen host: `REMNOTE_API_HOST` (default `0.0.0.0`)
-- Host API port: `PORT` (default `3000`)
+- Host API remote mode sources: `--api-base-url` / `REMNOTE_API_BASE_URL` / user config `apiBaseUrl`
+- Host API listen host: `--api-host` / `REMNOTE_API_HOST` / user config `apiHost` (default `0.0.0.0`)
+- Host API port: `--api-port` / `PORT` / `REMNOTE_API_PORT` / user config `apiPort` (default `3000`)
+- Host API base path: `--api-base-path` / `REMNOTE_API_BASE_PATH` / user config `apiBasePath` (default `/v1`)
 - User config file override: `--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state (env-only): `REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` (default: `~/.agent-remnote/ws.bridge.state.json`)
@@ -379,7 +383,7 @@ flowchart LR
 - status line file mode (env-only): `REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline (RN segment): see `docs/guides/tmux-statusline.md`
 
-Useful: `agent-remnote config path` shows the active user config path; `config list/get/set/unset/validate` manage the user config file; `config print` shows the resolved values (including defaults and overrides).
+Useful: `agent-remnote config path` shows the active user config path; `config list/get/set/unset/validate` manage the user config file; `config set` supports `apiBaseUrl`, `apiHost`, `apiPort`, and `apiBasePath`; `config print` shows the resolved values (including defaults and overrides).
 
 ## Development & debugging (from source)
 
@@ -419,6 +423,7 @@ npm run check
 ```
 
 ## Release
+
 This repo uses Changesets for npm releases.
 
 - Add a changeset for every release-worthy `agent-remnote` change

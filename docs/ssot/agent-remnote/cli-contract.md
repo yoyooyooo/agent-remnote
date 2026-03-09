@@ -82,9 +82,12 @@ export type JsonEnvelope =
 - `config path`：输出当前生效的用户配置文件路径
 - `config list`：枚举用户配置文件中的显式配置项，返回 canonical key
 - `config get --key <key>`：读取单个配置项；未设置时返回 `exists=false`
-- `config set --key <key> --value <value>`：写入单个配置项；当前支持 `apiBaseUrl`
+- `config set --key <key> --value <value>`：写入单个配置项；支持 `apiBaseUrl`、`apiHost`、`apiPort`、`apiBasePath`
 - `config unset --key <key>`：删除单个配置项；若文件清空可直接删除配置文件
 - `config validate`：校验用户配置文件的 JSON 结构与已知 key 语义，返回 `valid` 布尔值与 `errors[]`
 - `config print`：输出最终解析后的运行时配置，包含默认值、用户配置、环境变量与 CLI 参数覆盖后的结果
 - 用户配置文件路径优先级：`--config-file` > `REMNOTE_CONFIG_FILE` > `~/.agent-remnote/config.json`
 - remote API base URL 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL` > 用户配置文件中的 `apiBaseUrl` > direct mode
+- API host 优先级：`--api-host` > `REMNOTE_API_HOST` > 用户配置文件中的 `apiHost` > 默认 `0.0.0.0`
+- API port 优先级：`--api-port` > `PORT` / `REMNOTE_API_PORT` > 用户配置文件中的 `apiPort` > 默认 `3000`
+- API base path 优先级：`--api-base-path` > `REMNOTE_API_BASE_PATH` > 用户配置文件中的 `apiBasePath` > 默认 `/v1`

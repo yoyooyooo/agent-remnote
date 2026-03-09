@@ -21,6 +21,9 @@ export const configListCommand = Command.make('list', {}, () =>
       `- exists: ${data.exists}`,
       `- valid: ${data.valid}`,
       `- apiBaseUrl: ${data.values.apiBaseUrl ?? ''}`,
+      `- apiHost: ${data.values.apiHost ?? ''}`,
+      `- apiPort: ${data.values.apiPort ?? ''}`,
+      `- apiBasePath: ${data.values.apiBasePath ?? ''}`,
       `- unknown_keys: ${data.unknown_keys.join(', ')}`,
       `- errors: ${data.errors.join(' | ')}`,
     ];

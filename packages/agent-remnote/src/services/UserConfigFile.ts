@@ -5,12 +5,15 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { AppConfig } from './AppConfig.js';
-import { normalizeApiBaseUrl } from './Config.js';
+import { normalizeApiBasePath, normalizeApiBaseUrl, normalizeApiHost, normalizeApiPort } from './Config.js';
 import { CliError, isCliError } from './Errors.js';
 import { resolveUserFilePath } from '../lib/paths.js';
 
 export type UserConfigValues = {
   readonly apiBaseUrl?: string | undefined;
+  readonly apiHost?: string | undefined;
+  readonly apiPort?: number | undefined;
+  readonly apiBasePath?: string | undefined;
 };
 
 export type UserConfigInspection = {
@@ -26,13 +29,13 @@ export type UserConfigGetResult = {
   readonly configFile: string;
   readonly key: string;
   readonly exists: boolean;
-  readonly value: string | null;
+  readonly value: string | number | null;
 };
 
 export type UserConfigSetResult = {
   readonly configFile: string;
   readonly key: string;
-  readonly value: string;
+  readonly value: string | number;
   readonly changed: boolean;
 };
 
@@ -65,6 +68,9 @@ function canonicalKey(input: string): string {
     throw new CliError({ code: 'INVALID_ARGS', message: 'Config key is required', exitCode: 2 });
   }
   if (key === 'apiBaseUrl' || key === 'api.baseUrl' || key === 'api-base-url') return 'apiBaseUrl';
+  if (key === 'apiHost' || key === 'api.host' || key === 'api-host') return 'apiHost';
+  if (key === 'apiPort' || key === 'api.port' || key === 'api-port') return 'apiPort';
+  if (key === 'apiBasePath' || key === 'api.basePath' || key === 'api-base-path') return 'apiBasePath';
   throw new CliError({ code: 'INVALID_ARGS', message: `Unsupported config key: ${key}`, exitCode: 2 });
 }
 
@@ -113,12 +119,119 @@ function readApiBaseUrl(doc: UserConfigDoc): {
   return { value: rootValue ?? nestedValue, errors };
 }
 
+function normalizeApiHostCandidate(
+  candidate: unknown,
+  keyName: 'apiHost' | 'api.host',
+  errors: string[],
+): string | undefined {
+  if (candidate === undefined) return undefined;
+  if (typeof candidate !== 'string') {
+    errors.push(`Config key ${keyName} must be a string`);
+    return undefined;
+  }
+  return normalizeApiHost(candidate);
+}
+
+function readApiHost(doc: UserConfigDoc): {
+  readonly value?: string | undefined;
+  readonly errors: readonly string[];
+} {
+  const errors: string[] = [];
+
+  const root = doc.apiHost;
+  const api = doc.api;
+  const nested = isPlainObject(api) ? api.host : undefined;
+
+  const rootValue = normalizeApiHostCandidate(root, 'apiHost', errors);
+  const nestedValue = normalizeApiHostCandidate(nested, 'api.host', errors);
+
+  if (rootValue !== undefined && nestedValue !== undefined && rootValue !== nestedValue) {
+    errors.push('Config keys apiHost and api.host conflict');
+  }
+
+  return { value: rootValue ?? nestedValue, errors };
+}
+
+function normalizeApiPortCandidate(
+  candidate: unknown,
+  keyName: 'apiPort' | 'api.port',
+  errors: string[],
+): number | undefined {
+  if (candidate === undefined) return undefined;
+  if (typeof candidate !== 'number' && typeof candidate !== 'string') {
+    errors.push(`Config key ${keyName} must be a valid port number`);
+    return undefined;
+  }
+  try {
+    return normalizeApiPort(candidate);
+  } catch (error) {
+    errors.push(isCliError(error) ? error.message : `Config key ${keyName} must be a valid port number`);
+    return undefined;
+  }
+}
+
+function readApiPort(doc: UserConfigDoc): {
+  readonly value?: number | undefined;
+  readonly errors: readonly string[];
+} {
+  const errors: string[] = [];
+
+  const root = doc.apiPort;
+  const api = doc.api;
+  const nested = isPlainObject(api) ? api.port : undefined;
+
+  const rootValue = normalizeApiPortCandidate(root, 'apiPort', errors);
+  const nestedValue = normalizeApiPortCandidate(nested, 'api.port', errors);
+
+  if (rootValue !== undefined && nestedValue !== undefined && rootValue !== nestedValue) {
+    errors.push('Config keys apiPort and api.port conflict');
+  }
+
+  return { value: rootValue ?? nestedValue, errors };
+}
+
+function normalizeApiBasePathCandidate(
+  candidate: unknown,
+  keyName: 'apiBasePath' | 'api.basePath',
+  errors: string[],
+): string | undefined {
+  if (candidate === undefined) return undefined;
+  if (typeof candidate !== 'string') {
+    errors.push(`Config key ${keyName} must be a string`);
+    return undefined;
+  }
+  return normalizeApiBasePath(candidate);
+}
+
+function readApiBasePath(doc: UserConfigDoc): {
+  readonly value?: string | undefined;
+  readonly errors: readonly string[];
+} {
+  const errors: string[] = [];
+
+  const root = doc.apiBasePath;
+  const api = doc.api;
+  const nested = isPlainObject(api) ? api.basePath : undefined;
+
+  const rootValue = normalizeApiBasePathCandidate(root, 'apiBasePath', errors);
+  const nestedValue = normalizeApiBasePathCandidate(nested, 'api.basePath', errors);
+
+  if (rootValue !== undefined && nestedValue !== undefined && rootValue !== nestedValue) {
+    errors.push('Config keys apiBasePath and api.basePath conflict');
+  }
+
+  return { value: rootValue ?? nestedValue, errors };
+}
+
 function inspectDoc(configFile: string, exists: boolean, doc: UserConfigDoc): UserConfigInspection {
   const apiBaseUrl = readApiBaseUrl(doc);
+  const apiHost = readApiHost(doc);
+  const apiPort = readApiPort(doc);
+  const apiBasePath = readApiBasePath(doc);
   const unknownKeys: string[] = [];
 
   for (const key of Object.keys(doc)) {
-    if (key === 'apiBaseUrl') continue;
+    if (key === 'apiBaseUrl' || key === 'apiHost' || key === 'apiPort' || key === 'apiBasePath') continue;
     if (key !== 'api') {
       unknownKeys.push(key);
       continue;
@@ -128,18 +241,27 @@ function inspectDoc(configFile: string, exists: boolean, doc: UserConfigDoc): Us
       continue;
     }
     for (const nestedKey of Object.keys(api)) {
-      if (nestedKey === 'baseUrl') continue;
+      if (nestedKey === 'baseUrl' || nestedKey === 'host' || nestedKey === 'port' || nestedKey === 'basePath') {
+        continue;
+      }
       unknownKeys.push(`api.${nestedKey}`);
     }
   }
 
+  const errors = [...apiBaseUrl.errors, ...apiHost.errors, ...apiPort.errors, ...apiBasePath.errors];
+
   return {
     configFile,
     exists,
-    values: { apiBaseUrl: apiBaseUrl.value },
+    values: {
+      apiBaseUrl: apiBaseUrl.value,
+      apiHost: apiHost.value,
+      apiPort: apiPort.value,
+      apiBasePath: apiBasePath.value,
+    },
     unknownKeys,
-    errors: apiBaseUrl.errors,
-    valid: apiBaseUrl.errors.length === 0,
+    errors,
+    valid: errors.length === 0,
   };
 }
 
@@ -204,7 +326,12 @@ async function writeDoc(configFile: string, doc: UserConfigDoc): Promise<void> {
   const file = resolveUserFilePath(configFile);
   await ensureDir(file);
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmp, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+  await fs.writeFile(
+    tmp,
+    `${JSON.stringify(doc, null, 2)}
+`,
+    'utf8',
+  );
   await fs.rename(tmp, file);
 }
 
@@ -223,6 +350,39 @@ function setApiBaseUrl(doc: UserConfigDoc, value: string): UserConfigDoc {
   return next;
 }
 
+function setApiHost(doc: UserConfigDoc, value: string): UserConfigDoc {
+  const next = cloneDoc(doc);
+  next.apiHost = normalizeApiHost(value);
+  const api = next.api;
+  if (isPlainObject(api)) {
+    delete api.host;
+    removeEmptyApiObject(next);
+  }
+  return next;
+}
+
+function setApiPort(doc: UserConfigDoc, value: string): UserConfigDoc {
+  const next = cloneDoc(doc);
+  next.apiPort = normalizeApiPort(value);
+  const api = next.api;
+  if (isPlainObject(api)) {
+    delete api.port;
+    removeEmptyApiObject(next);
+  }
+  return next;
+}
+
+function setApiBasePath(doc: UserConfigDoc, value: string): UserConfigDoc {
+  const next = cloneDoc(doc);
+  next.apiBasePath = normalizeApiBasePath(value);
+  const api = next.api;
+  if (isPlainObject(api)) {
+    delete api.basePath;
+    removeEmptyApiObject(next);
+  }
+  return next;
+}
+
 function unsetApiBaseUrl(doc: UserConfigDoc): { readonly next: UserConfigDoc; readonly removed: boolean } {
   const next = cloneDoc(doc);
   let removed = false;
@@ -235,6 +395,63 @@ function unsetApiBaseUrl(doc: UserConfigDoc): { readonly next: UserConfigDoc; re
   const api = next.api;
   if (isPlainObject(api) && Object.prototype.hasOwnProperty.call(api, 'baseUrl')) {
     delete api.baseUrl;
+    removeEmptyApiObject(next);
+    removed = true;
+  }
+
+  return { next, removed };
+}
+
+function unsetApiHost(doc: UserConfigDoc): { readonly next: UserConfigDoc; readonly removed: boolean } {
+  const next = cloneDoc(doc);
+  let removed = false;
+
+  if (Object.prototype.hasOwnProperty.call(next, 'apiHost')) {
+    delete next.apiHost;
+    removed = true;
+  }
+
+  const api = next.api;
+  if (isPlainObject(api) && Object.prototype.hasOwnProperty.call(api, 'host')) {
+    delete api.host;
+    removeEmptyApiObject(next);
+    removed = true;
+  }
+
+  return { next, removed };
+}
+
+function unsetApiPort(doc: UserConfigDoc): { readonly next: UserConfigDoc; readonly removed: boolean } {
+  const next = cloneDoc(doc);
+  let removed = false;
+
+  if (Object.prototype.hasOwnProperty.call(next, 'apiPort')) {
+    delete next.apiPort;
+    removed = true;
+  }
+
+  const api = next.api;
+  if (isPlainObject(api) && Object.prototype.hasOwnProperty.call(api, 'port')) {
+    delete api.port;
+    removeEmptyApiObject(next);
+    removed = true;
+  }
+
+  return { next, removed };
+}
+
+function unsetApiBasePath(doc: UserConfigDoc): { readonly next: UserConfigDoc; readonly removed: boolean } {
+  const next = cloneDoc(doc);
+  let removed = false;
+
+  if (Object.prototype.hasOwnProperty.call(next, 'apiBasePath')) {
+    delete next.apiBasePath;
+    removed = true;
+  }
+
+  const api = next.api;
+  if (isPlainObject(api) && Object.prototype.hasOwnProperty.call(api, 'basePath')) {
+    delete api.basePath;
     removeEmptyApiObject(next);
     removed = true;
   }
@@ -292,7 +509,16 @@ export const UserConfigFileLive = Layer.succeed(UserConfigFile, {
         catch: (error) => toCliFailure(error, 'Invalid config file'),
       });
       const inspection = inspectDoc(configFile, parsed.exists, doc);
-      const value = targetKey === 'apiBaseUrl' ? (inspection.values.apiBaseUrl ?? null) : null;
+      const value =
+        targetKey === 'apiBaseUrl'
+          ? (inspection.values.apiBaseUrl ?? null)
+          : targetKey === 'apiHost'
+            ? (inspection.values.apiHost ?? null)
+            : targetKey === 'apiPort'
+              ? (inspection.values.apiPort ?? null)
+              : targetKey === 'apiBasePath'
+                ? (inspection.values.apiBasePath ?? null)
+                : null;
       return {
         configFile,
         key: targetKey,
@@ -318,7 +544,22 @@ export const UserConfigFileLive = Layer.succeed(UserConfigFile, {
               try: () => setApiBaseUrl(doc, value),
               catch: (error) => toCliFailure(error, 'Invalid config value'),
             })
-          : doc;
+          : targetKey === 'apiHost'
+            ? yield* Effect.try({
+                try: () => setApiHost(doc, value),
+                catch: (error) => toCliFailure(error, 'Invalid config value'),
+              })
+            : targetKey === 'apiPort'
+              ? yield* Effect.try({
+                  try: () => setApiPort(doc, value),
+                  catch: (error) => toCliFailure(error, 'Invalid config value'),
+                })
+              : targetKey === 'apiBasePath'
+                ? yield* Effect.try({
+                    try: () => setApiBasePath(doc, value),
+                    catch: (error) => toCliFailure(error, 'Invalid config value'),
+                  })
+                : doc;
       yield* Effect.tryPromise({
         try: async () => await writeDoc(configFile, next),
         catch: (error) =>
@@ -332,7 +573,16 @@ export const UserConfigFileLive = Layer.succeed(UserConfigFile, {
       return {
         configFile,
         key: targetKey,
-        value: String(next.apiBaseUrl ?? ''),
+        value:
+          targetKey === 'apiBaseUrl'
+            ? String(next.apiBaseUrl ?? '')
+            : targetKey === 'apiHost'
+              ? String(next.apiHost ?? '')
+              : targetKey === 'apiPort'
+                ? Number(next.apiPort)
+                : targetKey === 'apiBasePath'
+                  ? String(next.apiBasePath ?? '')
+                  : '',
         changed: true,
       } satisfies UserConfigSetResult;
     }),
@@ -356,7 +606,16 @@ export const UserConfigFileLive = Layer.succeed(UserConfigFile, {
           fileDeleted: false,
         } satisfies UserConfigUnsetResult;
       }
-      const result = targetKey === 'apiBaseUrl' ? unsetApiBaseUrl(doc) : { next: doc, removed: false };
+      const result =
+        targetKey === 'apiBaseUrl'
+          ? unsetApiBaseUrl(doc)
+          : targetKey === 'apiHost'
+            ? unsetApiHost(doc)
+            : targetKey === 'apiPort'
+              ? unsetApiPort(doc)
+              : targetKey === 'apiBasePath'
+                ? unsetApiBasePath(doc)
+                : { next: doc, removed: false };
       if (!result.removed) {
         return {
           configFile,

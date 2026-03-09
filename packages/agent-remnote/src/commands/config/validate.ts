@@ -20,6 +20,10 @@ export const configValidateCommand = Command.make('validate', {}, () =>
       `- config_file: ${data.config_file}`,
       `- exists: ${data.exists}`,
       `- valid: ${data.valid}`,
+      `- apiBaseUrl: ${data.values.apiBaseUrl ?? ''}`,
+      `- apiHost: ${data.values.apiHost ?? ''}`,
+      `- apiPort: ${data.values.apiPort ?? ''}`,
+      `- apiBasePath: ${data.values.apiBasePath ?? ''}`,
       `- unknown_keys: ${data.unknown_keys.join(', ')}`,
       `- errors: ${data.errors.join(' | ')}`,
     ];

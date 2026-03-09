@@ -1,6 +1,6 @@
 ---
 name: remnote
-description: "Use when interacting with RemNote: querying local notes, reading current page/focus/selection, using host API remote mode from containers, writing to DN/当前页面/当前块, importing Markdown bullet trees, creating deterministic references, or diagnosing queue/WS/plugin sync."
+description: 'Use when interacting with RemNote: querying local notes, reading current page/focus/selection, using host API remote mode from containers, writing to DN/当前页面/当前块, importing Markdown bullet trees, creating deterministic references, or diagnosing queue/WS/plugin sync.'
 ---
 
 # RemNote
@@ -48,6 +48,9 @@ agent-remnote api status --json
 
 ```bash
 agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config set --key apiHost --value 0.0.0.0
+agent-remnote config set --key apiPort --value 3001
+agent-remnote config set --key apiBasePath --value /v1
 agent-remnote config validate
 ```
 
@@ -62,7 +65,10 @@ agent-remnote plugin current --compact
 
 - `api` 命令组只负责 API 生命周期
 - 业务命令仍保留原命令名
-- 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json`
+- 优先级：`apiBaseUrl` 走 `--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json`
+- 优先级：`apiHost` 走 `--api-host` > `REMNOTE_API_HOST` > `~/.agent-remnote/config.json`
+- 优先级：`apiPort` 走 `--api-port` > `PORT` / `REMNOTE_API_PORT` > `~/.agent-remnote/config.json`
+- 优先级：`apiBasePath` 走 `--api-base-path` > `REMNOTE_API_BASE_PATH` > `~/.agent-remnote/config.json`
 
 ### 2）最推荐的“当前上下文”读取命令
 
@@ -303,7 +309,7 @@ agent-remnote --json rem inspect --id "<remId>"
 ## 机器执行 / JSON 使用注意事项
 
 - `--json` 结果应优先作为机器消费输出。
-- 若 Agent 不在宿主机：优先让用户先执行 `config set` 写入用户配置；临时覆盖再用 `--api-base-url` 或 `REMNOTE_API_BASE_URL`。
+- 若 Agent 不在宿主机：优先让用户先执行 `config set` 写入用户配置；临时覆盖可用 `--api-base-url`、`--api-host`、`--api-port`、`--api-base-path` 或对应 env。
 - 需要“最薄决策输入”时，优先 `plugin current --compact`，其次 `plugin selection current --compact`。
 - 若外层 shim / wrapper 混入 banner/help，脚本消费时应取最后一条 JSON，或直接切换到更纯净的 CLI 入口。
 - 在这套个人环境里，如果 `agent-remnote` 命中 dev shim 并报模块缺失，可优先尝试：

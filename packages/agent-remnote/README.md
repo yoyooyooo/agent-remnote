@@ -30,6 +30,9 @@ Or write it through the CLI:
 
 ```bash
 agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config set --key apiHost --value 0.0.0.0
+agent-remnote config set --key apiPort --value 3001
+agent-remnote config set --key apiBasePath --value /v1
 agent-remnote config validate
 ```
 
@@ -40,7 +43,7 @@ agent-remnote search --query "keyword"
 agent-remnote plugin current --compact
 ```
 
-One-off override remains available with `--api-base-url` or `REMNOTE_API_BASE_URL`. Use `agent-remnote config path|list|get|set|unset|validate|print` to manage user config.
+One-off override remains available with `--api-base-url`, `--api-host`, `--api-port`, `--api-base-path` or the matching env vars. Use `agent-remnote config path|list|get|set|unset|validate|print` to manage user config. `config set` supports `apiBaseUrl`, `apiHost`, `apiPort`, and `apiBasePath`.
 
 ## Docs
 

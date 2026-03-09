@@ -118,6 +118,9 @@ const ROOT_VALUE_FLAGS = new Set([
   '--ws-port',
   '--repo',
   '--api-base-url',
+  '--api-host',
+  '--api-port',
+  '--api-base-path',
   '--config-file',
   ...BUILTIN_VALUE_FLAGS,
 ]);
@@ -172,10 +175,15 @@ function isConfigCommandInvocation(argv: readonly string[]): boolean {
   return tokens[i] === 'config';
 }
 
-function normalizeApiBasePath(raw: string): string {
+export function normalizeApiBasePath(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '/v1';
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+export function normalizeApiHost(raw: string): string {
+  const trimmed = raw.trim();
+  return trimmed || '0.0.0.0';
 }
 
 export function normalizeApiBaseUrl(raw: string): string {
@@ -202,6 +210,19 @@ export function normalizeApiBaseUrl(raw: string): string {
   }
   const normalized = trimmed.replace(/\/+$/, '');
   return normalized;
+}
+
+export function normalizeApiPort(raw: string | number): number {
+  const value = typeof raw === 'number' ? raw : Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isInteger(value) || value <= 0 || value > 65535) {
+    throw new CliError({
+      code: 'INVALID_ARGS',
+      message: `Invalid apiPort: ${String(raw)}`,
+      exitCode: 2,
+      details: { api_port: raw },
+    });
+  }
+  return value;
 }
 
 function resolveWsStateFile(spec: string): { readonly disabled: boolean; readonly path: string } {
@@ -319,9 +340,15 @@ const rawConfigSpec = Config.all({
   statusLineJsonFile: Config.string('statusLineJsonFile').pipe(Config.withDefault(defaultStatusLineJsonFilePath())),
 
   apiBaseUrl: Config.string('apiBaseUrl').pipe(Config.withDefault('')),
-  apiHost: Config.string('apiHost').pipe(Config.withDefault('0.0.0.0')),
-  apiPort: Config.port('apiPort').pipe(Config.withDefault(3000)),
-  apiBasePath: Config.string('apiBasePath').pipe(Config.withDefault('/v1')),
+  apiHost: Config.string('apiHost').pipe(Config.withDefault('')),
+  apiPort: Config.integer('apiPort').pipe(
+    Config.withDefault(-1),
+    Config.validate({
+      message: 'apiPort must be -1 or a valid port',
+      validation: (n) => Number.isInteger(n) && (n === -1 || (n > 0 && n <= 65535)),
+    }),
+  ),
+  apiBasePath: Config.string('apiBasePath').pipe(Config.withDefault('')),
   apiPidFile: Config.string('apiPidFile').pipe(Config.withDefault(defaultApiPidFilePath())),
   apiLogFile: Config.string('apiLogFile').pipe(Config.withDefault(defaultApiLogFilePath())),
   apiStateFile: Config.string('apiStateFile').pipe(Config.withDefault(defaultApiStateFilePath())),
@@ -349,7 +376,12 @@ function optionalTrimmed(s: string): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
-function readUserConfigFile(configFile: string): { readonly apiBaseUrl?: string | undefined } {
+function readUserConfigFile(configFile: string): {
+  readonly apiBaseUrl?: string | undefined;
+  readonly apiHost?: string | undefined;
+  readonly apiPort?: number | undefined;
+  readonly apiBasePath?: string | undefined;
+} {
   const file = resolveUserFilePath(configFile);
 
   let rawText = '';
@@ -388,12 +420,19 @@ function readUserConfigFile(configFile: string): { readonly apiBaseUrl?: string 
 
   const config = parsed as Record<string, unknown>;
   const api = config.api;
-  const nestedBaseUrl =
-    api && typeof api === 'object' && !Array.isArray(api) ? (api as Record<string, unknown>).baseUrl : undefined;
-  const apiBaseUrl = config.apiBaseUrl ?? nestedBaseUrl;
+  const apiObject =
+    api && typeof api === 'object' && !Array.isArray(api) ? (api as Record<string, unknown>) : undefined;
+  const nestedBaseUrl = apiObject?.baseUrl;
+  const nestedHost = apiObject?.host;
+  const nestedPort = apiObject?.port;
+  const nestedBasePath = apiObject?.basePath;
 
-  if (apiBaseUrl === undefined) return {};
-  if (typeof apiBaseUrl !== 'string') {
+  const apiBaseUrl = config.apiBaseUrl ?? nestedBaseUrl;
+  const apiHostRaw = config.apiHost ?? nestedHost;
+  const apiPortRaw = config.apiPort ?? nestedPort;
+  const apiBasePathRaw = config.apiBasePath ?? nestedBasePath;
+
+  if (apiBaseUrl !== undefined && typeof apiBaseUrl !== 'string') {
     throw new CliError({
       code: 'INVALID_ARGS',
       message: `Config key apiBaseUrl must be a string: ${file}`,
@@ -402,7 +441,56 @@ function readUserConfigFile(configFile: string): { readonly apiBaseUrl?: string 
     });
   }
 
-  return { apiBaseUrl };
+  const apiHost =
+    apiHostRaw === undefined
+      ? undefined
+      : (() => {
+          if (typeof apiHostRaw !== 'string') {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config key apiHost must be a string: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalizeApiHost(apiHostRaw);
+        })();
+
+  const apiPort =
+    apiPortRaw === undefined
+      ? undefined
+      : (() => {
+          if (typeof apiPortRaw !== 'number' && typeof apiPortRaw !== 'string') {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config key apiPort must be a valid port number: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalizeApiPort(apiPortRaw);
+        })();
+
+  const apiBasePath =
+    apiBasePathRaw === undefined
+      ? undefined
+      : (() => {
+          if (typeof apiBasePathRaw !== 'string') {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config key apiBasePath must be a string: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalizeApiBasePath(apiBasePathRaw);
+        })();
+
+  if (apiBaseUrl === undefined && apiHost === undefined && apiPort === undefined && apiBasePath === undefined) {
+    return {};
+  }
+
+  return { apiBaseUrl, apiHost, apiPort, apiBasePath };
 }
 
 export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
@@ -456,6 +544,12 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
 
     const apiBaseUrlRaw = optionalTrimmed(raw.apiBaseUrl) ?? optionalTrimmed(userConfig.apiBaseUrl ?? '');
     const apiBaseUrl = apiBaseUrlRaw ? normalizeApiBaseUrl(apiBaseUrlRaw) : undefined;
+    const apiHostRaw = optionalTrimmed(raw.apiHost ?? '') ?? optionalTrimmed(userConfig.apiHost ?? '') ?? '0.0.0.0';
+    const apiHost = normalizeApiHost(apiHostRaw);
+    const apiPort = raw.apiPort && raw.apiPort > 0 ? raw.apiPort : (userConfig.apiPort ?? 3000);
+    const apiBasePathRaw =
+      optionalTrimmed(raw.apiBasePath ?? '') ?? optionalTrimmed(userConfig.apiBasePath ?? '') ?? '/v1';
+    const apiBasePath = normalizeApiBasePath(apiBasePathRaw);
 
     return {
       format,
@@ -478,9 +572,9 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
       statusLineDebug: raw.statusLineDebug,
       statusLineJsonFile: resolveUserFilePath(raw.statusLineJsonFile),
       apiBaseUrl,
-      apiHost: raw.apiHost.trim() || '0.0.0.0',
-      apiPort: raw.apiPort,
-      apiBasePath: normalizeApiBasePath(raw.apiBasePath),
+      apiHost,
+      apiPort,
+      apiBasePath,
       apiPidFile: resolveUserFilePath(raw.apiPidFile),
       apiLogFile: resolveUserFilePath(raw.apiLogFile),
       apiStateFile: resolveUserFilePath(raw.apiStateFile),

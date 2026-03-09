@@ -65,6 +65,9 @@ const daemonUrl = Options.text('daemon-url').pipe(Options.optional, Options.map(
 const wsPort = Options.integer('ws-port').pipe(Options.optional, Options.map(optionToUndefined));
 const repo = Options.text('repo').pipe(Options.optional, Options.map(optionToUndefined));
 const apiBaseUrl = Options.text('api-base-url').pipe(Options.optional, Options.map(optionToUndefined));
+const apiHost = Options.text('api-host').pipe(Options.optional, Options.map(optionToUndefined));
+const apiPort = Options.integer('api-port').pipe(Options.optional, Options.map(optionToUndefined));
+const apiBasePath = Options.text('api-base-path').pipe(Options.optional, Options.map(optionToUndefined));
 const configFile = Options.text('config-file').pipe(Options.optional, Options.map(optionToUndefined));
 
 const appConfigLive = Layer.effect(AppConfig, resolveConfig());
@@ -116,6 +119,9 @@ export const rootCommand = Command.make('agent-remnote', {
   wsPort,
   repo,
   apiBaseUrl,
+  apiHost,
+  apiPort,
+  apiBasePath,
   configFile,
 }).pipe(
   Command.withSubcommands([

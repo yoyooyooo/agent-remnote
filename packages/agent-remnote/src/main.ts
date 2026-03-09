@@ -104,6 +104,9 @@ const ROOT_VALUE_FLAGS = new Set([
   '--ws-port',
   '--repo',
   '--api-base-url',
+  '--api-host',
+  '--api-port',
+  '--api-base-path',
   '--config-file',
   ...BUILTIN_VALUE_FLAGS,
 ]);
@@ -153,9 +156,15 @@ function parseRootConfigFromArgv(argv: readonly string[]): Map<string, string> {
                   ? 'repo'
                   : flag === '--api-base-url'
                     ? 'apiBaseUrl'
-                    : flag === '--config-file'
-                      ? 'configFile'
-                      : null;
+                    : flag === '--api-host'
+                      ? 'apiHost'
+                      : flag === '--api-port'
+                        ? 'apiPort'
+                        : flag === '--api-base-path'
+                          ? 'apiBasePath'
+                          : flag === '--config-file'
+                            ? 'configFile'
+                            : null;
       if (inlineValue !== null) {
         if (key) out.set(key, inlineValue);
         i += 1;

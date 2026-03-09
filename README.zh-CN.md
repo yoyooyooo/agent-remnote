@@ -59,8 +59,8 @@ agent-remnote --help
 
 你需要插件来支持 **写入** 与 **Plugin RPC** 读取。
 
-1) 下载 `PluginZip.zip`（如有 Releases，可从 Releases 获取），或从源码构建（见“从源码开发与调试”）。  
-2) RemNote → Settings → Plugins → Developer → Install From Zip → 选择 `PluginZip.zip`。
+1. 下载 `PluginZip.zip`（如有 Releases，可从 Releases 获取），或从源码构建（见“从源码开发与调试”）。
+2. RemNote → Settings → Plugins → Developer → Install From Zip → 选择 `PluginZip.zip`。
 
 ### WS bridge（daemon）
 
@@ -104,6 +104,9 @@ curl http://127.0.0.1:3000/v1/health
 
 ```bash
 agent-remnote config set --key apiBaseUrl --value http://host.docker.internal:3000
+agent-remnote config set --key apiHost --value 0.0.0.0
+agent-remnote config set --key apiPort --value 3001
+agent-remnote config set --key apiBasePath --value /v1
 agent-remnote config validate
 ```
 
@@ -122,7 +125,7 @@ agent-remnote plugin current --compact
 ```bash
 REMNOTE_API_BASE_URL=http://host.docker.internal:3000 agent-remnote queue wait --txn "<txn_id>"
 agent-remnote --api-base-url http://host.docker.internal:3000 plugin current --compact
-agent-remnote --json config print
+agent-remnote --api-host 127.0.0.1 --api-port 3001 --api-base-path /v2 --json config print
 ```
 
 ## 快速开始（用户）
@@ -210,15 +213,15 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 ### 读取：双通道互补
 
-1) **Plugin RPC（快速候选集）**  
-需要 RemNote 窗口 + 插件已连接（active worker）。返回 Top‑K 候选 + snippet。
+1. **Plugin RPC（快速候选集）**  
+   需要 RemNote 窗口 + 插件已连接（active worker）。返回 Top‑K 候选 + snippet。
 
 ```bash
 agent-remnote --json plugin search --query "keyword" --timeout-ms 3000
 ```
 
-2) **DB Pull（确定性回退）**  
-直接对 `remnote.db` 做只读查询（不依赖插件）。
+2. **DB Pull（确定性回退）**  
+   直接对 `remnote.db` 做只读查询（不依赖插件）。
 
 ```bash
 agent-remnote --json search --query "keyword" --timeout-ms 30000
@@ -276,39 +279,39 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 
 ## 常用命令速查
 
-| 目标 | 命令 |
-| --- | --- |
-| 健康检查 | `agent-remnote --json daemon health` |
-| 查看 daemon/clients/active worker | `agent-remnote --json daemon status` |
-| 插件候选集搜索（Top‑K） | `agent-remnote --json plugin search --query "..."` |
-| DB 搜索（回退） | `agent-remnote --json search --query "..."` |
-| 读取 UI 上下文（IDs） | `agent-remnote --json plugin ui-context snapshot` |
-| 解析今日 Daily Note 条目 ID | `agent-remnote --ids daily rem-id` |
-| 解析指定日期 Daily Note 条目 ID | `agent-remnote --json daily rem-id --date "2026-03-08"` |
-| 写入 Markdown 到页面 | `agent-remnote --json import markdown --ref "page:..." --file ./note.md` |
-| 写入 Markdown（插入顶部） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0` |
-| 写入 Markdown（staged 一次性插入） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged` |
-| 以内联 Markdown 写 Daily Note | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait` |
-| 从 stdin 写 Daily Note Markdown | `cat note.md \| agent-remnote --json daily write --stdin --wait` |
-| 创建 Portal（传送门） | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait` |
-| 创建 Rem | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait` |
-| 移动 Rem | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait` |
-| 更新 Rem 文本 | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait` |
-| 给 Rem 加 Tag | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"` |
-| 给 Rem 移除 Tag | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"` |
-| Powerup schema（Tag + properties） | `agent-remnote --json powerup schema --powerup "Todo" --include-options` |
-| Powerup apply（打 Tag + 设值） | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
-| Todo：标记完成 | `agent-remnote --json todo done --rem "<rem_id>" --wait` |
-| Table：创建表 | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait` |
-| Table：新增一行 | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."` |
-| 删除 Rem | `agent-remnote --json rem delete --rem "<rem_id>"` |
-| 批量写入计划（多步依赖） | `agent-remnote --json plan apply --payload @plan.json` |
-| raw ops 入队（advanced） | `agent-remnote --json apply --payload @ops.json` |
-| 等待完成 | `agent-remnote --json queue wait --txn "<txn_id>"` |
-| 队列统计 | `agent-remnote --json queue stats` |
-| 队列统计（含冲突摘要） | `agent-remnote --json queue stats --include-conflicts` |
-| 查看冲突面报告 | `agent-remnote --json queue conflicts` |
-| 查看日志 | `agent-remnote daemon logs --lines 200` |
+| 目标                               | 命令                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 健康检查                           | `agent-remnote --json daemon health`                                                                                                              |
+| 查看 daemon/clients/active worker  | `agent-remnote --json daemon status`                                                                                                              |
+| 插件候选集搜索（Top‑K）            | `agent-remnote --json plugin search --query "..."`                                                                                                |
+| DB 搜索（回退）                    | `agent-remnote --json search --query "..."`                                                                                                       |
+| 读取 UI 上下文（IDs）              | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
+| 解析今日 Daily Note 条目 ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
+| 解析指定日期 Daily Note 条目 ID    | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
+| 写入 Markdown 到页面               | `agent-remnote --json import markdown --ref "page:..." --file ./note.md`                                                                          |
+| 写入 Markdown（插入顶部）          | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0`                                                             |
+| 写入 Markdown（staged 一次性插入） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged`                                                                 |
+| 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
+| 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --stdin --wait`                                                                                  |
+| 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| 创建 Rem                           | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| 移动 Rem                           | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
+| 更新 Rem 文本                      | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
+| 给 Rem 加 Tag                      | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
+| 给 Rem 移除 Tag                    | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
+| Powerup schema（Tag + properties） | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
+| Powerup apply（打 Tag + 设值）     | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
+| Todo：标记完成                     | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
+| Table：创建表                      | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
+| Table：新增一行                    | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
+| 删除 Rem                           | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
+| 批量写入计划（多步依赖）           | `agent-remnote --json plan apply --payload @plan.json`                                                                                            |
+| raw ops 入队（advanced）           | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
+| 等待完成                           | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
+| 队列统计                           | `agent-remnote --json queue stats`                                                                                                                |
+| 队列统计（含冲突摘要）             | `agent-remnote --json queue stats --include-conflicts`                                                                                            |
+| 查看冲突面报告                     | `agent-remnote --json queue conflicts`                                                                                                            |
+| 查看日志                           | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
 多数写入命令也支持 `--wait --timeout-ms <ms> --poll-ms <ms>`，用于一次调用闭环确认 txn 终态。
 
@@ -364,9 +367,10 @@ flowchart LR
 - RemNote DB（只读）：`--remnote-db` / `REMNOTE_DB`
 - Store DB：`--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`（默认 `~/.agent-remnote/store.sqlite`；legacy：`--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`）
 - WS 地址：`--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL`（或 `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`，默认端口 6789）
-- Host API remote mode 来源：`--api-base-url` / `REMNOTE_API_BASE_URL` / `~/.agent-remnote/config.json`
-- Host API 监听地址：`REMNOTE_API_HOST`（默认 `0.0.0.0`）
-- Host API 端口：`PORT`（默认 `3000`）
+- Host API remote mode 来源：`--api-base-url` / `REMNOTE_API_BASE_URL` / 用户配置 `apiBaseUrl`
+- Host API 监听地址：`--api-host` / `REMNOTE_API_HOST` / 用户配置 `apiHost`（默认 `0.0.0.0`）
+- Host API 端口：`--api-port` / `PORT` / `REMNOTE_API_PORT` / 用户配置 `apiPort`（默认 `3000`）
+- Host API 基础路径：`--api-base-path` / `REMNOTE_API_BASE_PATH` / 用户配置 `apiBasePath`（默认 `/v1`）
 - 用户配置文件覆盖：`--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state（仅 env）：`REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
 - WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`（默认 `~/.agent-remnote/ws.bridge.state.json`）
@@ -379,7 +383,7 @@ flowchart LR
 - statusLine 文件模式（仅 env）：`REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline（右下角 RN 段）：见 `docs/guides/tmux-statusline.md`
 
-可用 `agent-remnote config path` 查看当前用户配置文件路径，用 `config list/get/set/unset/validate` 管理用户配置文件，用 `config print` 查看最终解析结果（含默认值与覆盖结果）。
+可用 `agent-remnote config path` 查看当前用户配置文件路径，用 `config list/get/set/unset/validate` 管理用户配置文件；`config set` 支持 `apiBaseUrl`、`apiHost`、`apiPort`、`apiBasePath`；`config print` 可查看最终解析结果（含默认值与覆盖结果）。
 
 ## 从源码开发与调试（最后一环）
 
@@ -419,6 +423,7 @@ npm run check
 ```
 
 ## 发布
+
 本仓库使用 Changesets 管理 npm 发版。
 
 - 对每个值得发版的 `agent-remnote` 变更添加一个 changeset
