@@ -1,5 +1,11 @@
 # agent-remnote
 
+## 0.4.0
+
+### Minor Changes
+
+- 44ce542: Add the unreleased `agent-remnote` changes after `0.3.0`, including the improved daily markdown write flow and full Host API config support for `apiHost`, `apiPort`, and `apiBasePath` through both user config and root CLI flags.
+
 ## 0.3.0
 
 ### Minor Changes
