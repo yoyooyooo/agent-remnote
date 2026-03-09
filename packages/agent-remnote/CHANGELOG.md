@@ -1,5 +1,11 @@
 # agent-remnote
 
+## 0.4.1
+
+### Patch Changes
+
+- 53aad14: Fix Host API write endpoints so remote markdown and op writes no longer fail from a missing status-line runtime service.
+
 ## 0.4.0
 
 ### Minor Changes
