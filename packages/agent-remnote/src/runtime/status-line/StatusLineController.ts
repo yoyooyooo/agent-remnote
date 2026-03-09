@@ -2,8 +2,10 @@ import * as Clock from 'effect/Clock';
 import * as Context from 'effect/Context';
 import * as Deferred from 'effect/Deferred';
 import * as Effect from 'effect/Effect';
+import * as Exit from 'effect/Exit';
 import * as Layer from 'effect/Layer';
 import * as Ref from 'effect/Ref';
+import * as Scope from 'effect/Scope';
 
 import { AppConfig } from '../../services/AppConfig.js';
 import type { CliError } from '../../services/Errors.js';
@@ -51,6 +53,8 @@ export const StatusLineControllerLive = Layer.scoped(
     const cfg = yield* AppConfig;
     const updater = yield* StatusLineUpdater;
     const state = yield* Ref.make(INITIAL_STATE);
+    // Keep scheduled status-line updates inside the layer scope so tests/runtime shutdown can interrupt them cleanly.
+    const runLoopScope = yield* Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void));
 
     const runLoop = Effect.gen(function* () {
       while (true) {
@@ -107,7 +111,7 @@ export const StatusLineControllerLive = Layer.scoped(
           });
 
           if (shouldStart) {
-            yield* Effect.fork(runLoop.pipe(Effect.catchAll(() => Effect.void)));
+            yield* Effect.forkIn(runLoopScope)(runLoop.pipe(Effect.catchAll(() => Effect.void)));
           }
 
           yield* Deferred.await(waiter);

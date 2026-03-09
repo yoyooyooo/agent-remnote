@@ -32,8 +32,8 @@ describe('Subprocess (unit)', () => {
         return yield* sp
           .run({
             command: 'node',
-            args: ['-e', "process.stderr.write('ERR\\n'); setTimeout(() => {}, 60_000)"],
-            timeoutMs: 200,
+            args: ['-e', "require('node:fs').writeSync(2, 'ERR\\n'); setTimeout(() => {}, 60_000)"],
+            timeoutMs: 1000,
           })
           .pipe(Effect.exit);
       }).pipe(Effect.provide(SubprocessLive)),

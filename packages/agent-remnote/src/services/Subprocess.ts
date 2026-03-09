@@ -1,5 +1,7 @@
 import * as Context from 'effect/Context';
 import * as Deferred from 'effect/Deferred';
+import * as Duration from 'effect/Duration';
+import * as Either from 'effect/Either';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Layer from 'effect/Layer';
@@ -123,6 +125,17 @@ function unsafeKillAny(child: ChildProcess, signal: NodeJS.Signals) {
   } catch {}
 }
 
+function drainReadable(stream: NodeJS.ReadableStream | null | undefined): string {
+  if (!stream || typeof (stream as any).read !== 'function') return '';
+  let out = '';
+  while (true) {
+    const chunk = (stream as any).read();
+    if (chunk === null) break;
+    out += String(chunk);
+  }
+  return out;
+}
+
 export const SubprocessLive = Layer.succeed(Subprocess, {
   run: ({ command, args, timeoutMs, cwd, env, killSignal }) =>
     Effect.scoped(
@@ -207,19 +220,34 @@ export const SubprocessLive = Layer.succeed(Subprocess, {
       ).pipe(
         Effect.flatMap((state) =>
           Deferred.await(state.exit).pipe(
-            Effect.timeoutFail({
+            Effect.timeoutTo({
               duration: sanitizeTimeoutMs(timeoutMs),
-              onTimeout: () =>
-                timeoutCliError({
-                  command,
-                  args,
-                  timeoutMs: sanitizeTimeoutMs(timeoutMs),
-                  pid: state.child.pid,
-                  killSignal: state.killSignal,
-                  stdout: state.stdout.text,
-                  stderr: state.stderr.text,
-                }),
+              onSuccess: (result) => Either.right(result),
+              onTimeout: () => Either.left(undefined),
             }),
+            Effect.flatMap((result) =>
+              Either.isRight(result)
+                ? Effect.succeed(result.right)
+                : Effect.gen(function* () {
+                    yield* Effect.sync(() => unsafeKill(state.child, state.killSignal));
+                    yield* Effect.sleep(Duration.millis(50));
+                    yield* Effect.sync(() => {
+                      state.stdout.text += drainReadable(state.child.stdout);
+                      state.stderr.text += drainReadable(state.child.stderr);
+                    });
+                    return yield* Effect.fail(
+                      timeoutCliError({
+                        command,
+                        args,
+                        timeoutMs: sanitizeTimeoutMs(timeoutMs),
+                        pid: state.child.pid,
+                        killSignal: state.killSignal,
+                        stdout: state.stdout.text,
+                        stderr: state.stderr.text,
+                      }),
+                    );
+                  }),
+            ),
           ),
         ),
       ),

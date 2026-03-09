@@ -35,6 +35,7 @@ import { Queue } from '../../services/Queue.js';
 import { RemDb } from '../../services/RemDb.js';
 import { RefResolver } from '../../services/RefResolver.js';
 import { WsClient } from '../../services/WsClient.js';
+import { StatusLineController } from '../status-line/StatusLineController.js';
 
 function statusCodeFromCliError(error: CliError): number {
   switch (error.code) {
@@ -125,7 +126,7 @@ export function runHttpApiRuntime(params?: {
 }): Effect.Effect<
   void,
   CliError,
-  AppConfig | ApiDaemonFiles | WsClient | Queue | Payload | RefResolver | HostApiClient | RemDb
+  AppConfig | ApiDaemonFiles | WsClient | Queue | Payload | RefResolver | HostApiClient | RemDb | StatusLineController
 > {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
@@ -136,6 +137,7 @@ export function runHttpApiRuntime(params?: {
     const refs = yield* RefResolver;
     const hostApi = yield* HostApiClient;
     const remDb = yield* RemDb;
+    const statusLine = yield* StatusLineController;
 
     const host = params?.host ?? cfg.apiHost ?? '0.0.0.0';
     const configuredPort = params?.port ?? cfg.apiPort ?? 3000;
@@ -152,6 +154,7 @@ export function runHttpApiRuntime(params?: {
         Effect.provideService(RefResolver, refs),
         Effect.provideService(HostApiClient, hostApi),
         Effect.provideService(RemDb, remDb),
+        Effect.provideService(StatusLineController, statusLine),
       ) as Effect.Effect<A, CliError, never>;
 
     const server = createServer((req, res) => {
