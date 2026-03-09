@@ -17,7 +17,7 @@
 
 ```tmux
 # 将 RemNote 的 RN 段追加到 status-right（无分隔符版本）
-set -g status-right '#(bash /path/to/remnote-mcp/scripts/tmux/remnote-right-segment.tmux.sh 2>/dev/null) #{status-right}'
+set -g status-right '#(bash /path/to/agent-remnote/scripts/tmux/remnote-right-segment.tmux.sh 2>/dev/null) #{status-right}'
 ```
 
 ## 状态判定

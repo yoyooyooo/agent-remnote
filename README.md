@@ -236,7 +236,7 @@ If you have multiple RemNote windows: click the one you want to target.
 This repo ships a `remnote` Skill (Agent Skills spec). Install it via https://github.com/vercel-labs/add-skill :
 
 ```bash
-npx add-skill https://github.com/yoyooyooo/agent-renmote -g -a codex -a claude-code -y --skill remnote
+npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-code -y --skill remnote
 ```
 
 ## Command cheat sheet

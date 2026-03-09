@@ -236,7 +236,7 @@ agent-remnote --json queue wait --txn "<txn_id>"
 本仓库提供一个 `remnote` Skill（遵循 Agent Skills spec）。推荐用 https://github.com/vercel-labs/add-skill 一键安装：
 
 ```bash
-npx add-skill https://github.com/yoyooyooo/agent-renmote -g -a codex -a claude-code -y --skill remnote
+npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-code -y --skill remnote
 ```
 
 ## 常用命令速查

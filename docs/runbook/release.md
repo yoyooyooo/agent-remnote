@@ -36,7 +36,7 @@ npm run release:check
 
 ## Required GitHub / npm setup
 
-- npm package `agent-remnote` must have a Trusted Publisher configured for `yoyooyooo/agent-renmote`
+- npm package `agent-remnote` must have a Trusted Publisher configured for `yoyooyooo/agent-remnote`
 - Workflow filename on npm must match `.github/workflows/release.yml` exactly
 - No `NPM_TOKEN` is required for publishing once Trusted Publishing is enabled
 

@@ -293,7 +293,7 @@ agent-remnote --json rem inspect --id "<remId>"
 
 ```bash
 AGENT_REMNOTE_MODE=prod agent-remnote --json doctor
-node <remnote-mcp>/packages/agent-remnote/cli.js --json doctor
+node <agent-remnote-repo>/packages/agent-remnote/cli.js --json doctor
 ```
 
 ## 高频失败场景与处理

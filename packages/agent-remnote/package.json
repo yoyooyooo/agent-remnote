@@ -51,12 +51,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yoyooyooo/agent-renmote.git",
+    "url": "git+https://github.com/yoyooyooo/agent-remnote.git",
     "directory": "packages/agent-remnote"
   },
-  "homepage": "https://github.com/yoyooyooo/agent-renmote",
+  "homepage": "https://github.com/yoyooyooo/agent-remnote",
   "bugs": {
-    "url": "https://github.com/yoyooyooo/agent-renmote/issues"
+    "url": "https://github.com/yoyooyooo/agent-remnote/issues"
   },
   "publishConfig": {
     "access": "public",
