@@ -139,52 +139,75 @@ describe('cli contract: config user file', () => {
     }
   }, 30000);
 
-  it('supports set, get, list, and unset roundtrip for apiHost and apiBasePath', async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-host-path-'));
+  it('supports set, get, list, and unset roundtrip for apiHost', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-host-roundtrip-'));
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
-      const setHostRes = await runCli(['--json', 'config', 'set', '--key', 'apiHost', '--value', '127.0.0.1'], {
+      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiHost', '--value', '127.0.0.1'], {
         env: { HOME: tmpHome },
       });
-      expect(setHostRes.exitCode).toBe(0);
-      expect(setHostRes.stderr).toBe('');
-      expect(parseJsonLine(setHostRes.stdout).data).toMatchObject({ key: 'apiHost', value: '127.0.0.1' });
+      expect(setRes.exitCode).toBe(0);
+      expect(setRes.stderr).toBe('');
+      expect(parseJsonLine(setRes.stdout).data).toMatchObject({ key: 'apiHost', value: '127.0.0.1' });
 
-      const setPathRes = await runCli(['--json', 'config', 'set', '--key', 'apiBasePath', '--value', 'v2'], {
-        env: { HOME: tmpHome },
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiHost'], { env: { HOME: tmpHome } });
+      expect(getRes.exitCode).toBe(0);
+      expect(getRes.stderr).toBe('');
+      expect(parseJsonLine(getRes.stdout).data).toMatchObject({
+        key: 'apiHost',
+        value: '127.0.0.1',
+        exists: true,
       });
-      expect(setPathRes.exitCode).toBe(0);
-      expect(setPathRes.stderr).toBe('');
-      expect(parseJsonLine(setPathRes.stdout).data).toMatchObject({ key: 'apiBasePath', value: '/v2' });
 
       const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
       expect(listRes.exitCode).toBe(0);
       expect(listRes.stderr).toBe('');
       expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiHost: '127.0.0.1',
+      });
+
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiHost'], { env: { HOME: tmpHome } });
+      expect(unsetRes.exitCode).toBe(0);
+      expect(unsetRes.stderr).toBe('');
+      expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({ key: 'apiHost', removed: true });
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('supports set, get, list, and unset roundtrip for apiBasePath', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-base-path-roundtrip-'));
+    const tmpHome = path.join(tmpDir, 'home');
+
+    try {
+      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiBasePath', '--value', 'v2'], {
+        env: { HOME: tmpHome },
+      });
+      expect(setRes.exitCode).toBe(0);
+      expect(setRes.stderr).toBe('');
+      expect(parseJsonLine(setRes.stdout).data).toMatchObject({ key: 'apiBasePath', value: '/v2' });
+
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiBasePath'], { env: { HOME: tmpHome } });
+      expect(getRes.exitCode).toBe(0);
+      expect(getRes.stderr).toBe('');
+      expect(parseJsonLine(getRes.stdout).data).toMatchObject({
+        key: 'apiBasePath',
+        value: '/v2',
+        exists: true,
+      });
+
+      const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      expect(listRes.exitCode).toBe(0);
+      expect(listRes.stderr).toBe('');
+      expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiBasePath: '/v2',
       });
 
-      const printRes = await runCli(['--json', 'config', 'print'], { env: { HOME: tmpHome } });
-      expect(printRes.exitCode).toBe(0);
-      expect(printRes.stderr).toBe('');
-      expect(parseJsonLine(printRes.stdout).data).toMatchObject({
-        api_host: '127.0.0.1',
-        api_base_path: '/v2',
-      });
-
-      const unsetHostRes = await runCli(['--json', 'config', 'unset', '--key', 'apiHost'], { env: { HOME: tmpHome } });
-      expect(unsetHostRes.exitCode).toBe(0);
-      expect(unsetHostRes.stderr).toBe('');
-      expect(parseJsonLine(unsetHostRes.stdout).data).toMatchObject({ key: 'apiHost', removed: true });
-
-      const unsetPathRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBasePath'], {
-        env: { HOME: tmpHome },
-      });
-      expect(unsetPathRes.exitCode).toBe(0);
-      expect(unsetPathRes.stderr).toBe('');
-      expect(parseJsonLine(unsetPathRes.stdout).data).toMatchObject({ key: 'apiBasePath', removed: true });
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBasePath'], { env: { HOME: tmpHome } });
+      expect(unsetRes.exitCode).toBe(0);
+      expect(unsetRes.stderr).toBe('');
+      expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({ key: 'apiBasePath', removed: true });
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
