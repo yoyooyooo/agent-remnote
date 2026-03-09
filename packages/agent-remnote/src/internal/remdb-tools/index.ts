@@ -9,6 +9,7 @@ export { executeSummarizeTopicActivity } from './summarizeTopicActivity.js';
 export { executeListRemReferences } from './listRemReferences.js';
 export { executeSummarizeDailyNotes } from './summarizeDailyNotes.js';
 export { executeSearchRemOverview } from './searchRemOverview.js';
+export type { SearchRemOverviewInput } from './searchRemOverview.js';
 export { executeInspectRemDoc } from './inspectRemDoc.js';
 export { executeOutlineRemSubtree } from './outlineRemSubtree.js';
 export { executeReadRemTable } from './readRemTable.js';

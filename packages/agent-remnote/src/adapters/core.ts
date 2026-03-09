@@ -1,4 +1,4 @@
-export type { BackupInfo, BetterSqliteInstance, DbResolution } from '../internal/public.js';
+export type { BackupInfo, BetterSqliteInstance, DbResolution, SearchRemOverviewInput } from '../internal/public.js';
 
 export {
   TYPES,

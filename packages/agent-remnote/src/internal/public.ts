@@ -6,7 +6,7 @@ export { StoreSchemaError, defaultLegacyQueuePath, defaultStorePath, openStoreDb
 export { QueueSchemaError, openQueueDb } from './queue/index.js';
 export { enqueueTxn, getTxnIdByOpId, queueConflicts, queueStats } from './queue/index.js';
 
-export type { BackupInfo, BetterSqliteInstance, DbResolution } from './remdb-tools/index.js';
+export type { BackupInfo, BetterSqliteInstance, DbResolution, SearchRemOverviewInput } from './remdb-tools/index.js';
 export {
   TYPES,
   discoverBackups,
