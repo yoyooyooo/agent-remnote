@@ -28,12 +28,15 @@ import {
 import { apiContainerBaseUrl, apiLocalBaseUrl } from '../../lib/apiUrls.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
+import { DaemonFiles } from '../../services/DaemonFiles.js';
 import { CliError, fail, isCliError, ok, toJsonError } from '../../services/Errors.js';
 import { HostApiClient } from '../../services/HostApiClient.js';
 import { Payload } from '../../services/Payload.js';
+import { Process } from '../../services/Process.js';
 import { Queue } from '../../services/Queue.js';
 import { RemDb } from '../../services/RemDb.js';
 import { RefResolver } from '../../services/RefResolver.js';
+import { SupervisorState } from '../../services/SupervisorState.js';
 import { WsClient } from '../../services/WsClient.js';
 import { StatusLineController } from '../status-line/StatusLineController.js';
 
@@ -126,17 +129,31 @@ export function runHttpApiRuntime(params?: {
 }): Effect.Effect<
   void,
   CliError,
-  AppConfig | ApiDaemonFiles | WsClient | Queue | Payload | RefResolver | HostApiClient | RemDb | StatusLineController
+  | AppConfig
+  | ApiDaemonFiles
+  | DaemonFiles
+  | WsClient
+  | Queue
+  | Payload
+  | RefResolver
+  | HostApiClient
+  | RemDb
+  | Process
+  | SupervisorState
+  | StatusLineController
 > {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const apiFiles = yield* ApiDaemonFiles;
+    const daemonFiles = yield* DaemonFiles;
     const ws = yield* WsClient;
     const queue = yield* Queue;
     const payload = yield* Payload;
     const refs = yield* RefResolver;
     const hostApi = yield* HostApiClient;
     const remDb = yield* RemDb;
+    const processSvc = yield* Process;
+    const supervisorState = yield* SupervisorState;
     const statusLine = yield* StatusLineController;
 
     const host = params?.host ?? cfg.apiHost ?? '0.0.0.0';
@@ -148,12 +165,15 @@ export function runHttpApiRuntime(params?: {
       effect.pipe(
         Effect.provideService(AppConfig, cfg),
         Effect.provideService(ApiDaemonFiles, apiFiles),
+        Effect.provideService(DaemonFiles, daemonFiles),
         Effect.provideService(WsClient, ws),
         Effect.provideService(Queue, queue),
         Effect.provideService(Payload, payload),
         Effect.provideService(RefResolver, refs),
         Effect.provideService(HostApiClient, hostApi),
         Effect.provideService(RemDb, remDb),
+        Effect.provideService(Process, processSvc),
+        Effect.provideService(SupervisorState, supervisorState),
         Effect.provideService(StatusLineController, statusLine),
       ) as Effect.Effect<A, CliError, never>;
 
