@@ -9,11 +9,15 @@ import { runHttpApiRuntime } from '../../src/runtime/http-api/runHttpApiRuntime.
 import { AppConfig } from '../../src/services/AppConfig.js';
 import type { ResolvedConfig } from '../../src/services/Config.js';
 import { ApiDaemonFiles, type ApiStateFile } from '../../src/services/ApiDaemonFiles.js';
+import { DaemonFiles } from '../../src/services/DaemonFiles.js';
+import { CliError } from '../../src/services/Errors.js';
 import { HostApiClient } from '../../src/services/HostApiClient.js';
 import { Payload } from '../../src/services/Payload.js';
+import { Process } from '../../src/services/Process.js';
 import { Queue } from '../../src/services/Queue.js';
 import { RefResolver } from '../../src/services/RefResolver.js';
 import { RemDb } from '../../src/services/RemDb.js';
+import { SupervisorState } from '../../src/services/SupervisorState.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
 
@@ -81,11 +85,12 @@ function makeConfig(tmpDir: string, port: number): ResolvedConfig {
 }
 
 describe('runtime contract: http api write markdown', () => {
-  it('injects status line service for /v1/write/markdown', async () => {
+  it('injects daemon runtime services for /v1/write/markdown', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-http-api-'));
     const port = await getFreePort();
     const cfg = makeConfig(tmpDir, port);
     const states: ApiStateFile[] = [];
+    let healthChecks = 0;
 
     try {
       await Effect.runPromise(
@@ -102,8 +107,8 @@ describe('runtime contract: http api write markdown', () => {
                   parent: 'dummy-parent',
                   markdown: '- hello from api',
                   bulk: 'never',
-                  notify: false,
-                  ensureDaemon: false,
+                  notify: true,
+                  ensureDaemon: true,
                 }),
               }),
             );
@@ -113,7 +118,10 @@ describe('runtime contract: http api write markdown', () => {
             expect(json.ok).toBe(true);
             expect(json.data.txn_id).toBe('txn-1');
             expect(json.data.op_ids).toEqual(['op-1']);
-            expect(states.at(-1)?.port).toBe(port);
+            expect(json.data.notified).toBe(true);
+            expect(json.data.sent).toBe(1);
+            expect(healthChecks).toBeGreaterThanOrEqual(2);
+            expect(states.length).toBeGreaterThan(0);
           }).pipe(
             Effect.provideService(AppConfig, cfg),
             Effect.provideService(ApiDaemonFiles, {
@@ -129,9 +137,30 @@ describe('runtime contract: http api write markdown', () => {
               }),
               deleteStateFile: () => Effect.void,
             }),
+            Effect.provideService(DaemonFiles, {
+              defaultPidFile: () => path.join(tmpDir, 'ws.pid'),
+              defaultLogFile: () => path.join(tmpDir, 'ws.log'),
+              readPidFile: () => Effect.succeed(undefined),
+              writePidFile: () => Effect.void,
+              deletePidFile: () => Effect.void,
+            }),
             Effect.provideService(WsClient, {
-              health: () => Effect.succeed({ ok: true }),
-              triggerStartSync: () => Effect.succeed({ ok: true, sent: 0 }),
+              health: () =>
+                Effect.suspend(() => {
+                  healthChecks += 1;
+                  if (healthChecks === 1) {
+                    return Effect.fail(
+                      new CliError({
+                        code: 'WS_UNAVAILABLE',
+                        message: 'daemon not ready yet',
+                        exitCode: 1,
+                        details: { url: cfg.wsUrl },
+                      }),
+                    );
+                  }
+                  return Effect.succeed({ url: cfg.wsUrl, rtt_ms: 1 });
+                }),
+              triggerStartSync: () => Effect.succeed({ sent: 1 }),
               queryClients: () => Effect.succeed({ clients: [], activeWorkerConnId: undefined }),
               search: () => Effect.fail(new Error('unexpected ws search call')),
             } as any),
@@ -147,6 +176,18 @@ describe('runtime contract: http api write markdown', () => {
             } as any),
             Effect.provideService(HostApiClient, {} as any),
             Effect.provideService(RemDb, {} as any),
+            Effect.provideService(Process, {
+              isPidRunning: () => Effect.succeed(false),
+              spawnDetached: () => Effect.succeed(12345),
+              kill: () => Effect.void,
+              waitForExit: () => Effect.succeed(true),
+            }),
+            Effect.provideService(SupervisorState, {
+              defaultStateFile: () => path.join(tmpDir, 'ws.state.json'),
+              readStateFile: () => Effect.succeed(undefined),
+              writeStateFile: () => Effect.void,
+              deleteStateFile: () => Effect.void,
+            }),
             Effect.provideService(StatusLineController, {
               invalidate: () => Effect.void,
             }),
