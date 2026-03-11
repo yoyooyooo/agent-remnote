@@ -62,6 +62,11 @@ export const readOutlineCommand = Command.make(
           new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --id or --ref', exitCode: 2 }),
         );
       }
+      if (!id && !ref) {
+        return yield* Effect.fail(
+          new CliError({ code: 'INVALID_ARGS', message: 'You must provide --id or --ref', exitCode: 2 }),
+        );
+      }
 
       if (cfg.apiBaseUrl) {
         const data = yield* hostApi.readOutline({

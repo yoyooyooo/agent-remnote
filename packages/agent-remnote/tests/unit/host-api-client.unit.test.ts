@@ -23,6 +23,7 @@ async function runWithClient<A>(fn: (client: typeof HostApiClient.Service) => Ef
 describe('HostApiClient (unit)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('posts readOutline requests to the host api', async () => {

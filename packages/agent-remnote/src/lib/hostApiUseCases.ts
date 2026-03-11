@@ -30,8 +30,20 @@ function clampInt(value: number, min: number, max: number): number {
 }
 
 function parseDateInput(raw: string): Date {
-  const value = new Date(raw);
+  const trimmed = raw.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const value = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(trimmed);
   if (Number.isNaN(value.getTime())) {
+    throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
+  }
+  if (
+    match &&
+    (value.getFullYear() !== Number(match[1]) ||
+      value.getMonth() !== Number(match[2]) - 1 ||
+      value.getDate() !== Number(match[3]))
+  ) {
     throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
   }
   return value;
@@ -227,7 +239,8 @@ export function executeDailyRemIdUseCase(params: {
       const offset = params.offsetDays ?? 0;
       ref = `daily:${offset}`;
       remId = yield* refs.resolve(ref);
-      const target = new Date(todayAtMidnight().getTime() + offset * 24 * 3600 * 1000);
+      const target = todayAtMidnight();
+      target.setDate(target.getDate() + offset);
       dateString = yield* remDb
         .withDb(cfg.remnoteDb, async (db) => {
           const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
