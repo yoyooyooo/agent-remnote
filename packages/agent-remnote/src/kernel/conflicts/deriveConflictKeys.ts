@@ -138,8 +138,7 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
     }
 
     if (opType === 'replace_children_with_markdown') {
-      const pid = parentId ?? getFirstString(p, ['parent_id', 'parentId']);
-      if (pid) keys.push(`rem:${pid}`, `children:${pid}`);
+      if (parentId) keys.push(`rem:${parentId}`, `children:${parentId}`);
     }
 
     return uniq(keys);

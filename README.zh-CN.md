@@ -290,6 +290,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
 | 替换某个 Rem 的直接子级            | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
+| 清空某个 Rem 的直接子级            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |

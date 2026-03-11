@@ -82,7 +82,7 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     aliases: ['rem.createTreeWithMarkdown'],
     payload: {
       required: ['parent_id', 'markdown'],
-      optional: ['position', 'indent_mode', 'indent_size', 'parse_mode', 'prepared', 'client_temp_ids', 'bundle'],
+      optional: ['position', 'indent_mode', 'indent_size', 'parse_mode', 'prepared', 'client_temp_ids', 'bundle', 'staged'],
     },
     description: 'Create a tree from Markdown (parent required).',
     id_fields: ['parent_id'],

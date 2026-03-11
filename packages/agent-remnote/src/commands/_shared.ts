@@ -33,6 +33,10 @@ export function readMarkdownTextFromInputSpec(inputSpec: string): Effect.Effect<
       );
     }
 
+    if (value.startsWith('@@')) {
+      return value.slice(1);
+    }
+
     if (value === '-' || value.startsWith('@')) {
       const fileInput = yield* FileInput;
       return yield* fileInput.readTextFromFileSpec({ spec: value });

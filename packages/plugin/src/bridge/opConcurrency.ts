@@ -149,6 +149,13 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
       if (!parentId) return ['global:replace_children_with_markdown'];
       addRem(parentId);
       addChildren(parentId);
+      try {
+        const parentRem: any = await plugin.rem.findOne(parentId);
+        const childIds = Array.isArray(parentRem?.children)
+          ? parentRem.children.filter((value: any) => typeof value === 'string' && value.trim()).map((value: string) => value.trim())
+          : [];
+        for (const childId of childIds) addRem(childId);
+      } catch {}
       return keys;
     }
 

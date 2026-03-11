@@ -4,7 +4,7 @@ import { tryParseRemnoteLink } from '../../../../lib/remnote.js';
 import { trimBoundaryBlankLines } from '../../../../lib/text.js';
 import { executeWriteApplyUseCase } from '../../../../lib/hostApiUseCases.js';
 import { AppConfig } from '../../../../services/AppConfig.js';
-import { CliError } from '../../../../services/Errors.js';
+import { CliError, isCliError } from '../../../../services/Errors.js';
 import { FileInput } from '../../../../services/FileInput.js';
 import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
@@ -102,9 +102,13 @@ export function dryRunEnvelope(
     const parsed = yield* Effect.try({
       try: () => parseApplyEnvelope(payloadSvc.normalizeKeys(body)),
       catch: (error) =>
-        error instanceof Error && 'code' in error
-          ? (error as any)
-          : new Error(String((error as any)?.message || error)),
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INVALID_PAYLOAD',
+              message: String((error as any)?.message || 'Invalid apply envelope'),
+              exitCode: 2,
+            }),
     });
     const compiled = yield* compileApplyEnvelope(parsed);
     return {

@@ -2,13 +2,21 @@
 
 ## Canonical Write Route
 
-Planned canonical route:
+Current canonical route:
 
 ```http
 POST /v1/write/apply
 ```
 
 This route accepts the same apply envelope used by CLI `apply --payload`.
+
+When callers need completion confirmation, the same request body may also include:
+
+- `wait: true`
+- `timeoutMs`
+- `pollMs`
+
+All timeout and polling values are expressed in milliseconds.
 
 ## Request Shapes
 
@@ -38,14 +46,22 @@ This route accepts the same apply envelope used by CLI `apply --payload`.
   "kind": "ops",
   "ops": [
     {
-      "type": "delete_rem",
+      "type": "create_rem",
       "payload": {
-        "rem_id": "abc"
+        "parent_id": "demo-parent-id",
+        "text": "demo content"
       }
     }
   ]
 }
 ```
+
+## Wait Semantics
+
+- Default behavior is enqueue-only.
+- When `wait: true` is present, the API blocks until the transaction reaches a terminal state.
+- `timeoutMs` and `pollMs` follow the same semantics as CLI `--timeout-ms` and `--poll-ms`.
+- Timeout and terminal-state failures return the normal error envelope with deterministic error codes.
 
 ## Response Envelope
 
