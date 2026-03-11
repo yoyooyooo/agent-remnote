@@ -7,6 +7,7 @@ import { executeSummarizeTopicActivity } from '../../../adapters/core.js';
 
 import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError } from '../../../services/Errors.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { cliErrorFromUnknown } from '../../_tool.js';
 
@@ -31,6 +32,10 @@ export const topicSummaryCommand = Command.make(
   ({ keywords, query, timeRange, maxResults, maxNodesPerResult, groupBy }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'topic summary',
+        reason: 'this command still summarizes topics from the local RemNote database',
+      });
 
       const keywordList = keywords
         ? keywords

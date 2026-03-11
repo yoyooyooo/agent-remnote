@@ -9,6 +9,7 @@ import { tryParseRemnoteLinkFromRef, tryResolveRemnoteDbPathForWorkspaceIdSync }
 import { AppConfig } from '../../services/AppConfig.js';
 import { RefResolver } from '../../services/RefResolver.js';
 import { CliError } from '../../services/Errors.js';
+import { HostApiClient } from '../../services/HostApiClient.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -53,12 +54,34 @@ export const readOutlineCommand = Command.make(
   }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      const hostApi = yield* HostApiClient;
       const refs = yield* RefResolver;
 
       if (id && ref) {
         return yield* Effect.fail(
           new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --id or --ref', exitCode: 2 }),
         );
+      }
+
+      if (cfg.apiBaseUrl) {
+        const data = yield* hostApi.readOutline({
+          baseUrl: cfg.apiBaseUrl,
+          body: {
+            id,
+            ref,
+            depth,
+            offset,
+            nodes,
+            format: format === 'json' ? 'json' : format === 'md' ? 'md' : undefined,
+            excludeProperties,
+            includeEmpty,
+            expandReferences,
+            maxReferenceDepth,
+            detail,
+          },
+        });
+        yield* writeSuccess({ data, md: (data as any).markdown ?? '' });
+        return;
       }
 
       const link = ref ? tryParseRemnoteLinkFromRef(ref) : undefined;

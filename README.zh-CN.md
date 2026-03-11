@@ -120,6 +120,13 @@ agent-remnote plugin selection current --compact
 agent-remnote plugin current --compact
 ```
 
+严格 remote mode 规则：
+
+- 配置了 `apiBaseUrl` 之后，业务命令必须走宿主机 Host API。
+- 仍依赖本地 DB 或本地文件系统的命令会直接 fail fast，不再静默回落到本地读取。
+- 当前已支持远程模式的代表性命令包括 `search`、`queue wait`、`plugin current`、`rem outline`、`daily rem-id`。
+- 远程模式下写 Daily Note，优先使用 `import markdown --ref daily:today ...`。
+
 需要临时覆盖时仍可使用：
 
 ```bash

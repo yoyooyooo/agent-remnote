@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import { executeReadRemTable } from '../../adapters/core.js';
 
 import { AppConfig } from '../../services/AppConfig.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -27,6 +28,10 @@ export const readTableCommand = Command.make(
   ({ id, includeOptions, limit, offset }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'read table',
+        reason: 'this command still reads local table metadata from the RemNote database',
+      });
       const payload = yield* Effect.tryPromise({
         try: async () =>
           await executeReadRemTable({

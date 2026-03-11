@@ -11,6 +11,7 @@ import {
 } from '../../adapters/core.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
+import { HostApiClient } from '../../services/HostApiClient.js';
 import { RefResolver } from '../../services/RefResolver.js';
 import { RemDb } from '../../services/RemDb.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
@@ -40,8 +41,23 @@ export const dailyRemIdCommand = Command.make('rem-id', { date, offsetDays }, ({
     }
 
     const cfg = yield* AppConfig;
+    const hostApi = yield* HostApiClient;
     const refs = yield* RefResolver;
     const remDb = yield* RemDb;
+
+    if (cfg.apiBaseUrl) {
+      const data = yield* hostApi.dailyRemId({
+        baseUrl: cfg.apiBaseUrl,
+        date,
+        offsetDays,
+      });
+      yield* writeSuccess({
+        data,
+        ids: [data.remId],
+        md: `- ref: ${data.ref}\n- rem_id: ${data.remId}${data.dateString ? `\n- date_string: ${data.dateString}` : ''}\n`,
+      });
+      return;
+    }
 
     let ref = `daily:${offsetDays ?? 0}`;
     let remId = '';

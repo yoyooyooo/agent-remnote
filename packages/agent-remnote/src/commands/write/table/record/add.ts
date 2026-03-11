@@ -9,6 +9,7 @@ import { CliError, isCliError } from '../../../../services/Errors.js';
 import { Payload } from '../../../../services/Payload.js';
 import { Queue } from '../../../../services/Queue.js';
 import { RefResolver } from '../../../../services/RefResolver.js';
+import { failInRemoteMode } from '../../../_remoteMode.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
@@ -86,6 +87,10 @@ export const writeTableRecordAddCommand = Command.make(
       }
 
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'table record add',
+        reason: 'this command still reads local table metadata before enqueueing writes',
+      });
       const refs = yield* RefResolver;
       const payloadSvc = yield* Payload;
 

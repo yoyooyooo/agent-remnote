@@ -9,6 +9,7 @@ import { resolvePowerup, normalizeRemIdInput } from '../../_powerup.js';
 
 import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError } from '../../../services/Errors.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { cliErrorFromUnknown } from '../../_tool.js';
 
@@ -47,6 +48,10 @@ export const readPowerupSchemaCommand = Command.make(
       }
 
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'powerup schema',
+        reason: 'this command still reads local powerup/table metadata from the RemNote database',
+      });
       const resolved = powerup ? yield* resolvePowerup(powerup) : null;
       const tagId = resolved ? resolved.id : normalizeRemIdInput(id!);
 

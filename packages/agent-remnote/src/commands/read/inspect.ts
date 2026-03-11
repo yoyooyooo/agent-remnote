@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import { executeInspectRemDoc } from '../../adapters/core.js';
 
 import { AppConfig } from '../../services/AppConfig.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -25,6 +26,10 @@ export const readInspectCommand = Command.make(
   ({ id, expandReferences, maxReferenceDepth }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'rem inspect',
+        reason: 'this command still inspects the local RemNote database directly',
+      });
       const result = yield* Effect.tryPromise({
         try: async () =>
           await executeInspectRemDoc({
