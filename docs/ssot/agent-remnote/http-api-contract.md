@@ -40,6 +40,8 @@
 以下业务命令必须支持 remote API mode：
 
 - `search`
+- `rem outline`
+- `daily rem-id`
 - `plugin search`
 - `plugin ui-context snapshot/page/focused-rem/describe`
 - `plugin current`
@@ -61,6 +63,12 @@
 
 - `--api-base-url` > `REMNOTE_API_BASE_URL` > `~/.agent-remnote/config.json` > direct mode
 
+严格 remote mode：
+
+- 一旦配置 `apiBaseUrl`，业务命令必须优先走宿主机 Host API。
+- 仍依赖本地 DB 或本地文件系统的命令必须 fail fast，禁止静默回落到本地读取。
+- 若某个业务命令尚无等价 Host API 能力，应返回稳定错误并提示用户在宿主机执行。
+
 ## HTTP Endpoints
 
 - `GET /v1/health`
@@ -75,7 +83,9 @@
 - `GET /v1/plugin/selection/roots`
 - `GET /v1/plugin/selection/current`
 - `GET /v1/plugin/current`
+- `GET /v1/daily/rem-id`
 - `POST /v1/plugin/selection/outline`
+- `POST /v1/read/outline`
 - `POST /v1/search/db`
 - `POST /v1/search/plugin`
 - `POST /v1/write/ops`
@@ -83,6 +93,13 @@
 - `POST /v1/queue/wait`
 - `GET /v1/queue/txns/:txnId`
 - `POST /v1/actions/trigger-sync`
+
+## Host API write flows
+
+- Host API write routes reuse the same enqueue pipeline as the CLI.
+- `ensureDaemon=true` means the request may invoke daemon lifecycle helpers before notifying the active worker.
+- The runtime must inject daemon runtime services used by enqueue helpers, including `DaemonFiles`, `Process`, and `SupervisorState`.
+- Missing daemon runtime services are considered a server bug and must not be silently ignored.
 
 ## Envelope
 

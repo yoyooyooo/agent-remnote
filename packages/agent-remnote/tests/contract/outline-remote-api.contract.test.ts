@@ -71,4 +71,23 @@ describe('cli contract: rem outline remote api mode', () => {
       await api.close();
     }
   });
+
+  it('keeps the same missing-target validation in remote mode', async () => {
+    const api = await startApiStub();
+    try {
+      const res = await runCli(['--json', '--api-base-url', api.baseUrl, 'rem', 'outline'], {
+        timeoutMs: 15_000,
+      });
+
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toBe('');
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(false);
+      expect(parsed.error.code).toBe('INVALID_ARGS');
+      expect(String(parsed.error.message)).toContain('You must provide --id or --ref');
+      expect(api.requests).toHaveLength(0);
+    } finally {
+      await api.close();
+    }
+  });
 });

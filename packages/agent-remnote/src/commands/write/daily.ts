@@ -51,8 +51,16 @@ const BULK_THRESHOLD_LINES = 80;
 const BULK_THRESHOLD_CHARS = 5000;
 
 function parseDateInput(raw: string): Date {
-  const d = new Date(raw);
+  const trimmed = raw.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const d = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(trimmed);
   if (isNaN(d.getTime())) {
+    throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
+  }
+  if (
+    match &&
+    (d.getFullYear() !== Number(match[1]) || d.getMonth() !== Number(match[2]) - 1 || d.getDate() !== Number(match[3]))
+  ) {
     throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
   }
   return d;
@@ -177,7 +185,11 @@ export const writeDailyCommand = Command.make(
             catch: (e) =>
               isCliError(e) ? e : new CliError({ code: 'INVALID_ARGS', message: 'Invalid date', exitCode: 2 }),
           })
-        : new Date(todayAtMidnight().getTime() + (offsetDays ?? 0) * 24 * 3600 * 1000);
+        : (() => {
+            const target = todayAtMidnight();
+            target.setDate(target.getDate() + (offsetDays ?? 0));
+            return target;
+          })();
 
       const dateString = yield* remDb
         .withDb(cfg.remnoteDb, async (db) => {

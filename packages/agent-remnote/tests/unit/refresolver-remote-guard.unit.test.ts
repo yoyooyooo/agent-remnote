@@ -38,7 +38,19 @@ function makeConfig(apiBaseUrl?: string): ResolvedConfig {
 }
 
 describe('RefResolver remote guard (unit)', () => {
-  it('fails fast when apiBaseUrl is configured', async () => {
+  it('allows pure id refs when apiBaseUrl is configured', async () => {
+    const cfgLayer = Layer.succeed(AppConfig, makeConfig('http://host.docker.internal:3310'));
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const refs = yield* RefResolver;
+        return yield* refs.resolve('id:RID-1');
+      }).pipe(Effect.provide([cfgLayer, RefResolverLive])),
+    );
+
+    expect(result).toBe('RID-1');
+  });
+
+  it('fails fast for db-backed refs when apiBaseUrl is configured', async () => {
     const cfgLayer = Layer.succeed(AppConfig, makeConfig('http://host.docker.internal:3310'));
     const result = await Effect.runPromise(
       Effect.either(

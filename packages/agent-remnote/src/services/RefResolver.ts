@@ -92,7 +92,15 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
   resolve: (ref) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
-      if (cfg.apiBaseUrl) {
+      const parsed = yield* Effect.try({
+        try: () => parseRef(ref),
+        catch: (e) =>
+          e && typeof e === 'object' && (e as any)._tag === 'CliError'
+            ? (e as any)
+            : new CliError({ code: 'INVALID_ARGS', message: `Invalid ref: ${ref}`, exitCode: 2 }),
+      });
+
+      if (cfg.apiBaseUrl && parsed.kind !== 'id') {
         return yield* Effect.fail(
           remoteModeUnsupportedError({
             command: `ref resolution (${ref})`,
@@ -105,13 +113,6 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
           }),
         );
       }
-      const parsed = yield* Effect.try({
-        try: () => parseRef(ref),
-        catch: (e) =>
-          e && typeof e === 'object' && (e as any)._tag === 'CliError'
-            ? (e as any)
-            : new CliError({ code: 'INVALID_ARGS', message: `Invalid ref: ${ref}`, exitCode: 2 }),
-      });
 
       if (parsed.kind === 'id') return parsed.value;
 

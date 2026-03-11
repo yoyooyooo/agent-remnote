@@ -22,8 +22,20 @@ function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
 }
 
 function parseDateInput(raw: string): Date {
-  const value = new Date(raw);
+  const trimmed = raw.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const value = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(trimmed);
   if (Number.isNaN(value.getTime())) {
+    throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
+  }
+  if (
+    match &&
+    (value.getFullYear() !== Number(match[1]) ||
+      value.getMonth() !== Number(match[2]) - 1 ||
+      value.getDate() !== Number(match[3]))
+  ) {
     throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
   }
   return value;
