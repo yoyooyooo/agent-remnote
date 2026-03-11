@@ -6,6 +6,7 @@ import { executeSearchRemOverview } from '../adapters/core.js';
 
 import { AppConfig } from './AppConfig.js';
 import { CliError } from './Errors.js';
+import { remoteModeUnsupportedError } from '../commands/_remoteMode.js';
 import { tryParseRemnoteLink } from '../lib/remnote.js';
 
 export interface RefResolverService {
@@ -91,6 +92,19 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
   resolve: (ref) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      if (cfg.apiBaseUrl) {
+        return yield* Effect.fail(
+          remoteModeUnsupportedError({
+            command: `ref resolution (${ref})`,
+            reason: 'this path still resolves refs by reading the local RemNote database',
+            hints: [
+              'Use a remote-capable command that accepts --ref and forwards it to the host API.',
+              'If no remote endpoint exists yet, run the command on the host.',
+            ],
+            apiBaseUrl: cfg.apiBaseUrl,
+          }),
+        );
+      }
       const parsed = yield* Effect.try({
         try: () => parseRef(ref),
         catch: (e) =>

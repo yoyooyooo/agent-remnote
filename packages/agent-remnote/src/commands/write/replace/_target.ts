@@ -5,6 +5,7 @@ import { executeOutlineRemSubtree } from '../../../adapters/core.js';
 import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError } from '../../../services/Errors.js';
 import { RefResolver } from '../../../services/RefResolver.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 
 import {
   loadBridgeSelectionSnapshot,
@@ -26,6 +27,10 @@ export function resolveReplaceTarget(params: {
 }): Effect.Effect<ReplaceTarget, CliError, AppConfig | RefResolver> {
   return Effect.gen(function* () {
     const _cfg = yield* AppConfig;
+    yield* failInRemoteMode({
+      command: 'replace target resolution',
+      reason: 'replace commands still depend on local selection/ref resolution semantics',
+    });
     const refs = yield* RefResolver;
 
     const hasSelection = params.selection === true;
@@ -100,6 +105,10 @@ export function expandTargetIds(params: {
 }): Effect.Effect<ExpandResult, CliError, AppConfig> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
+    yield* failInRemoteMode({
+      command: 'replace subtree expansion',
+      reason: 'replace commands still expand target subtrees from the local RemNote database',
+    });
 
     if (params.scope === 'roots') {
       const unique = Array.from(new Set(params.rootIds));

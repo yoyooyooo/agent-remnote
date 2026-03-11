@@ -7,6 +7,7 @@ import { executeInspectRemDoc } from '../../../../adapters/core.js';
 import { AppConfig } from '../../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../../services/Errors.js';
 import { Payload } from '../../../../services/Payload.js';
+import { failInRemoteMode } from '../../../_remoteMode.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
@@ -95,6 +96,10 @@ export const writePowerupRecordDeleteCommand = Command.make(
       }
 
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'powerup record delete',
+        reason: 'this command still validates local table membership before enqueueing writes',
+      });
       const payloadSvc = yield* Payload;
 
       const resolved = powerup ? yield* resolvePowerup(powerup) : null;

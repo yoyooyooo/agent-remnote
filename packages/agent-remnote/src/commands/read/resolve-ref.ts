@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import { executeResolveRemReference } from '../../adapters/core.js';
 
 import { AppConfig } from '../../services/AppConfig.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -28,6 +29,10 @@ export const readResolveRefCommand = Command.make(
   ({ ids, expandReferences, maxReferenceDepth, detail }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'rem resolve-ref',
+        reason: 'this command still resolves references from the local RemNote database',
+      });
       const result = yield* Effect.tryPromise({
         try: async () =>
           await executeResolveRemReference({

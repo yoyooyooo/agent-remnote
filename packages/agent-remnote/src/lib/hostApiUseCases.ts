@@ -1,6 +1,12 @@
 import * as Effect from 'effect/Effect';
 
-import { executeOutlineRemSubtree, executeSearchRemOverview, type BetterSqliteInstance } from '../adapters/core.js';
+import {
+  executeOutlineRemSubtree,
+  executeSearchRemOverview,
+  formatDateWithPattern,
+  getDateFormatting,
+  type BetterSqliteInstance,
+} from '../adapters/core.js';
 import { loadBridgeSelectionSnapshot, requireOkRemSelection } from '../commands/read/selection/_shared.js';
 import { loadBridgeUiContextSnapshot, requireOkUiContext } from '../commands/read/uiContext/_shared.js';
 import { enqueueOps, normalizeOp, normalizeOps, parseEnqueuePayload } from '../commands/_enqueue.js';
@@ -21,6 +27,19 @@ import { cliErrorFromUnknown } from '../commands/_tool.js';
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
+function parseDateInput(raw: string): Date {
+  const value = new Date(raw);
+  if (Number.isNaN(value.getTime())) {
+    throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
+  }
+  return value;
+}
+
+function todayAtMidnight(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 export function executeDbSearchUseCase(params: {
@@ -95,6 +114,132 @@ export function executePluginSearchUseCase(params: {
       limit: limitEffective,
       rpcTimeoutMs,
     });
+  });
+}
+
+export function executeReadOutlineUseCase(params: {
+  readonly id?: string | undefined;
+  readonly ref?: string | undefined;
+  readonly depth?: number | undefined;
+  readonly offset?: number | undefined;
+  readonly nodes?: number | undefined;
+  readonly format?: 'md' | 'json' | undefined;
+  readonly excludeProperties?: boolean | undefined;
+  readonly includeEmpty?: boolean | undefined;
+  readonly expandReferences?: boolean | undefined;
+  readonly maxReferenceDepth?: number | undefined;
+  readonly detail?: boolean | undefined;
+}): Effect.Effect<any, CliError, AppConfig | RefResolver> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const refs = yield* RefResolver;
+
+    if (params.id && params.ref) {
+      return yield* Effect.fail(
+        new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --id or --ref', exitCode: 2 }),
+      );
+    }
+
+    const resolvedId = params.ref ? yield* refs.resolve(params.ref) : params.id;
+    if (!resolvedId) {
+      return yield* Effect.fail(
+        new CliError({ code: 'INVALID_ARGS', message: 'You must provide --id or --ref', exitCode: 2 }),
+      );
+    }
+
+    return yield* Effect.tryPromise({
+      try: async () =>
+        await executeOutlineRemSubtree({
+          id: resolvedId,
+          dbPath: cfg.remnoteDb,
+          maxDepth: params.depth as any,
+          startOffset: params.offset as any,
+          maxNodes: params.nodes as any,
+          format: params.format === 'json' ? 'json' : 'markdown',
+          excludeProperties: params.excludeProperties === true,
+          includeEmpty: params.includeEmpty === true,
+          expandReferences: params.expandReferences === false ? false : undefined,
+          maxReferenceDepth: params.maxReferenceDepth as any,
+          detail: params.detail === true,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+  });
+}
+
+export function executeDailyRemIdUseCase(params: {
+  readonly date?: string | undefined;
+  readonly offsetDays?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | RefResolver | RemDb> {
+  return Effect.gen(function* () {
+    if (params.date && params.offsetDays !== undefined) {
+      return yield* Effect.fail(
+        new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --date or --offset-days', exitCode: 2 }),
+      );
+    }
+
+    const cfg = yield* AppConfig;
+    const refs = yield* RefResolver;
+    const remDb = yield* RemDb;
+
+    let ref = `daily:${params.offsetDays ?? 0}`;
+    let remId = '';
+    let dateString: string | undefined;
+
+    if (params.date) {
+      const target = parseDateInput(params.date);
+      dateString = yield* remDb
+        .withDb(cfg.remnoteDb, async (db) => {
+          const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
+          return formatDateWithPattern(target, format);
+        })
+        .pipe(
+          Effect.map((result) => result.result),
+          Effect.catchAll(() => Effect.succeed(formatDateWithPattern(target, 'yyyy/MM/dd'))),
+        );
+
+      const result = yield* Effect.tryPromise({
+        try: async () =>
+          await executeSearchRemOverview({
+            query: dateString,
+            dbPath: cfg.remnoteDb,
+            limit: 1,
+            preferExact: true,
+            exactFirstSingle: true,
+            excludePages: true,
+          } as any),
+        catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+      });
+
+      const first = Array.isArray((result as any).matches) ? (result as any).matches[0] : undefined;
+      remId = first?.id ? String(first.id) : '';
+      ref = `daily:${params.date}`;
+      if (!remId) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: `No Daily Rem found for date: ${params.date}`,
+            exitCode: 2,
+          }),
+        );
+      }
+    } else {
+      const offset = params.offsetDays ?? 0;
+      ref = `daily:${offset}`;
+      remId = yield* refs.resolve(ref);
+      const target = new Date(todayAtMidnight().getTime() + offset * 24 * 3600 * 1000);
+      dateString = yield* remDb
+        .withDb(cfg.remnoteDb, async (db) => {
+          const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
+          return formatDateWithPattern(target, format);
+        })
+        .pipe(
+          Effect.map((result) => result.result),
+          Effect.catchAll(() => Effect.succeed(undefined)),
+        );
+    }
+
+    return { ref, remId, dateString };
   });
 }
 

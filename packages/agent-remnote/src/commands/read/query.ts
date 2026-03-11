@@ -8,6 +8,7 @@ import { executeSearchQuery } from '../../adapters/core.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
 import { Payload } from '../../services/Payload.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -49,6 +50,10 @@ export const readQueryCommand = Command.make(
   ({ payload, text, tag, limit, offset, snippetLength, sort, sortDirection }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'query',
+        reason: 'this command still executes structured queries against the local RemNote database',
+      });
       const payloadSvc = yield* Payload;
 
       const queryObj: any = {};

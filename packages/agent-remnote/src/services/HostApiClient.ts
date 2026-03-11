@@ -241,6 +241,17 @@ export interface HostApiClientService {
     readonly body: unknown;
     readonly timeoutMs?: number;
   }) => Effect.Effect<any, CliError>;
+  readonly readOutline: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly dailyRemId: (params: {
+    readonly baseUrl: string;
+    readonly date?: string | undefined;
+    readonly offsetDays?: number | undefined;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
   readonly queueWait: (params: {
     readonly baseUrl: string;
     readonly txnId: string;
@@ -329,6 +340,15 @@ export const HostApiClientLive = Layer.succeed(HostApiClient, {
     requestJson({ baseUrl, path: '/v1/write/ops', method: 'POST', body, timeoutMs }),
   writeMarkdown: ({ baseUrl, body, timeoutMs }) =>
     requestJson({ baseUrl, path: '/v1/write/markdown', method: 'POST', body, timeoutMs }),
+  readOutline: ({ baseUrl, body, timeoutMs }) =>
+    requestJson({ baseUrl, path: '/v1/read/outline', method: 'POST', body, timeoutMs }),
+  dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>
+    requestJson({
+      baseUrl,
+      path: `/v1/daily/rem-id${buildQuery({ date, offsetDays })}`,
+      method: 'GET',
+      timeoutMs,
+    }),
   queueWait: ({ baseUrl, txnId, timeoutMs, pollMs }) =>
     requestJson({ baseUrl, path: '/v1/queue/wait', method: 'POST', body: { txnId, timeoutMs, pollMs } }),
   queueTxn: ({ baseUrl, txnId, timeoutMs }) =>

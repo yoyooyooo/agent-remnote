@@ -7,6 +7,7 @@ import { executeListTodos, executeReadRemTable } from '../../../../adapters/core
 import { AppConfig } from '../../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../../services/Errors.js';
 import { Payload } from '../../../../services/Payload.js';
+import { failInRemoteMode } from '../../../_remoteMode.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
@@ -174,6 +175,10 @@ export function todoWriteEffect(params: {
     }
 
     const cfg = yield* AppConfig;
+    yield* failInRemoteMode({
+      command: 'todo add',
+      reason: 'this command still reads local todo schema metadata before enqueueing writes',
+    });
     const payloadSvc = yield* Payload;
 
     const remId = normalizeRemIdInput(rem);

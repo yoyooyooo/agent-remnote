@@ -9,6 +9,7 @@ import { tryParseRemnoteLinkFromRef, tryResolveRemnoteDbPathForWorkspaceIdSync }
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
 import { RefResolver } from '../../services/RefResolver.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { cliErrorFromUnknown } from '../_tool.js';
 
@@ -26,6 +27,10 @@ export const readPageIdCommand = Command.make(
   ({ ref, id, maxHops, detail }) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'rem page-id',
+        reason: 'this command still resolves page ancestry from the local RemNote database',
+      });
       const refs = yield* RefResolver;
 
       const hasRef = typeof ref === 'string' && ref.trim().length > 0;

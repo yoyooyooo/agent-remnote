@@ -8,6 +8,7 @@ import { waitForTxn } from '../../commands/_waitTxn.js';
 import { loadBridgeUiContextSnapshot } from '../../commands/read/uiContext/_shared.js';
 import {
   collectApiHealthUseCase,
+  executeDailyRemIdUseCase,
   collectApiStatusUseCase,
   collectPluginCurrentUseCase,
   collectSelectionCurrentUseCase,
@@ -22,6 +23,7 @@ import {
   executeImportMarkdownUseCase,
   executePluginSearchUseCase,
   executeQueueTxnUseCase,
+  executeReadOutlineUseCase,
   executeTriggerSyncUseCase,
   executeWriteOpsUseCase,
 } from '../../lib/hostApiUseCases.js';
@@ -144,6 +146,7 @@ export function runHttpApiRuntime(params?: {
 > {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
+    const runtimeCfg = { ...cfg, apiBaseUrl: undefined };
     const apiFiles = yield* ApiDaemonFiles;
     const daemonFiles = yield* DaemonFiles;
     const ws = yield* WsClient;
@@ -163,7 +166,7 @@ export function runHttpApiRuntime(params?: {
 
     const provide = <A>(effect: Effect.Effect<A, CliError, any>) =>
       effect.pipe(
-        Effect.provideService(AppConfig, cfg),
+        Effect.provideService(AppConfig, runtimeCfg),
         Effect.provideService(ApiDaemonFiles, apiFiles),
         Effect.provideService(DaemonFiles, daemonFiles),
         Effect.provideService(WsClient, ws),
@@ -323,6 +326,16 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
+      if (method === 'GET' && url.pathname === '/v1/daily/rem-id') {
+        void run(
+          executeDailyRemIdUseCase({
+            date: url.searchParams.get('date') ?? undefined,
+            offsetDays: url.searchParams.get('offsetDays') ? Number(url.searchParams.get('offsetDays')) : undefined,
+          }),
+        );
+        return;
+      }
+
       if (method === 'POST' && url.pathname === '/v1/plugin/selection/outline') {
         void (async () => {
           try {
@@ -380,6 +393,40 @@ export function runHttpApiRuntime(params?: {
               details: { error: String((error as any)?.message || error) },
             });
             sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && url.pathname === '/v1/read/outline') {
+        void (async () => {
+          try {
+            const body = await Effect.runPromise(readJsonBody(req));
+            await run(
+              executeReadOutlineUseCase({
+                id: typeof body?.id === 'string' ? body.id : undefined,
+                ref: typeof body?.ref === 'string' ? body.ref : undefined,
+                depth: typeof body?.depth === 'number' ? body.depth : undefined,
+                offset: typeof body?.offset === 'number' ? body.offset : undefined,
+                nodes: typeof body?.nodes === 'number' ? body.nodes : undefined,
+                format: body?.format === 'json' ? 'json' : body?.format === 'md' ? 'md' : undefined,
+                excludeProperties: body?.excludeProperties === true,
+                includeEmpty: body?.includeEmpty === true,
+                expandReferences: body?.expandReferences === true ? true : body?.expandReferences === false ? false : undefined,
+                maxReferenceDepth: typeof body?.maxReferenceDepth === 'number' ? body.maxReferenceDepth : undefined,
+                detail: body?.detail === true,
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : new CliError({
+                  code: 'INVALID_PAYLOAD',
+                  message: 'Invalid JSON body',
+                  exitCode: 2,
+                  details: { error: String((error as any)?.message || error) },
+                });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
           }
         })();
         return;

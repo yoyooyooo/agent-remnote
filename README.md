@@ -120,6 +120,13 @@ agent-remnote plugin selection current --compact
 agent-remnote plugin current --compact
 ```
 
+Strict remote mode rule:
+
+- When `apiBaseUrl` is configured, business commands must use the host API.
+- Commands that still depend on direct local DB/filesystem access now fail fast instead of silently falling back to local reads.
+- Remote-capable examples now include `search`, `queue wait`, `plugin current`, `rem outline`, and `daily rem-id`.
+- For Daily Note writes in remote mode, prefer `import markdown --ref daily:today ...`.
+
 Overrides are still available when needed:
 
 ```bash

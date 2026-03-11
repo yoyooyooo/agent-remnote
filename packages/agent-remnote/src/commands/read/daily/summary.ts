@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import { executeSummarizeDailyNotes } from '../../../adapters/core.js';
 
 import { AppConfig } from '../../../services/AppConfig.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { cliErrorFromUnknown } from '../../_tool.js';
 
@@ -19,6 +20,10 @@ const maxLines = Options.integer('max-lines').pipe(Options.optional, Options.map
 export const dailySummaryCommand = Command.make('summary', { days, maxLines }, ({ days, maxLines }) =>
   Effect.gen(function* () {
     const cfg = yield* AppConfig;
+    yield* failInRemoteMode({
+      command: 'daily summary',
+      reason: 'this command still summarizes Daily Notes from the local RemNote database',
+    });
     const result = yield* Effect.tryPromise({
       try: async () =>
         await executeSummarizeDailyNotes({

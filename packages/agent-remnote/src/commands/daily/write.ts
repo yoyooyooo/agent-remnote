@@ -10,6 +10,7 @@ import { CliError, isCliError } from '../../services/Errors.js';
 import { FileInput } from '../../services/FileInput.js';
 import { Payload } from '../../services/Payload.js';
 import { RemDb } from '../../services/RemDb.js';
+import { failInRemoteMode } from '../_remoteMode.js';
 import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
 import { waitForTxn } from '../_waitTxn.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
@@ -175,6 +176,11 @@ export const dailyWriteCommand = Command.make(
       }
 
       const cfg = yield* AppConfig;
+      yield* failInRemoteMode({
+        command: 'daily write',
+        reason: 'this command still needs local Daily Note metadata before enqueueing writes',
+        hints: ['Use `import markdown --ref daily:today ...` in remote mode.'],
+      });
       const fileInput = yield* FileInput;
       const payloadSvc = yield* Payload;
       const remDb = yield* RemDb;
