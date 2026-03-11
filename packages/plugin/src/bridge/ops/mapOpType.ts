@@ -7,6 +7,7 @@ export function mapOpType(input: string): string {
     'rem.createPortal': 'create_portal',
     'rem.createSingleWithMarkdown': 'create_single_rem_with_markdown',
     'rem.createTreeWithMarkdown': 'create_tree_with_markdown',
+    'rem.replaceChildrenWithMarkdown': 'replace_children_with_markdown',
     'rem.createLink': 'create_link_rem',
     'rem.updateText': 'update_text',
     'rem.move': 'move_rem',

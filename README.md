@@ -38,8 +38,8 @@ This repo is optimized for the “agent calls CLI” workflow, not for humans cl
 - List built-in powerups (read-only): `agent-remnote --json powerup list`
 - Resolve a powerup (read-only): `agent-remnote --json powerup resolve --powerup "Todo"`
 - Mark a Rem as Todo (safe write): `agent-remnote --json todo add --rem "<rem_id>" --wait`
-- Dump everything into one place (safe write): `agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md`
-- Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json import markdown --ref "page:Reading" --file ./summary.md`
+- Dump everything into one place (safe write): `agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
+- Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
 
 ## Installation (users)
 
@@ -124,8 +124,8 @@ Strict remote mode rule:
 
 - When `apiBaseUrl` is configured, business commands must use the host API.
 - Commands that still depend on direct local DB/filesystem access now fail fast instead of silently falling back to local reads.
-- Remote-capable examples now include `search`, `queue wait`, `plugin current`, `rem outline`, and `daily rem-id`.
-- For Daily Note writes in remote mode, prefer `import markdown --ref daily:today ...`.
+- Remote-capable examples now include `search`, `queue wait`, `plugin current`, `rem outline`, `daily rem-id`, `daily write`, and `rem children *`.
+- For structured writes in remote mode, use `daily write --markdown ...`, `rem children ...`, or `apply --payload ...`.
 
 Overrides are still available when needed:
 
@@ -154,7 +154,7 @@ Safety defaults: most list-like read commands are paginated with a default `--li
 Safe write + progress tracking:
 
 ```bash
-agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -165,14 +165,14 @@ All write recipes require a connected RemNote window + plugin (active worker) an
 ### 1) Research summary → Reading page (Markdown import)
 
 ```bash
-agent-remnote --json import markdown --ref "page:Reading" --file ./summary.md --idempotency-key "reading:summary:2026-01-26"
+agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
 ### 2) Daily Notes journaling (append or prepend)
 
 ```bash
-agent-remnote --json daily write --md-file ./daily.md --create-if-missing --idempotency-key "daily:2026-01-26:journal"
+agent-remnote --json daily write --markdown @./daily.md --create-if-missing --idempotency-key "daily:2026-01-26:journal"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -180,39 +180,31 @@ Inline Markdown / stdin are also supported:
 
 ```bash
 agent-remnote --json daily write --markdown $'- topic\n  - note' --wait
-cat <<'MD' | agent-remnote --json daily write --stdin --wait
+cat <<'MD' | agent-remnote --json daily write --markdown - --wait
 - topic
   - note
 MD
 ```
 
-Guardrail: if `--text` input looks like structured Markdown, the CLI fails fast and asks you to use `--markdown`, `--stdin`, or `--md-file`. Use `--force-text` only when you intentionally want literal Markdown text.
+Guardrail: if `--text` input looks like structured Markdown, the CLI fails fast and asks you to use `--markdown`. Use `--force-text` only when you intentionally want literal Markdown text.
 
-### 3) Import a WeChat article as an outline (optional)
-
-Requires a Chromium-based browser with CDP enabled (e.g. Chrome with `--remote-debugging-port=9222`).
-
-```bash
-agent-remnote --json import wechat outline --url "<wechat_url>" --ref "page:Inbox" --cdp-port 9222 --idempotency-key "wechat:<id>"
-agent-remnote --json queue wait --txn "<txn_id>"
-```
-
-### 4) Multi-step writes with dependencies (`plan apply`)
+### 3) Multi-step writes with dependencies (`apply --payload`)
 
 Create `plan.json`:
 
 ```json
 {
   "version": 1,
-  "steps": [
+  "kind": "actions",
+  "actions": [
     { "as": "idea", "action": "write.bullet", "input": { "parent_id": "id:<parentRemId>", "text": "First bullet" } },
-    { "action": "tag.add", "input": { "rem_id": "@idea", "tag_id": "id:<tagId>" } }
+    { "action": "rem.children.append", "input": { "rem_id": "@idea", "markdown": "- child note" } }
   ]
 }
 ```
 
 ```bash
-agent-remnote --json plan apply --payload @plan.json --idempotency-key "plan:demo:2026-01-26"
+agent-remnote --json apply --payload @plan.json --idempotency-key "plan:demo:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -241,7 +233,7 @@ If Plugin RPC is unavailable, the command returns `ok=false` with `error.code` a
 Writes never touch `remnote.db` directly. They go through the operation queue and are applied by the plugin via the official SDK.
 
 ```bash
-agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -251,7 +243,7 @@ Tip: always pass a stable `--idempotency-key` for “the same logical write” s
 
 When writing large content, injecting hundreds of Rems directly under an existing page is risky and hard to clean up.
 
-`import markdown` and `daily write` support a **bundle mode**: large inputs (default: ≥80 lines or ≥5000 chars) are wrapped into a single “container Rem”, and the container Rem text is the bundle title.
+`daily write` supports a **bundle mode**: large inputs (default: ≥80 lines or ≥5000 chars) are wrapped into a single “container Rem”, and the container Rem text is the bundle title.
 
 - Disable bundling: `--bulk never`
 - Force bundling: `--bulk always`
@@ -261,7 +253,7 @@ When writing large content, injecting hundreds of Rems directly under an existin
 Example:
 
 ```bash
-agent-remnote --json import markdown --ref "page:Reading" --file ./big.md \
+agent-remnote --json daily write --markdown @./big.md \
   --bundle-title "X thread: Remotion workflow — Remotion + skills pipeline; align cuts to TTS segment lengths" \
   --idempotency-key "reading:x:2015245301603549328"
 agent-remnote --json queue wait --txn "<txn_id>"
@@ -295,11 +287,11 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | UI context snapshot (IDs)                | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
 | Resolve today's Daily Note Rem ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
 | Resolve a specific Daily Note Rem ID     | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
-| Write Markdown to a page                 | `agent-remnote --json import markdown --ref "page:..." --file ./note.md`                                                                          |
-| Write Markdown (insert at top)           | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0`                                                             |
-| Write Markdown (staged insert)           | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged`                                                                 |
+| Append Markdown to a Rem's children      | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
+| Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
+| Replace a Rem's direct children          | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
-| Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --stdin --wait`                                                                                  |
+| Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
 | Create a Rem                             | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
 | Move a Rem                               | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
@@ -312,7 +304,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Table: create a table                    | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table: add a row                         | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
 | Delete a Rem                             | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
-| Batch write plan (multi-step)            | `agent-remnote --json plan apply --payload @plan.json`                                                                                            |
+| Structured multi-step write              | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | Raw ops enqueue (advanced)               | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
 | Wait for completion                      | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
 | Queue stats                              | `agent-remnote --json queue stats`                                                                                                                |

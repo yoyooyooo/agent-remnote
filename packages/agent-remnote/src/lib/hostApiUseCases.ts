@@ -9,7 +9,8 @@ import {
 } from '../adapters/core.js';
 import { loadBridgeSelectionSnapshot, requireOkRemSelection } from '../commands/read/selection/_shared.js';
 import { loadBridgeUiContextSnapshot, requireOkUiContext } from '../commands/read/uiContext/_shared.js';
-import { enqueueOps, normalizeOp, normalizeOps, parseEnqueuePayload } from '../commands/_enqueue.js';
+import { compileApplyEnvelope, parseApplyEnvelope } from '../commands/_applyEnvelope.js';
+import { enqueueOps, normalizeOp } from '../commands/_enqueue.js';
 import { waitForTxn } from '../commands/_waitTxn.js';
 import { WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from '../commands/ws/_shared.js';
 import { AppConfig } from '../services/AppConfig.js';
@@ -256,7 +257,7 @@ export function executeDailyRemIdUseCase(params: {
   });
 }
 
-export function executeWriteOpsUseCase(params: {
+export function executeWriteApplyUseCase(params: {
   readonly raw: unknown;
   readonly priority?: number | undefined;
   readonly clientId?: string | undefined;
@@ -264,47 +265,52 @@ export function executeWriteOpsUseCase(params: {
   readonly meta?: unknown;
   readonly notify?: boolean | undefined;
   readonly ensureDaemon?: boolean | undefined;
+  readonly wait?: boolean | undefined;
+  readonly timeoutMs?: number | undefined;
+  readonly pollMs?: number | undefined;
 }): Effect.Effect<any, CliError, AppConfig | Queue | Payload | WsClient | RefResolver | any> {
   return Effect.gen(function* () {
+    const payloadSvc = yield* Payload;
+
     const parsed = yield* Effect.try({
-      try: () => parseEnqueuePayload(params.raw),
+      try: () => parseApplyEnvelope(payloadSvc.normalizeKeys(params.raw)),
       catch: (e) =>
         isCliError(e)
           ? e
           : new CliError({
               code: 'INVALID_PAYLOAD',
-              message: 'Invalid payload shape: expected an ops array, or { ops: [...] }',
+              message: 'Invalid apply envelope',
               exitCode: 2,
             }),
     });
 
-    const rawOps = parsed.ops;
-    if (rawOps.length === 0) {
-      return yield* Effect.fail(
-        new CliError({ code: 'INVALID_PAYLOAD', message: 'ops must not be empty', exitCode: 2 }),
-      );
-    }
-    if (rawOps.length > 500) {
+    const compiled = yield* compileApplyEnvelope(parsed);
+    if (compiled.ops.length > 500) {
       return yield* Effect.fail(
         new CliError({
           code: 'PAYLOAD_TOO_LARGE',
-          message: `Too many ops (${rawOps.length}); split the request and try again`,
+          message: `Too many ops (${compiled.ops.length}); split the request and try again`,
           exitCode: 2,
-          details: { ops: rawOps.length, max_ops: 500 },
+          details: { ops: compiled.ops.length, max_ops: 500 },
         }),
       );
     }
 
-    const ops = yield* normalizeOps(rawOps);
-    return yield* enqueueOps({
-      ops,
-      priority: params.priority ?? parsed.priority,
-      clientId: params.clientId ?? parsed.clientId,
-      idempotencyKey: params.idempotencyKey ?? parsed.idempotencyKey,
-      meta: params.meta ?? parsed.meta,
-      notify: params.notify ?? true,
-      ensureDaemon: params.ensureDaemon ?? true,
+    const data = yield* enqueueOps({
+      ops: compiled.ops,
+      priority: params.priority ?? compiled.priority,
+      clientId: params.clientId ?? compiled.clientId,
+      idempotencyKey: params.idempotencyKey ?? compiled.idempotencyKey,
+      meta: params.meta ?? compiled.meta,
+      notify: params.notify ?? compiled.notify ?? true,
+      ensureDaemon: params.ensureDaemon ?? compiled.ensureDaemon ?? true,
     });
+    if (!params.wait) {
+      return compiled.kind === 'actions' ? { ...data, alias_map: compiled.aliasMap } : data;
+    }
+    const waited = yield* waitForTxn({ txnId: data.txn_id, timeoutMs: params.timeoutMs, pollMs: params.pollMs });
+    const out = { ...data, ...waited };
+    return compiled.kind === 'actions' ? { ...out, alias_map: compiled.aliasMap } : out;
   });
 }
 

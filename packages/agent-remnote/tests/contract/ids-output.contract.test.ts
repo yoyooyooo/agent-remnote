@@ -53,7 +53,7 @@ describe('cli contract: --ids output', () => {
     const storeDb = path.join(tmpDir, 'store.sqlite');
 
     try {
-      const payload = '[{"type":"create_rem","payload":{"parentId":"dummy-parent","text":"hello"}}]';
+      const payload = '{"version":1,"kind":"ops","ops":[{"type":"create_rem","payload":{"parentId":"dummy-parent","text":"hello"}}]}';
       const res = await runCli(['--ids', 'apply', '--no-notify', '--no-ensure-daemon', '--payload', payload], {
         env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb },
       });

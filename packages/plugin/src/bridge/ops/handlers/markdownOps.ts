@@ -27,6 +27,11 @@ function getParentIdOfRem(rem: any): string {
   return '';
 }
 
+function getOrderedChildIds(rem: any): string[] {
+  if (!Array.isArray(rem?.children)) return [];
+  return rem.children.filter((value: any) => typeof value === 'string' && value.trim()).map((value: string) => value.trim());
+}
+
 async function computeRootRemIdsForMove(
   plugin: ReactRNPlugin,
   created: unknown,
@@ -653,6 +658,156 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     selection_rem_ids: uniqRemIds,
     created_ids: createdIds,
     deleted_rem_ids: orderedOldIds,
+    backup_deleted: backupDeleted,
+    backup_rem_id: backupRemId,
+  };
+}
+
+export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
+  const {
+    parent_id,
+    markdown,
+    indent_mode,
+    indent_size,
+    parse_mode,
+    prepared,
+    staged,
+    bundle,
+  } = op.payload || {};
+  const parentId = normalizeId(parent_id);
+  if (!parentId) return { ok: false, fatal: true, error: 'Missing parent_id' };
+
+  const parentRem: any = await plugin.rem.findOne(parentId);
+  if (!parentRem) return { ok: false, fatal: true, error: `Rem not found: ${parentId}` };
+
+  const oldChildIds = getOrderedChildIds(parentRem);
+  const md = String(markdown ?? '');
+  let createdIds: string[] = [];
+
+  const rollbackCreated = async () => {
+    for (const id of createdIds) {
+      try {
+        const rem: any = await plugin.rem.findOne(id);
+        if (rem) await rem.remove();
+      } catch {}
+    }
+    createdIds = [];
+  };
+
+  if (md.trim()) {
+    const result = await executeCreateTreeWithMarkdown(plugin, {
+      ...op,
+      payload: {
+        parent_id: parentId,
+        markdown: md,
+        position: 0,
+        ...(typeof indent_mode === 'boolean' ? { indent_mode } : {}),
+        ...(typeof indent_size === 'number' ? { indent_size } : {}),
+        ...(typeof parse_mode === 'string' ? { parse_mode } : {}),
+        ...(prepared !== undefined ? { prepared } : {}),
+        ...(staged === true ? { staged: true } : {}),
+        ...(bundle && typeof bundle === 'object' ? { bundle } : {}),
+      },
+    });
+    createdIds = Array.isArray(result?.created_ids)
+      ? result.created_ids.filter((value: any) => typeof value === 'string' && value.trim()).map((value: string) => value.trim())
+      : [];
+  }
+
+  if (oldChildIds.length === 0) {
+    return {
+      ok: true,
+      parent_id: parentId,
+      created_ids: createdIds,
+      deleted_rem_ids: [],
+      backup_deleted: true,
+      backup_rem_id: null,
+    };
+  }
+
+  let backupRemId: string | null = null;
+  try {
+    const backup = await plugin.rem.createSingleRemWithMarkdown('agent-remnote: children replace backup (auto)', parentId);
+    if (!backup?._id) throw new Error('createSingleRemWithMarkdown returned null');
+    backupRemId = String(backup._id);
+    try {
+      await plugin.rem.moveRems([backupRemId], parentId, 1_000_000_000);
+    } catch {}
+    await plugin.rem.moveRems(oldChildIds, backupRemId, 0);
+  } catch (e: any) {
+    await rollbackCreated();
+    if (backupRemId) {
+      try {
+        const movedBack: string[] = [];
+        for (const id of oldChildIds) {
+          try {
+            const rem: any = await plugin.rem.findOne(id);
+            if (rem && getParentIdOfRem(rem) === backupRemId) movedBack.push(id);
+          } catch {}
+        }
+        if (movedBack.length > 0) {
+          try {
+            await plugin.rem.moveRems(movedBack, parentId, 0);
+          } catch {}
+        }
+      } catch {}
+      try {
+        const backupRem: any = await plugin.rem.findOne(backupRemId);
+        if (backupRem) await backupRem.remove();
+      } catch {}
+    }
+    return { ok: false, fatal: true, error: `Failed to move old children to backup: ${String(e?.message || e)}` };
+  }
+
+  let backupDeleted = false;
+  if (backupRemId) {
+    try {
+      const backupRem: any = await plugin.rem.findOne(backupRemId);
+      if (backupRem) await backupRem.remove();
+      backupDeleted = true;
+      backupRemId = null;
+    } catch {
+      backupDeleted = false;
+    }
+  }
+
+  if (!backupDeleted && backupRemId) {
+    await rollbackCreated();
+    let movedBack = false;
+    try {
+      await plugin.rem.moveRems(oldChildIds, parentId, 0);
+      movedBack = true;
+    } catch {}
+    if (movedBack) {
+      try {
+        const stillInBackup: string[] = [];
+        for (const id of oldChildIds) {
+          try {
+            const rem: any = await plugin.rem.findOne(id);
+            if (rem && getParentIdOfRem(rem) === backupRemId) stillInBackup.push(id);
+          } catch {}
+        }
+        if (stillInBackup.length === 0) {
+          const backupRem: any = await plugin.rem.findOne(backupRemId);
+          if (backupRem) await backupRem.remove();
+          backupRemId = null;
+        }
+      } catch {}
+    }
+    return {
+      ok: false,
+      fatal: true,
+      error: 'Failed to delete children replace backup; rolled back to original content',
+      rolled_back: true,
+      backup_rem_id: backupRemId,
+    };
+  }
+
+  return {
+    ok: true,
+    parent_id: parentId,
+    created_ids: createdIds,
+    deleted_rem_ids: oldChildIds,
     backup_deleted: backupDeleted,
     backup_rem_id: backupRemId,
   };

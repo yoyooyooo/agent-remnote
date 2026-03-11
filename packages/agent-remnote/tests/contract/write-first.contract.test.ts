@@ -21,9 +21,10 @@ describe('cli contract: write-first workflow', () => {
       const res = await runCli(
         [
           '--json',
-          'import',
-          'markdown',
-          '--parent',
+          'rem',
+          'children',
+          'append',
+          '--rem',
           'dummy-parent',
           '--markdown',
           '# hi',
@@ -63,9 +64,19 @@ describe('cli contract: write-first workflow', () => {
 
     try {
       const payload = '[{"type":"create_rem","payload":{"text":"hello"}}]';
-      const res = await runCli(['--json', 'apply', '--no-notify', '--no-ensure-daemon', '--payload', payload], {
+      const res = await runCli(
+        [
+          '--json',
+          'apply',
+          '--no-notify',
+          '--no-ensure-daemon',
+          '--payload',
+          `{"version":1,"kind":"ops","ops":${payload}}`,
+        ],
+        {
         env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },
-      });
+        },
+      );
 
       expect(res.exitCode).toBe(2);
       expect(res.stderr).toBe('');

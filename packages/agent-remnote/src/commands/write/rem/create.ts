@@ -139,7 +139,7 @@ export const writeRemCreateCommand = Command.make(
           new CliError({
             code: 'INVALID_ARGS',
             message:
-              'Input passed to --text looks like structured Markdown. Use import markdown --parent/--ref instead, or pass --force-text to keep it literal.',
+              'Input passed to --text looks like structured Markdown. Use rem children append --rem <parentRemId> --markdown ... instead, or pass --force-text to keep it literal.',
             exitCode: 2,
           }),
         );

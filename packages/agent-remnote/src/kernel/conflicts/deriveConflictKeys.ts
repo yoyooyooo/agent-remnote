@@ -62,7 +62,12 @@ function isCreateOp(opType: string): boolean {
 }
 
 function isStructureOp(opType: string): boolean {
-  return opType === 'move_rem' || opType === 'delete_rem' || opType === 'replace_selection_with_markdown';
+  return (
+    opType === 'move_rem' ||
+    opType === 'delete_rem' ||
+    opType === 'replace_selection_with_markdown' ||
+    opType === 'replace_children_with_markdown'
+  );
 }
 
 export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readonly ConflictKey[] {
@@ -130,6 +135,11 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
         const explicitIds = getStringArrayFromNested(p, ['target', 'remIds']);
         for (const id of explicitIds) keys.push(`rem:${id}`);
       }
+    }
+
+    if (opType === 'replace_children_with_markdown') {
+      const pid = parentId ?? getFirstString(p, ['parent_id', 'parentId']);
+      if (pid) keys.push(`rem:${pid}`, `children:${pid}`);
     }
 
     return uniq(keys);

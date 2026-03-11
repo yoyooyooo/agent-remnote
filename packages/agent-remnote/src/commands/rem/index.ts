@@ -9,6 +9,7 @@ import { readReferencesCommand } from '../read/references.js';
 import { readResolveRefCommand } from '../read/resolve-ref.js';
 
 import { writeRemCreateCommand } from '../write/rem/create.js';
+import { writeRemChildrenCommand } from '../write/rem/children/index.js';
 import { writeRemDeleteCommand } from '../write/rem/delete.js';
 import { writeRemMoveCommand } from '../write/rem/move.js';
 import { writeRemTagCommand } from '../write/rem/tag/index.js';
@@ -16,6 +17,7 @@ import { writeRemSetTextCommand, writeRemTextCommand } from '../write/rem/text.j
 
 export const remCommand = Command.make('rem', {}).pipe(
   Command.withSubcommands([
+    writeRemChildrenCommand,
     writeRemCreateCommand,
     writeRemMoveCommand,
     writeRemSetTextCommand,

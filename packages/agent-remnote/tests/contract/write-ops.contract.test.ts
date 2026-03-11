@@ -4,7 +4,7 @@ import { runCli } from '../helpers/runCli.js';
 
 describe('cli contract: write ops --dry-run --json', () => {
   it('prints ok envelope and does not require queue db', async () => {
-    const payload = '[{"type":"create_rem","payload":{"fooBar":1}}]';
+    const payload = '{"version":1,"kind":"ops","ops":[{"type":"create_rem","payload":{"fooBar":1}}]}';
 
     const res = await runCli(['--json', 'apply', '--dry-run', '--payload', payload]);
 
@@ -21,6 +21,8 @@ describe('cli contract: write ops --dry-run --json', () => {
 
   it('accepts object payload with meta (and normalizes keys)', async () => {
     const payload = JSON.stringify({
+      version: 1,
+      kind: 'ops',
       ops: [{ type: 'create_rem', payload: { fooBar: 1 } }],
       meta: { traceId: 't1', fooBar: 2 },
       clientId: 'test-client',

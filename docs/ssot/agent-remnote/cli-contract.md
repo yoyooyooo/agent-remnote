@@ -71,11 +71,11 @@ export type JsonEnvelope =
 
 为降低 Agent “选错入口”的概率，命令树归属做如下裁决：
 
-- 顶层命令集合固定为：`daemon` / `queue` / `apply` / `plugin` / `search` / `query` / `rem` / `daily` / `todo` / `topic` / `powerup` / `table` / `tag` / `portal` / `replace` / `import` / `plan` / `db` / `config` / `doctor` / `ops`
+- 顶层命令集合固定为：`daemon` / `queue` / `apply` / `plugin` / `search` / `query` / `rem` / `daily` / `todo` / `topic` / `powerup` / `table` / `tag` / `portal` / `replace` / `db` / `config` / `doctor` / `ops`
 - `plugin/*`：依赖 RemNote UI/插件/WS bridge state 的能力（例如候选集搜索、selection、ui-context）
 - 其余 **只读** 能力优先直挂顶层实体子命令（例如 `search` / `query` / `db ...` / `powerup list/schema` / `todo list` / `rem outline`）
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
-- raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口为 `plan apply`）
+- raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口同样统一到 `apply` 的 `kind=actions`）
 
 ## 6) `config` 命令组契约
 

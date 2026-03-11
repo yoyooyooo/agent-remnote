@@ -8,11 +8,11 @@ description: 'Use when interacting with RemNote: querying local notes, reading c
 ## 默认优先级（最重要）
 
 - **默认写入格式**：优先使用 **Markdown + 无序列表 + 缩进层级**。
-- **默认写入命令**：优先 `agent-remnote import markdown --stdin`，不要先落本地临时文件。
+- **默认写入命令**：优先 `agent-remnote rem children append --rem <parentRemId> --markdown -`，不要先落本地临时文件。
 - **默认执行模式**：优先“异步入队”路径；已知 `parent/ref` 的写入默认不要加 `--wait`。
 - **默认内容策略**：先把内容整理成结构化列表，再写入 RemNote；不要把聊天原文、原始 Markdown 标题层级、过程噪音直接落库。
 - **默认验证动作**：仅在用户明确要求、目标 parent 不确定、需要新节点 ID、或上次返回 `sent=0/failed/timeout` 时再做 `rem outline` 或 `search` 验证。
-- **强警告**：`daily write --text` 仅适合**短纯文本**；凡是有层级、标题、列表、引用、研究总结、DN 沉淀，一律优先 `import markdown`。
+- **强警告**：`daily write --text` 仅适合**短纯文本**；凡是有层级、标题、列表、引用、研究总结、DN 沉淀，一律优先 `rem children append` 或 `daily write --markdown`。
 
 ## 核心约束（先遵守）
 
@@ -114,7 +114,7 @@ agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000
 默认用：
 
 ```bash
-cat <<'MD' | agent-remnote --json import markdown --parent <parentRemId> --stdin --bulk never
+cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown -
 - 主题
   - 结论 1
   - 结论 2
@@ -204,7 +204,7 @@ agent-remnote --json search --query "2026/03/08" --limit 20
 
 ### 最稳的引用写法
 
-在 `import markdown` 里，优先使用显式 ID 引用：
+在结构化写入命令里，优先使用显式 ID 引用：
 
 - `((RID))`
 - `{ref:RID}`
@@ -227,7 +227,7 @@ agent-remnote --json search --query "2026/03/08" --limit 20
 1. **按需健康检查**：仅在首次接入、环境刚切换、刚重启服务、或前一次返回 `sent=0/failed/timeout` 时执行 `agent-remnote --json doctor`
 2. **解析目标 parent**：`PRID` / `FRID` / `SEL` / 当天日期 Rem
 3. **先整理内容**：转成 Markdown 无序列表；默认不要用 `#`/`##` 标题作为最终落库结构
-4. **写入**：优先 `import markdown --stdin --bulk never`，默认不加 `--wait`
+4. **写入**：优先 `rem children append --rem <parentRemId> --markdown -`，默认不加 `--wait`
 5. **必要时加引用**：标题和关键概念优先 `((RID))`
 6. **按需验证**：仅在用户明确要求验收、目标定位风险高、需要新节点 ID、或返回异常状态时再跑 `queue wait / rem outline / search`
 
@@ -242,7 +242,7 @@ agent-remnote --json search --query "2026/03/08" --limit 20
 推荐流程：
 
 1. 直接整理成无序列表 Markdown
-2. 直接执行 `import markdown --stdin --bulk never`
+2. 直接执行 `rem children append --rem <parentRemId> --markdown -`
 3. 只读取返回里的 `txn_id`、`op_ids`、`sent`
 4. 若 `sent > 0`，本轮即可结束
 5. 若 `sent = 0`，再进入诊断分支：`daemon status` → 必要时切回 RemNote → `daemon sync` / `queue wait`
@@ -250,7 +250,7 @@ agent-remnote --json search --query "2026/03/08" --limit 20
 推荐命令：
 
 ```bash
-cat <<'MD' | agent-remnote --json import markdown --parent <parentRemId> --stdin --bulk never
+cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown -
 - 标题
   - 子项
 MD
@@ -264,7 +264,7 @@ MD
 默认命令模板：
 
 ```bash
-cat <<'MD' | agent-remnote --json import markdown --parent <parentRemId> --stdin --bulk never
+cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown -
 - 主题
   - 关键结论
   - 关键证据
@@ -326,7 +326,7 @@ node <agent-remnote-repo>/packages/agent-remnote/cli.js --json doctor
 处理：
 
 - 删除错误条目
-- 改用 `import markdown --stdin`
+- 改用 `rem children append --rem <parentRemId> --markdown -`
 - 内容改成无序列表结构后重写
 
 ### 2）内容写到了 `Daily Document` 根下，而不是当天条目下
@@ -376,7 +376,7 @@ agent-remnote --ids  plugin selection roots
 ### 结构化写入（默认）
 
 ```bash
-cat <<'MD' | agent-remnote --json import markdown --parent <parentRemId> --stdin --bulk never
+cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown -
 - 标题
   - 子项
 MD
@@ -385,7 +385,7 @@ MD
 ### 结构化写入并等待结果（仅按需）
 
 ```bash
-cat <<'MD' | agent-remnote --json import markdown --parent <parentRemId> --stdin --bulk never --wait --timeout-ms 60000
+cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown - --wait --timeout-ms 60000
 - 标题
   - 子项
 MD

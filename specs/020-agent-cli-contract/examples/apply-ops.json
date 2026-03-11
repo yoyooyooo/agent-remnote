@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "kind": "ops",
+  "ops": [
+    {
+      "type": "delete_rem",
+      "payload": {
+        "rem_id": "demo-rem-id"
+      }
+    }
+  ]
+}
