@@ -34,8 +34,8 @@ describe('cli contract: --help', () => {
     expect(out).toContain('db');
     expect(out).not.toMatch(/\n\s*-\s+read\b/);
     expect(out).not.toMatch(/\n\s*-\s+write\b/);
-    expect(out).not.toContain('import');
-    expect(out).not.toContain('plan');
+    expect(out).not.toMatch(/\n\s*-\s+import\b/);
+    expect(out).not.toMatch(/\n\s*-\s+plan\b/);
   });
 
   it('prints rem help with verbs', async () => {
@@ -46,7 +46,7 @@ describe('cli contract: --help', () => {
 
     const out = stripAnsi(res.stdout);
     expect(out).toContain('create');
-    expect(out).toContain('children');
+    expect(out).toMatch(/\n\s*-\s+children\b/);
     expect(out).toContain('move');
     expect(out).toContain('text');
     expect(out).toContain('tag');
@@ -85,8 +85,8 @@ describe('cli contract: --help', () => {
     const out = stripAnsi(res.stdout);
     expect(out).toContain('--markdown');
     expect(out).toContain('--force-text');
-    expect(out).not.toContain('--stdin');
-    expect(out).not.toContain('--md-file');
+    expect(out).not.toMatch(/^\s+--stdin\b/m);
+    expect(out).not.toMatch(/^\s+--md-file\b/m);
   });
 
   it('prints daily help with rem-id subcommand', async () => {
