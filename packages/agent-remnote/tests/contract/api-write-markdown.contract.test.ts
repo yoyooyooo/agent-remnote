@@ -84,8 +84,8 @@ function makeConfig(tmpDir: string, port: number): ResolvedConfig {
   };
 }
 
-describe('runtime contract: http api write markdown', () => {
-  it('injects daemon runtime services for /v1/write/markdown', async () => {
+describe('runtime contract: http api write apply', () => {
+  it('injects daemon runtime services for /v1/write/apply', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-http-api-'));
     const port = await getFreePort();
     const cfg = makeConfig(tmpDir, port);
@@ -100,13 +100,13 @@ describe('runtime contract: http api write markdown', () => {
             yield* Effect.promise(() => waitForPort(port));
 
             const res = yield* Effect.promise(() =>
-              fetch(`http://127.0.0.1:${port}/v1/write/markdown`, {
+              fetch(`http://127.0.0.1:${port}/v1/write/apply`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
-                  parent: 'dummy-parent',
-                  markdown: '- hello from api',
-                  bulk: 'never',
+                  version: 1,
+                  kind: 'ops',
+                  ops: [{ type: 'delete_rem', payload: { rem_id: 'dummy-rem' } }],
                   notify: true,
                   ensureDaemon: true,
                 }),

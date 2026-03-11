@@ -32,10 +32,14 @@ describe('cli contract: daemon status-line queue indicator', () => {
       ),
     );
 
-    const payload = JSON.stringify([
-      { type: 'test_op', payload: {} },
-      { type: 'test_op', payload: {} },
-    ]);
+    const payload = JSON.stringify({
+      version: 1,
+      kind: 'ops',
+      ops: [
+        { type: 'test_op', payload: {} },
+        { type: 'test_op', payload: {} },
+      ],
+    });
 
     const env = { REMNOTE_TMUX_REFRESH: '0' };
 

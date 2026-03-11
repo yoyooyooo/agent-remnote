@@ -98,6 +98,16 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     id_fields: ['target.rem_ids[]', 'portal_id'],
   },
 
+  replace_children_with_markdown: {
+    op_type: 'replace_children_with_markdown',
+    payload: {
+      required: ['parent_id', 'markdown'],
+      optional: ['indent_mode', 'indent_size', 'parse_mode', 'prepared', 'staged', 'bundle'],
+    },
+    description: 'Replace the direct children of a Rem with Markdown.',
+    id_fields: ['parent_id'],
+  },
+
   // Daily note
   daily_note_write: {
     op_type: 'daily_note_write',

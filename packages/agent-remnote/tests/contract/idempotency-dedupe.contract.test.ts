@@ -21,9 +21,10 @@ describe('cli contract: idempotency-key dedupe', () => {
       const idem = 'test-idempotency-key-dedupe';
       const baseArgs = [
         '--json',
-        'import',
-        'markdown',
-        '--parent',
+        'rem',
+        'children',
+        'append',
+        '--rem',
         'dummy-parent',
         '--markdown',
         '# hi',

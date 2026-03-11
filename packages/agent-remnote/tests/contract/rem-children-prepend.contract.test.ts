@@ -2,21 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { runCli } from '../helpers/runCli.js';
 
-describe('cli contract: import markdown position', () => {
-  it('includes position in dry-run op payload', async () => {
+describe('cli contract: rem children prepend', () => {
+  it('compiles prepend to create_tree_with_markdown with position 0 (dry-run)', async () => {
     const res = await runCli(
-      [
-        '--json',
-        'import',
-        'markdown',
-        '--parent',
-        'PARENT_ID',
-        '--markdown',
-        '- hello',
-        '--position',
-        '0',
-        '--dry-run',
-      ],
+      ['--json', 'rem', 'children', 'prepend', '--rem', 'PARENT_ID', '--markdown', '- hello', '--dry-run'],
       { env: { REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 15_000 },
     );
 

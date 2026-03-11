@@ -1,6 +1,7 @@
 import * as Effect from 'effect/Effect';
 
 import { AppConfig } from '../services/AppConfig.js';
+import { FileInput } from '../services/FileInput.js';
 import { CliError, ok } from '../services/Errors.js';
 import { Output } from '../services/Output.js';
 
@@ -17,6 +18,28 @@ function formatHumanErrorLine(message: string): string {
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((v) => String(v ?? '').trim()).filter(Boolean);
+}
+
+export function readMarkdownTextFromInputSpec(inputSpec: string): Effect.Effect<string, CliError, FileInput> {
+  return Effect.gen(function* () {
+    const value = String(inputSpec ?? '').trim();
+    if (!value) {
+      return yield* Effect.fail(
+        new CliError({
+          code: 'INVALID_ARGS',
+          message: '--markdown requires a non-empty input spec',
+          exitCode: 2,
+        }),
+      );
+    }
+
+    if (value === '-' || value.startsWith('@')) {
+      const fileInput = yield* FileInput;
+      return yield* fileInput.readTextFromFileSpec({ spec: value });
+    }
+
+    return inputSpec;
+  });
 }
 
 export function writeSuccess(params: {

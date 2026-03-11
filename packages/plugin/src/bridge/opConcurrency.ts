@@ -144,6 +144,14 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
       return keys;
     }
 
+    case 'replace_children_with_markdown': {
+      const parentId = normalizeId(payload.parent_id);
+      if (!parentId) return ['global:replace_children_with_markdown'];
+      addRem(parentId);
+      addChildren(parentId);
+      return keys;
+    }
+
     case 'update_text':
     case 'add_tag':
     case 'remove_tag':

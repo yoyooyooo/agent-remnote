@@ -38,8 +38,8 @@
 - 枚举内置 Powerup（只读）：`agent-remnote --json powerup list`
 - 解析 Powerup（只读）：`agent-remnote --json powerup resolve --powerup "Todo"`
 - 把某个 Rem 标记为 Todo（安全写入）：`agent-remnote --json todo add --rem "<rem_id>" --wait`
-- 把信息集中到一个地方（安全写入）：`agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md`
-- 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json import markdown --ref "page:Reading" --file ./summary.md`
+- 把信息集中到一个地方（安全写入）：`agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
+- 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
 
 ## 安装（用户）
 
@@ -124,8 +124,8 @@ agent-remnote plugin current --compact
 
 - 配置了 `apiBaseUrl` 之后，业务命令必须走宿主机 Host API。
 - 仍依赖本地 DB 或本地文件系统的命令会直接 fail fast，不再静默回落到本地读取。
-- 当前已支持远程模式的代表性命令包括 `search`、`queue wait`、`plugin current`、`rem outline`、`daily rem-id`。
-- 远程模式下写 Daily Note，优先使用 `import markdown --ref daily:today ...`。
+- 当前已支持远程模式的代表性命令包括 `search`、`queue wait`、`plugin current`、`rem outline`、`daily rem-id`、`daily write` 与 `rem children *`。
+- 远程模式下的结构化写入，使用 `daily write --markdown ...`、`rem children ...` 或 `apply --payload ...`。
 
 需要临时覆盖时仍可使用：
 
@@ -154,7 +154,7 @@ agent-remnote --json search --query "keyword" --timeout-ms 30000
 安全写入 + 进度查询：
 
 ```bash
-agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -165,14 +165,14 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ### 1) 研究总结 → 归档到 Reading 页面（Markdown 导入）
 
 ```bash
-agent-remnote --json import markdown --ref "page:Reading" --file ./summary.md --idempotency-key "reading:summary:2026-01-26"
+agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
 ### 2) Daily Notes 日记（追加 / 前插）
 
 ```bash
-agent-remnote --json daily write --md-file ./daily.md --create-if-missing --idempotency-key "daily:2026-01-26:journal"
+agent-remnote --json daily write --markdown @./daily.md --create-if-missing --idempotency-key "daily:2026-01-26:journal"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -180,39 +180,31 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 ```bash
 agent-remnote --json daily write --markdown $'- topic\n  - note' --wait
-cat <<'MD' | agent-remnote --json daily write --stdin --wait
+cat <<'MD' | agent-remnote --json daily write --markdown - --wait
 - topic
   - note
 MD
 ```
 
-护栏：如果 `--text` 的输入看起来像结构化 Markdown，CLI 会 fail-fast，并提示改用 `--markdown`、`--stdin` 或 `--md-file`。只有在你明确要保留字面 Markdown 时才用 `--force-text`。
+护栏：如果 `--text` 的输入看起来像结构化 Markdown，CLI 会 fail-fast，并提示改用 `--markdown`。只有在你明确要保留字面 Markdown 时才用 `--force-text`。
 
-### 3) 微信文章导入为大纲（可选）
-
-需要一个开启了 CDP 的 Chromium 浏览器（例如 Chrome 启动参数包含 `--remote-debugging-port=9222`）。
-
-```bash
-agent-remnote --json import wechat outline --url "<wechat_url>" --ref "page:Inbox" --cdp-port 9222 --idempotency-key "wechat:<id>"
-agent-remnote --json queue wait --txn "<txn_id>"
-```
-
-### 4) 多步依赖写入（`plan apply`）
+### 3) 多步依赖写入（`apply --payload`）
 
 创建 `plan.json`：
 
 ```json
 {
   "version": 1,
-  "steps": [
+  "kind": "actions",
+  "actions": [
     { "as": "idea", "action": "write.bullet", "input": { "parent_id": "id:<parentRemId>", "text": "First bullet" } },
-    { "action": "tag.add", "input": { "rem_id": "@idea", "tag_id": "id:<tagId>" } }
+    { "action": "rem.children.append", "input": { "rem_id": "@idea", "markdown": "- child note" } }
   ]
 }
 ```
 
 ```bash
-agent-remnote --json plan apply --payload @plan.json --idempotency-key "plan:demo:2026-01-26"
+agent-remnote --json apply --payload @plan.json --idempotency-key "plan:demo:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -241,7 +233,7 @@ agent-remnote --json search --query "keyword" --timeout-ms 30000
 写入永远不直接落到 `remnote.db`，而是走队列并由插件通过官方 SDK 执行。
 
 ```bash
-agent-remnote --json import markdown --ref "page:Inbox" --file ./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -251,7 +243,7 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 当内容很大时，把大量 Rem 直接插入到既有页面的根下既危险也难清理。
 
-`import markdown` 与 `daily write` 支持 **bundle 模式**：当输入很大（默认：≥80 行或 ≥5000 字符）时，会先创建一个“容器 Rem”，把导入内容写入容器子树；**容器 Rem 的文本即 bundle title**。
+`daily write` 支持 **bundle 模式**：当输入很大（默认：≥80 行或 ≥5000 字符）时，会先创建一个“容器 Rem”，把导入内容写入容器子树；**容器 Rem 的文本即 bundle title**。
 
 - 禁用 bundling：`--bulk never`
 - 强制 bundling：`--bulk always`
@@ -261,7 +253,7 @@ agent-remnote --json queue wait --txn "<txn_id>"
 示例：
 
 ```bash
-agent-remnote --json import markdown --ref "page:Reading" --file ./big.md \
+agent-remnote --json daily write --markdown @./big.md \
   --bundle-title "X thread：Remotion 工作流 — Remotion + 多个 skill 的一键成片流程；按 TTS 分段时长裁剪片段" \
   --idempotency-key "reading:x:2015245301603549328"
 agent-remnote --json queue wait --txn "<txn_id>"
@@ -295,11 +287,11 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 读取 UI 上下文（IDs）              | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
 | 解析今日 Daily Note 条目 ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
 | 解析指定日期 Daily Note 条目 ID    | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
-| 写入 Markdown 到页面               | `agent-remnote --json import markdown --ref "page:..." --file ./note.md`                                                                          |
-| 写入 Markdown（插入顶部）          | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --position 0`                                                             |
-| 写入 Markdown（staged 一次性插入） | `agent-remnote --json import markdown --ref "page:..." --file ./note.md --staged`                                                                 |
+| 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
+| 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
+| 替换某个 Rem 的直接子级            | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
-| 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --stdin --wait`                                                                                  |
+| 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
 | 创建 Rem                           | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
 | 移动 Rem                           | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
@@ -312,7 +304,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Table：创建表                      | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table：新增一行                    | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
 | 删除 Rem                           | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
-| 批量写入计划（多步依赖）           | `agent-remnote --json plan apply --payload @plan.json`                                                                                            |
+| 结构化多步写入                    | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | raw ops 入队（advanced）           | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
 | 等待完成                           | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
 | 队列统计                           | `agent-remnote --json queue stats`                                                                                                                |

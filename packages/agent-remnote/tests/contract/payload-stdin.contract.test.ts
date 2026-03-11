@@ -4,7 +4,7 @@ import { runCli } from '../helpers/runCli.js';
 
 describe('cli contract: --payload - stdin', () => {
   it('reads payload from stdin in dry-run mode', async () => {
-    const stdin = '[{"type":"create_rem","payload":{"fooBar":1}}]';
+    const stdin = '{"version":1,"kind":"ops","ops":[{"type":"create_rem","payload":{"fooBar":1}}]}';
 
     const res = await runCli(['--json', 'apply', '--dry-run', '--payload', '-'], { stdin });
 

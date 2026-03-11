@@ -20,12 +20,11 @@ import {
   collectUiContextPageUseCase,
   collectUiContextSnapshotUseCase,
   executeDbSearchUseCase,
-  executeImportMarkdownUseCase,
   executePluginSearchUseCase,
   executeQueueTxnUseCase,
   executeReadOutlineUseCase,
   executeTriggerSyncUseCase,
-  executeWriteOpsUseCase,
+  executeWriteApplyUseCase,
 } from '../../lib/hostApiUseCases.js';
 import { apiContainerBaseUrl, apiLocalBaseUrl } from '../../lib/apiUrls.js';
 import { AppConfig } from '../../services/AppConfig.js';
@@ -458,50 +457,13 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/write/ops') {
+      if (method === 'POST' && url.pathname === '/v1/write/apply') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
             await run(
-              executeWriteOpsUseCase({
+              executeWriteApplyUseCase({
                 raw: body,
-                priority: typeof body?.priority === 'number' ? body.priority : undefined,
-                clientId: typeof body?.clientId === 'string' ? body.clientId : undefined,
-                idempotencyKey: typeof body?.idempotencyKey === 'string' ? body.idempotencyKey : undefined,
-                meta: body?.meta,
-                notify: body?.notify !== false,
-                ensureDaemon: body?.ensureDaemon !== false,
-              }),
-            );
-          } catch (error) {
-            const cliError = new CliError({
-              code: 'INVALID_PAYLOAD',
-              message: 'Invalid JSON body',
-              exitCode: 2,
-              details: { error: String((error as any)?.message || error) },
-            });
-            sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
-          }
-        })();
-        return;
-      }
-
-      if (method === 'POST' && url.pathname === '/v1/write/markdown') {
-        void (async () => {
-          try {
-            const body = await Effect.runPromise(readJsonBody(req));
-            await run(
-              executeImportMarkdownUseCase({
-                parent: typeof body?.parent === 'string' ? body.parent : undefined,
-                ref: typeof body?.ref === 'string' ? body.ref : undefined,
-                markdown: String(body?.markdown ?? ''),
-                mode: body?.mode === 'indent' || body?.mode === 'native' ? body.mode : undefined,
-                indentSize: typeof body?.indentSize === 'number' ? body.indentSize : undefined,
-                position: typeof body?.position === 'number' ? body.position : undefined,
-                bulk:
-                  body?.bulk === 'auto' || body?.bulk === 'always' || body?.bulk === 'never' ? body.bulk : undefined,
-                bundleTitle: typeof body?.bundleTitle === 'string' ? body.bundleTitle : undefined,
-                staged: body?.staged === true,
                 priority: typeof body?.priority === 'number' ? body.priority : undefined,
                 clientId: typeof body?.clientId === 'string' ? body.clientId : undefined,
                 idempotencyKey: typeof body?.idempotencyKey === 'string' ? body.idempotencyKey : undefined,

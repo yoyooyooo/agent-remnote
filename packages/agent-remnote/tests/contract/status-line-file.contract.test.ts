@@ -17,6 +17,8 @@ describe('contract: statusLine file mode', () => {
       await fs.writeFile(
         payloadPath,
         JSON.stringify({
+          version: 1,
+          kind: 'ops',
           ops: [
             {
               type: 'replace_selection_with_markdown',

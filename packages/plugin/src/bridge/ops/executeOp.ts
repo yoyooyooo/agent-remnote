@@ -7,6 +7,7 @@ import { executeDailyNoteWrite } from './handlers/dailyNoteWrite';
 import {
   executeCreateSingleRemWithMarkdown,
   executeCreateTreeWithMarkdown,
+  executeReplaceChildrenWithMarkdown,
   executeReplaceSelectionWithMarkdown,
 } from './handlers/markdownOps';
 import {
@@ -84,6 +85,9 @@ export async function executeOp(plugin: ReactRNPlugin, op: OpDispatch): Promise<
         break;
       case 'replace_selection_with_markdown':
         result = await executeReplaceSelectionWithMarkdown(plugin, op);
+        break;
+      case 'replace_children_with_markdown':
+        result = await executeReplaceChildrenWithMarkdown(plugin, op);
         break;
       case 'create_link_rem':
         result = await executeCreateLinkRem(plugin, op);

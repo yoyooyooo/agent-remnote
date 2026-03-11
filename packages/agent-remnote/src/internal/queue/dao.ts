@@ -10,6 +10,7 @@ export type OpType =
   | 'create_single_rem_with_markdown'
   | 'create_tree_with_markdown'
   | 'replace_selection_with_markdown'
+  | 'replace_children_with_markdown'
   | 'create_link_rem'
   | 'create_table'
   | 'add_property'

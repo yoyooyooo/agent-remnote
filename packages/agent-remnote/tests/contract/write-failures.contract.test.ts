@@ -41,7 +41,7 @@ describe('cli contract: write failures are diagnosable', () => {
     const storeDb = path.join(tmpDir, 'store.sqlite');
 
     try {
-      const payload = JSON.stringify([{ type: 'delete_rem', payload: { remId: 'dummy' } }]);
+      const payload = JSON.stringify({ version: 1, kind: 'ops', ops: [{ type: 'delete_rem', payload: { remId: 'dummy' } }] });
 
       const res = await runCli(['--json', 'apply', '--payload', payload, '--no-ensure-daemon'], {
         env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, DAEMON_URL: 'ws://127.0.0.1:1/ws', REMNOTE_TMUX_REFRESH: '0' },

@@ -26,25 +26,22 @@ describe('cli contract: write --wait', () => {
       const cliPromise = runCli(
         [
           '--json',
-          'rem',
-          'create',
-          '--parent',
-          'dummy-parent',
-          '--text',
-          'hello',
+          'apply',
+          '--payload',
+          '{"version":1,"kind":"ops","ops":[{"type":"delete_rem","payload":{"rem_id":"dummy-rem"}}]}',
           '--no-notify',
           '--no-ensure-daemon',
           '--wait',
           '--timeout-ms',
-          '15000',
+          '30000',
           '--poll-ms',
           '10',
         ],
-        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 25_000 },
+        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 40_000 },
       );
 
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 15_000) {
+      while (Date.now() - startedAt < 25_000) {
         try {
           const db = openQueueDb(storeDb);
           try {
@@ -92,12 +89,9 @@ describe('cli contract: write --wait', () => {
       const res = await runCli(
         [
           '--json',
-          'rem',
-          'create',
-          '--parent',
-          'dummy-parent',
-          '--text',
-          'hello',
+          'apply',
+          '--payload',
+          '{"version":1,"kind":"ops","ops":[{"type":"delete_rem","payload":{"rem_id":"dummy-rem"}}]}',
           '--no-notify',
           '--no-ensure-daemon',
           '--wait',

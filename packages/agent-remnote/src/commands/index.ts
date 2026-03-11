@@ -8,11 +8,9 @@ import { doctorCommand } from './doctor.js';
 import { daemonCommand } from './daemon/index.js';
 import { dailyCommand } from './daily/index.js';
 import { dbCommand } from './db/index.js';
-import { importCommand } from './import/index.js';
 import { opsCommand } from './ops/index.js';
 import { applyCommand } from './apply.js';
 import { apiCommand } from './api/index.js';
-import { planCommand } from './plan/index.js';
 import { pluginCommand } from './plugin/index.js';
 import { powerupCommand } from './powerup/index.js';
 import { queryCommand } from './query.js';
@@ -142,8 +140,6 @@ export const rootCommand = Command.make('agent-remnote', {
     tagCommand,
     portalCommand,
     replaceCommand,
-    importCommand,
-    planCommand,
     dbCommand,
     configCommand,
     doctorCommand,

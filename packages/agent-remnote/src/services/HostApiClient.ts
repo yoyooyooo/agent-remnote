@@ -231,12 +231,7 @@ export interface HostApiClientService {
     readonly timeoutMs?: number | undefined;
     readonly ensureDaemon?: boolean | undefined;
   }) => Effect.Effect<any, CliError>;
-  readonly writeOps: (params: {
-    readonly baseUrl: string;
-    readonly body: unknown;
-    readonly timeoutMs?: number;
-  }) => Effect.Effect<any, CliError>;
-  readonly writeMarkdown: (params: {
+  readonly writeApply: (params: {
     readonly baseUrl: string;
     readonly body: unknown;
     readonly timeoutMs?: number;
@@ -336,10 +331,8 @@ export const HostApiClientLive = Layer.succeed(HostApiClient, {
   selection: ({ baseUrl, timeoutMs }) => requestJson({ baseUrl, path: '/v1/selection', method: 'GET', timeoutMs }),
   searchDb: ({ baseUrl, ...body }) => requestJson({ baseUrl, path: '/v1/search/db', method: 'POST', body }),
   searchPlugin: ({ baseUrl, ...body }) => requestJson({ baseUrl, path: '/v1/search/plugin', method: 'POST', body }),
-  writeOps: ({ baseUrl, body, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/write/ops', method: 'POST', body, timeoutMs }),
-  writeMarkdown: ({ baseUrl, body, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/write/markdown', method: 'POST', body, timeoutMs }),
+  writeApply: ({ baseUrl, body, timeoutMs }) =>
+    requestJson({ baseUrl, path: '/v1/write/apply', method: 'POST', body, timeoutMs }),
   readOutline: ({ baseUrl, body, timeoutMs }) =>
     requestJson({ baseUrl, path: '/v1/read/outline', method: 'POST', body, timeoutMs }),
   dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>

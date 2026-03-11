@@ -36,8 +36,8 @@ describe('cli contract: daily write trims boundary blank lines', () => {
     expect(parsed.data?.ops?.[0]?.payload?.text).toBeUndefined();
   });
 
-  it('supports markdown from stdin via --stdin (dry-run)', async () => {
-    const res = await runCli(['--json', 'daily', 'write', '--stdin', '--dry-run'], {
+  it('supports markdown from stdin via --markdown - (dry-run)', async () => {
+    const res = await runCli(['--json', 'daily', 'write', '--markdown', '-', '--dry-run'], {
       env: { REMNOTE_TMUX_REFRESH: '0' },
       stdin: '\n- root\n  - child\n\n',
       timeoutMs: 15_000,
@@ -80,7 +80,7 @@ describe('cli contract: daily write trims boundary blank lines', () => {
   });
 
   it('fails fast for --dry-run --wait before attempting stdin read', async () => {
-    const res = await runCli(['--json', 'daily', 'write', '--stdin', '--dry-run', '--wait'], {
+    const res = await runCli(['--json', 'daily', 'write', '--markdown', '-', '--dry-run', '--wait'], {
       env: { REMNOTE_TMUX_REFRESH: '0' },
       timeoutMs: 15_000,
     });
@@ -104,6 +104,6 @@ describe('cli contract: daily write trims boundary blank lines', () => {
 
     const parsed = JSON.parse(res.stdout.trim());
     expect(parsed.ok).toBe(false);
-    expect(parsed.error?.message ?? '').toContain('Choose only one of --text, --markdown, --md-file, or --stdin');
+    expect(parsed.error?.message ?? '').toContain('Choose only one of --text or --markdown');
   });
 });

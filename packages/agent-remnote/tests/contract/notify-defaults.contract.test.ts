@@ -79,7 +79,7 @@ describe('cli contract: default notify/ensure + sent=0 visibility', () => {
     try {
       const tmp = await mkdtemp(path.join(os.tmpdir(), 'agent-remnote-test-'));
       const storeDb = path.join(tmp, 'store.sqlite');
-      const payload = JSON.stringify([{ type: 'delete_rem', payload: { remId: 'dummy' } }]);
+      const payload = JSON.stringify({ version: 1, kind: 'ops', ops: [{ type: 'delete_rem', payload: { remId: 'dummy' } }] });
 
       const res = await runCli(['--json', 'apply', '--payload', payload], {
         env: { DAEMON_URL: ws.url, REMNOTE_STORE_DB: storeDb },
@@ -106,7 +106,7 @@ describe('cli contract: default notify/ensure + sent=0 visibility', () => {
     try {
       const tmp = await mkdtemp(path.join(os.tmpdir(), 'agent-remnote-test-'));
       const storeDb = path.join(tmp, 'store.sqlite');
-      const payload = JSON.stringify([{ type: 'delete_rem', payload: { remId: 'dummy' } }]);
+      const payload = JSON.stringify({ version: 1, kind: 'ops', ops: [{ type: 'delete_rem', payload: { remId: 'dummy' } }] });
 
       const res = await runCli(['apply', '--payload', payload], {
         env: { DAEMON_URL: ws.url, REMNOTE_STORE_DB: storeDb },

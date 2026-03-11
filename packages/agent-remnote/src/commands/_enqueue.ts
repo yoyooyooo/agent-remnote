@@ -119,7 +119,7 @@ function assertOpsNoOrphanCreates(ops: readonly EnqueueOpInput[]): void {
       details: { op_type: op.type },
       hint: [
         'Provide payload.parentId (or parent_id) for create-type ops',
-        'Example: agent-remnote import markdown --ref "page:demo" ...',
+        'Example: agent-remnote rem children append --rem "<parentRemId>" --markdown "- item"',
       ],
     });
   }

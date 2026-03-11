@@ -50,7 +50,11 @@
   - recommended for selection-only flows: `plugin selection current --compact`
 - `queue wait`
 - `apply`
-- `import markdown`
+- `rem children append`
+- `rem children prepend`
+- `rem children replace`
+- `rem children clear`
+- `daily write`
 
 入口：
 
@@ -88,15 +92,15 @@
 - `POST /v1/read/outline`
 - `POST /v1/search/db`
 - `POST /v1/search/plugin`
-- `POST /v1/write/ops`
-- `POST /v1/write/markdown`
+- `POST /v1/write/apply`
 - `POST /v1/queue/wait`
 - `GET /v1/queue/txns/:txnId`
 - `POST /v1/actions/trigger-sync`
 
 ## Host API write flows
 
-- Host API write routes reuse the same enqueue pipeline as the CLI.
+- Host API canonical write route reuses the same enqueue pipeline as the CLI.
+- The route accepts the same apply envelope used by `agent-remnote apply --payload`.
 - `ensureDaemon=true` means the request may invoke daemon lifecycle helpers before notifying the active worker.
 - The runtime must inject daemon runtime services used by enqueue helpers, including `DaemonFiles`, `Process`, and `SupervisorState`.
 - Missing daemon runtime services are considered a server bug and must not be silently ignored.

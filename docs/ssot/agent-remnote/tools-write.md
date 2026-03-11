@@ -12,8 +12,8 @@
 - Deep link：`remnote://w/<workspaceId>/<remId>` / `https://www.remnote.com/w/<workspaceId>/<remId>`；CLI 对所有 “RemId” 参数只提取 `<remId>`。
 
 ## 命令一览
-- `agent-remnote import markdown`：写 Markdown（树导入；支持 bundle；对应 `create_tree_with_markdown` 等）。
-- `agent-remnote daily write`：写入 Daily Note（支持 bundle；支持 `--markdown` / `--stdin` / `--md-file`；对应 `daily_note_write`）。
+- `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。
+- `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
 - `agent-remnote daily rem-id`：解析 Daily Note 条目 Rem ID（用于把结构化内容精准写到当天条目下，而不是容器页）。
 - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`；`rem text` 为 `set-text` 兼容别名）。
 - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
@@ -24,9 +24,7 @@
 - `agent-remnote table option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。
 - `agent-remnote powerup apply/remove/...`：Powerup(Tag) 视角的封装命令（常见场景：列 schema、给 Rem 打 Powerup Tag 并设置 properties；内部仍生成标准 ops 入队）。
 - `agent-remnote replace markdown/literal`：替换目标 Rem（`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids）。
-- `agent-remnote import wechat outline`：抓取 WeChat 文章并写入 RemNote（生成可导入的大纲/Markdown 树；最终仍走队列/插件执行链路）。
-- `agent-remnote plan apply`：入队一份批量写入计划（WritePlanV1；支持 `as/@alias` 多步依赖；write-first）。
-- `agent-remnote apply`：入队一批 raw ops（advanced/debug 入口；默认 notify/ensure-daemon）。
+- `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
 - `agent-remnote queue stats`：查看队列统计（pending/in_flight/dead/ready_txns；可选 `--include-conflicts` 追加冲突摘要）。
 - `agent-remnote queue conflicts`：输出 pending 冲突面报告（用于消费前风险判断与排障）。
 - `agent-remnote queue inspect`：查看指定事务/操作详情。
@@ -35,7 +33,7 @@
 
 ## Agent 工作流（write-first）
 
-- 默认直接执行写入（实体命令的动词子命令 / `apply` / `plan apply`），不再单独做“事前检查”；必要的校验与诊断内化在写入命令中。
+- 默认直接执行写入（实体命令的动词子命令 / `apply`），不再单独做“事前检查”；必要的校验与诊断内化在写入命令中。
 - 失败时返回稳定的 `error.code` + `hint`（英文），用于指导下一步修复（例如配置/队列 DB/引用解析/缺少 parent 等）。
 - 成功时返回 `txn_id/op_ids`，并附带 `nextActions`（英文命令）用于闭环验证（例如 `queue inspect` / `queue progress` / `daemon sync`）。
 - 需要“同一次调用闭环确认落库”时，优先使用写入命令自带的 `--wait/--timeout-ms/--poll-ms`；`queue wait` 仅作为诊断工具保留。
@@ -46,11 +44,13 @@
 - `--json`：stdout 单行 JSON envelope，stderr 必须为空；写入类命令成功时 `data.nextActions` 必须可执行且为英文命令。
 - `--ids`：仅在成功时输出 ids（逐行），stderr 必须为空；用于上游脚本/Agent 做最短链路的后续拼装。
 
-## apply（raw 入队，advanced/debug）
-- 入参（`--payload` 支持 `ops[]` 或 `{ ops, priority?, clientId?, idempotencyKey?, meta? }`）
-  - `ops: { type: string; payload: any; idempotencyKey?; maxAttempts?; deliverAfterMs? }[]`
-  - `priority?`/`clientId?`/`idempotencyKey?`/`meta?`
+## apply（统一写入入口）
+- 入参：`agent-remnote apply --payload <json|@file|->`
+- payload 顶层 envelope：
+  - `{"version":1,"kind":"actions","actions":[...]}`
+  - `{"version":1,"kind":"ops","ops":[...]}`
 - 默认行为：入队后触发一次同步（notify=true，ensure-daemon=true）；可用 `--no-notify` / `--no-ensure-daemon` 关闭。
+- `actions` 适用于 agent 友好的结构化写入；`ops` 适用于 advanced/debug。
 - 标准类型（部分示例）
   - rem 基础：`create_rem`/`create_portal`/`create_single_rem_with_markdown`/`create_tree_with_markdown`/`replace_selection_with_markdown`/`create_link_rem`/`update_text`/`move_rem`/`delete_rem`
   - 日常笔记：`daily_note_write`
@@ -93,13 +93,15 @@
       - 用途：避免把大量导入内容“直接插入到现有页面根下”。当 `bundle` 存在时，插件会先创建一个“容器 Rem”，并把 Markdown 导入到该容器之下；**容器 Rem 的文本即 bundle title**（若缺字段则自动降级）。
       - 语义：`position`（如提供）用于定位“容器 Rem”的插入位置；容器内部的导入不再二次应用 `position`。
       - 回执：result 会包含 `bundle.rem_id`（容器 Rem），并把顶层 `created_ids` 收敛为 `[bundle.rem_id]` 以便上游快速定位/回滚。
+  - `replace_children_with_markdown`（替换某个 Rem 的 direct children）
+    - `parent_id`（必填）：目标 Rem id
+    - `markdown`（必填，可为空字符串）：新 children 内容；空字符串表示清空 direct children
   - `daily_note_write`（写入 Daily Note；由插件侧定位当天 daily doc）
     - `markdown` / `text`：二选一（内容）
-    - CLI 层额外支持 `--stdin`（作为 `markdown` 输入）
     - `date` / `offset_days`：二选一（目标日期）
     - `prepend`（可选）：true 则插入到 daily doc 顶部
     - `bundle`（可选，同上）：当内容很大时建议启用；写入会先创建容器 Rem（容器文本为 bundle title），再把内容导入到容器下。
-    - `--text` 仅用于纯文本；若输入看起来像结构化 Markdown，CLI 必须 fail-fast 并提示改用 `--markdown` / `--stdin` / `--md-file`
+    - `--text` 仅用于纯文本；若输入看起来像结构化 Markdown，CLI 必须 fail-fast 并提示改用 `--markdown`
     - `--force-text` 允许显式保留字面 Markdown 文本
   - `replace_selection_with_markdown`（推荐替代“create + delete”的多 op 方案）
     - `markdown`：新内容
@@ -134,12 +136,13 @@ node scripts/remnote-set-text-verify-ref.mjs \
   --poll-ms 1000
 ```
 
-## plan apply（批量计划写入）
+## apply（actions：多步依赖写入）
 
-目标：让 Agent 用“一次调用”表达多步依赖写入；通过 `as/@alias` 避免手工传递真实 RemId，并由 daemon 在派发前用 `queue_id_map` 完成 temp id → remote id 替换。
+目标：让 Agent 用一次 `apply --payload` 表达多步依赖写入；通过 `as/@alias` 避免手工传递真实 RemId，并由 daemon 在派发前用 `queue_id_map` 完成 temp id → remote id 替换。
 
-- 入参：`agent-remnote plan apply --payload <json|@file|->`
-  - payload schema：`specs/012-batch-write-plan/contracts/plan-schema.md`（v1）
+- 入参：`agent-remnote apply --payload <json|@file|->`
+- actions envelope 示例：
+  - `{"version":1,"kind":"actions","actions":[...]}`
 - 输出：
   - enqueue-only 成功：`txn_id`、`op_ids[]`、`alias_map`（alias→`tmp:*`），并包含可执行英文 `nextActions[]`
   - `--ids`：逐行输出 ids（txn_id + op_ids），stderr 为空
@@ -155,7 +158,8 @@ node scripts/remnote-set-text-verify-ref.mjs \
 ```
 {
   "version": 1,
-  "steps": [
+  "kind": "actions",
+  "actions": [
     {
       "as": "idea",
       "action": "write.bullet",

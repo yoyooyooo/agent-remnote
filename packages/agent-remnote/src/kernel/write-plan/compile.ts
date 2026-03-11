@@ -121,6 +121,7 @@ const ACTIONS: Record<string, ActionSpec> = {
       if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
       if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
       if (typeof input.position === 'number') payload.position = input.position;
+      if (typeof input.staged === 'boolean') payload.staged = input.staged;
       if (input.prepared !== undefined) payload.prepared = input.prepared;
       if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
 
@@ -161,10 +162,103 @@ const ACTIONS: Record<string, ActionSpec> = {
       if (typeof input.date === 'string' || typeof input.date === 'number') payload.date = input.date;
       if (typeof input.offset_days === 'number') payload.offset_days = input.offset_days;
       if (typeof input.prepend === 'boolean') payload.prepend = input.prepend;
+      if (typeof input.create_if_missing === 'boolean') payload.create_if_missing = input.create_if_missing;
       if (typeof input.position === 'number') payload.position = input.position;
       if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
 
       return { ops: [{ type: 'daily_note_write', payload }] };
+    },
+  },
+
+  'rem.children.append': {
+    opType: 'create_tree_with_markdown',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const markdown = input.markdown;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('rem.children.append requires input.rem_id');
+      }
+      if (typeof markdown !== 'string') {
+        throw new Error('rem.children.append requires input.markdown');
+      }
+
+      const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
+      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
+      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
+      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
+      if (typeof input.staged === 'boolean') payload.staged = input.staged;
+      if (input.prepared !== undefined) payload.prepared = input.prepared;
+      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+
+      return { ops: [{ type: 'create_tree_with_markdown', payload }] };
+    },
+  },
+
+  'rem.children.prepend': {
+    opType: 'create_tree_with_markdown',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const markdown = input.markdown;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('rem.children.prepend requires input.rem_id');
+      }
+      if (typeof markdown !== 'string') {
+        throw new Error('rem.children.prepend requires input.markdown');
+      }
+
+      const payload: Record<string, unknown> = { parent_id: rem_id, markdown, position: 0 };
+      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
+      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
+      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
+      if (typeof input.staged === 'boolean') payload.staged = input.staged;
+      if (input.prepared !== undefined) payload.prepared = input.prepared;
+      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+
+      return { ops: [{ type: 'create_tree_with_markdown', payload }] };
+    },
+  },
+
+  'rem.children.replace': {
+    opType: 'replace_children_with_markdown',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const markdown = input.markdown;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('rem.children.replace requires input.rem_id');
+      }
+      if (typeof markdown !== 'string') {
+        throw new Error('rem.children.replace requires input.markdown');
+      }
+
+      const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
+      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
+      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
+      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
+      if (typeof input.staged === 'boolean') payload.staged = input.staged;
+      if (input.prepared !== undefined) payload.prepared = input.prepared;
+      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+
+      return { ops: [{ type: 'replace_children_with_markdown', payload }] };
+    },
+  },
+
+  'rem.children.clear': {
+    opType: 'replace_children_with_markdown',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('rem.children.clear requires input.rem_id');
+      }
+
+      return { ops: [{ type: 'replace_children_with_markdown', payload: { parent_id: rem_id, markdown: '' } }] };
     },
   },
 

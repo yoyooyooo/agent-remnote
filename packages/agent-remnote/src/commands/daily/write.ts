@@ -3,18 +3,14 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { formatDateWithPattern, getDateFormatting } from '../../adapters/core.js';
-
-import { AppConfig } from '../../services/AppConfig.js';
-import { CliError, isCliError } from '../../services/Errors.js';
-import { FileInput } from '../../services/FileInput.js';
-import { Payload } from '../../services/Payload.js';
-import { RemDb } from '../../services/RemDb.js';
-import { failInRemoteMode } from '../_remoteMode.js';
+import { compileApplyEnvelope, parseApplyEnvelope } from '../_applyEnvelope.js';
+import { readMarkdownTextFromInputSpec, writeFailure, writeSuccess } from '../_shared.js';
+import { executeWriteApplyUseCase } from '../../lib/hostApiUseCases.js';
 import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
-import { waitForTxn } from '../_waitTxn.js';
-import { writeFailure, writeSuccess } from '../_shared.js';
-import { enqueueOps, normalizeOp } from '../_enqueue.js';
+import { AppConfig } from '../../services/AppConfig.js';
+import { CliError } from '../../services/Errors.js';
+import { HostApiClient } from '../../services/HostApiClient.js';
+import { Payload } from '../../services/Payload.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -26,8 +22,6 @@ function readOptionalText(name: string) {
 
 const text = readOptionalText('text');
 const markdown = readOptionalText('markdown');
-const mdFile = readOptionalText('md-file');
-const stdin = Options.boolean('stdin');
 const date = readOptionalText('date');
 const offsetDays = Options.integer('offset-days').pipe(Options.optional, Options.map(optionToUndefined));
 const createIfMissing = Options.boolean('create-if-missing');
@@ -57,7 +51,7 @@ function parseDateInput(raw: string): Date {
   const trimmed = raw.trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
   const d = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(trimmed);
-  if (isNaN(d.getTime())) {
+  if (Number.isNaN(d.getTime())) {
     throw new CliError({ code: 'INVALID_ARGS', message: `Invalid date: ${raw}`, exitCode: 2 });
   }
   if (
@@ -69,18 +63,11 @@ function parseDateInput(raw: string): Date {
   return d;
 }
 
-function todayAtMidnight(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
 export const dailyWriteCommand = Command.make(
   'write',
   {
     text,
     markdown,
-    mdFile,
-    stdin,
     date,
     offsetDays,
     prepend: Options.boolean('prepend'),
@@ -104,8 +91,6 @@ export const dailyWriteCommand = Command.make(
   ({
     text,
     markdown: markdownInput,
-    mdFile,
-    stdin,
     date,
     offsetDays,
     prepend,
@@ -145,16 +130,12 @@ export const dailyWriteCommand = Command.make(
         );
       }
 
-      const inputModeCount =
-        Number(text !== undefined) +
-        Number(markdownInput !== undefined) +
-        Number(mdFile !== undefined) +
-        Number(stdin);
+      const inputModeCount = Number(text !== undefined) + Number(markdownInput !== undefined);
       if (inputModeCount > 1) {
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
-            message: 'Choose only one of --text, --markdown, --md-file, or --stdin',
+            message: 'Choose only one of --text or --markdown',
             exitCode: 2,
           }),
         );
@@ -163,7 +144,7 @@ export const dailyWriteCommand = Command.make(
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
-            message: 'You must provide one of --text, --markdown, --md-file, or --stdin',
+            message: 'You must provide one of --text or --markdown',
             exitCode: 2,
           }),
         );
@@ -183,30 +164,20 @@ export const dailyWriteCommand = Command.make(
         );
       }
 
-      const cfg = yield* AppConfig;
-      yield* failInRemoteMode({
-        command: 'daily write',
-        reason: 'this command still needs local Daily Note metadata before enqueueing writes',
-        hints: ['Use `import markdown --ref daily:today ...` in remote mode.'],
-      });
-      const fileInput = yield* FileInput;
       const payloadSvc = yield* Payload;
-      const remDb = yield* RemDb;
+      const cfg = yield* AppConfig;
+      const hostApi = yield* HostApiClient;
 
-      const markdownRaw = mdFile
-        ? yield* fileInput.readTextFromFileSpec({ spec: mdFile })
-        : stdin
-          ? yield* fileInput.readTextFromFileSpec({ spec: '-' })
-          : markdownInput;
-      const markdown = markdownRaw !== undefined ? trimBoundaryBlankLines(markdownRaw) : undefined;
+      const markdownRaw =
+        markdownInput !== undefined ? yield* readMarkdownTextFromInputSpec(markdownInput) : undefined;
+      const markdownValue = markdownRaw !== undefined ? trimBoundaryBlankLines(markdownRaw) : undefined;
       const textValue = text !== undefined ? trimBoundaryBlankLines(text) : undefined;
 
       if (textValue && !forceText && looksLikeStructuredMarkdown(textValue)) {
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
-            message:
-              'Input passed to --text looks like structured Markdown. Use --markdown, --stdin, or --md-file instead.',
+            message: 'Input passed to --text looks like structured Markdown. Use --markdown instead.',
             exitCode: 2,
           }),
         );
@@ -225,99 +196,92 @@ export const dailyWriteCommand = Command.make(
         );
       }
 
-      const target = date
-        ? yield* Effect.try({
-            try: () => parseDateInput(date),
-            catch: (e) =>
-              isCliError(e) ? e : new CliError({ code: 'INVALID_ARGS', message: 'Invalid date', exitCode: 2 }),
-          })
-        : (() => {
-            const target = todayAtMidnight();
-            target.setDate(target.getDate() + (offsetDays ?? 0));
-            return target;
-          })();
-
-      const dateString = yield* remDb
-        .withDb(cfg.remnoteDb, async (db) => {
-          const fmt = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
-          return formatDateWithPattern(target, fmt);
-        })
-        .pipe(
-          Effect.map((r) => r.result),
-          Effect.catchAll(() => Effect.succeed(undefined)),
-        );
-
+      const target = date ? parseDateInput(date) : null;
       const createIfMissingBool = noCreateIfMissing ? false : createIfMissing ? true : undefined;
-
-      const content = markdown ?? textValue ?? '';
-      const lines = typeof content === 'string' ? content.split('\n').length : 0;
-      const chars = typeof content === 'string' ? content.length : 0;
+      const content = markdownValue ?? textValue ?? '';
+      const lines = content.split('\n').length;
+      const chars = content.length;
       const shouldBundle =
         bulkMode === 'always' ||
         (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
 
-      const payload = {
-        ...(markdown !== undefined ? { markdown } : {}),
-        ...(textValue !== undefined ? { text: textValue } : {}),
-        ...(date ? { date: target.toISOString() } : { offsetDays: offsetDays ?? 0 }),
-        ...(dateString ? { dateString } : {}),
-        ...(prepend ? { prepend: true } : {}),
-        ...(createIfMissingBool !== undefined ? { createIfMissing: createIfMissingBool } : {}),
-        ...(shouldBundle
-          ? {
-              bundle: {
-                enabled: true,
-                title: bundleTitleValue || 'Imported (bundle)',
-              },
-            }
-          : {}),
+      const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
+      const body: Record<string, unknown> = {
+        version: 1,
+        kind: 'actions',
+        actions: [
+          {
+            action: 'daily.write',
+            input: {
+              ...(markdownValue !== undefined ? { markdown: markdownValue } : {}),
+              ...(textValue !== undefined ? { text: textValue } : {}),
+              ...(target ? { date: target.toISOString() } : { offset_days: offsetDays ?? 0 }),
+              ...(prepend ? { prepend: true } : {}),
+              ...(createIfMissingBool !== undefined ? { create_if_missing: createIfMissingBool } : {}),
+              ...(shouldBundle
+                ? {
+                    bundle: {
+                      enabled: true,
+                      title: bundleTitleValue || 'Imported (bundle)',
+                    },
+                  }
+                : {}),
+            },
+          },
+        ],
+        ...(priority !== undefined ? { priority } : {}),
+        ...(clientId ? { client_id: clientId } : {}),
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        ...(metaValue !== undefined ? { meta: metaValue } : {}),
+        notify,
+        ensure_daemon: ensureDaemon,
       };
 
-      const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'daily_note_write', payload }, payloadSvc.normalizeKeys),
-        catch: (e) =>
-          isCliError(e)
-            ? e
-            : new CliError({
-                code: 'INVALID_PAYLOAD',
-                message: 'Failed to generate op',
-                exitCode: 2,
-                details: { error: String((e as any)?.message || e) },
-              }),
-      });
-
-      const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
-
       if (dryRun) {
+        const parsed = yield* Effect.try({
+          try: () => parseApplyEnvelope(payloadSvc.normalizeKeys(body)),
+          catch: (error) =>
+            error instanceof Error && 'code' in error
+              ? (error as any)
+              : new Error(String((error as any)?.message || error)),
+        });
+        const compiled = yield* compileApplyEnvelope(parsed);
         yield* writeSuccess({
-          data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
-          md: `- dry_run: true\n- op: daily_note_write\n- date_string: ${dateString ?? ''}\n`,
+          data: {
+            dry_run: true,
+            kind: compiled.kind,
+            ops: compiled.ops,
+            alias_map: compiled.aliasMap,
+            meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
+          },
+          md: `- dry_run: true\n- action: daily.write\n`,
         });
         return;
       }
 
-      const data = yield* enqueueOps({
-        ops: [op],
-        priority,
-        clientId,
-        idempotencyKey,
-        meta: metaValue,
-        notify,
-        ensureDaemon,
-      });
-
-      const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
-      const out = waited ? ({ ...data, ...waited } as any) : data;
+      const out = cfg.apiBaseUrl
+        ? yield* Effect.gen(function* () {
+            const data = yield* hostApi.writeApply({ baseUrl: cfg.apiBaseUrl!, body });
+            if (!wait) return data;
+            const waited = yield* hostApi.queueWait({
+              baseUrl: cfg.apiBaseUrl!,
+              txnId: String(data.txn_id),
+              timeoutMs,
+              pollMs,
+            });
+            return { ...data, ...waited };
+          })
+        : yield* executeWriteApplyUseCase({ raw: body, wait, timeoutMs, pollMs });
 
       yield* writeSuccess({
         data: out,
-        ids: [data.txn_id, ...data.op_ids],
+        ids: [out.txn_id, ...(Array.isArray(out.op_ids) ? out.op_ids : [])],
         md: [
-          `- txn_id: ${data.txn_id}`,
-          `- op_ids: ${data.op_ids.length}`,
-          `- notified: ${data.notified}`,
-          `- sent: ${data.sent ?? ''}`,
-          ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          `- txn_id: ${out.txn_id}`,
+          `- op_ids: ${Array.isArray(out.op_ids) ? out.op_ids.length : ''}`,
+          `- notified: ${out.notified}`,
+          `- sent: ${out.sent ?? ''}`,
+          ...(out.status ? [`- status: ${out.status}`, `- elapsed_ms: ${out.elapsed_ms ?? ''}`] : []),
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
