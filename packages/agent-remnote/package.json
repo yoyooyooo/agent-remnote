@@ -1,6 +1,6 @@
 {
   "name": "agent-remnote",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "license": "MIT",
   "bin": {
     "agent-remnote": "./cli.js"
