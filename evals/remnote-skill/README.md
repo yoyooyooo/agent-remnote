@@ -1,6 +1,6 @@
-# remnote-workspace
+# remnote-skill evals
 
-This workspace keeps only the durable evaluation conclusions for the `skills/remnote` optimization work.
+This directory keeps only the durable evaluation conclusions for the `skills/remnote` optimization work.
 
 ## Kept artifacts
 
