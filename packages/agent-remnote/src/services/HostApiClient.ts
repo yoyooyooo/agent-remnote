@@ -43,7 +43,7 @@ function apiUnavailableError(params: {
 }
 
 function exitCodeFromRemoteCode(code: string | undefined): 1 | 2 {
-  return code === 'INVALID_ARGS' ? 2 : 1;
+  return code === 'INVALID_ARGS' || code === 'INVALID_PAYLOAD' || code === 'PAYLOAD_TOO_LARGE' ? 2 : 1;
 }
 
 function parseEnvelope(raw: unknown): JsonEnvelope {

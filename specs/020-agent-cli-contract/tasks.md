@@ -69,6 +69,6 @@
 
 - [ ] T060 Update SSoT write docs in `docs/ssot/agent-remnote/tools-write.md` and `docs/ssot/agent-remnote/http-api-contract.md`
 - [ ] T061 [P] Update public docs in `README.md`, `README.zh-CN.md`, and `README.local.md`
-- [ ] T062 [P] Update agent skill guidance in `/Users/yoyo/.codex/skills/remnote/SKILL.md`
+- [ ] T062 [P] Update agent skill guidance in the local Codex RemNote skill doc (for example, `~/.codex/skills/remnote/SKILL.md`)
 - [ ] T063 Add or update end-to-end remote-mode smoke coverage in `packages/agent-remnote/tests/contract/http-api-write-apply.contract.test.ts`
 - [ ] T064 Run and record final verification evidence in `specs/020-agent-cli-contract/acceptance.md`

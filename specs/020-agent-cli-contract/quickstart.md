@@ -2,7 +2,7 @@
 
 ## Goal
 
-Validate the canonical write contract and the new direct-children wrapper surface end to end.
+Validate the canonical write contract and the new direct-children wrapper surface end-to-end.
 
 ## 1. Structured apply through CLI
 

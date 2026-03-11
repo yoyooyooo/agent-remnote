@@ -56,21 +56,41 @@ function asObject(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
 }
 
+function hasOwn(obj: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function invalidFieldType(key: string, expected: string): CliError {
+  return new CliError({
+    code: 'INVALID_PAYLOAD',
+    message: `Invalid apply envelope: ${key} must be ${expected}`,
+    exitCode: 2,
+  });
+}
+
 function readOptionalString(obj: Record<string, unknown>, key: string): string | undefined {
   const value = obj[key];
-  if (typeof value !== 'string') return undefined;
+  if (!hasOwn(obj, key) || value === undefined) return undefined;
+  if (typeof value !== 'string') throw invalidFieldType(key, 'a non-empty string');
   const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
+  if (!trimmed) throw invalidFieldType(key, 'a non-empty string');
+  return trimmed;
 }
 
 function readOptionalNumber(obj: Record<string, unknown>, key: string): number | undefined {
   const value = obj[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  if (!hasOwn(obj, key) || value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw invalidFieldType(key, 'a finite number');
+  }
+  return value;
 }
 
 function readOptionalBoolean(obj: Record<string, unknown>, key: string): boolean | undefined {
   const value = obj[key];
-  return typeof value === 'boolean' ? value : undefined;
+  if (!hasOwn(obj, key) || value === undefined) return undefined;
+  if (typeof value !== 'boolean') throw invalidFieldType(key, 'a boolean');
+  return value;
 }
 
 export function parseApplyEnvelope(raw: unknown): ParsedApplyEnvelope {

@@ -681,6 +681,7 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
   if (!parentRem) return { ok: false, fatal: true, error: `Rem not found: ${parentId}` };
 
   const oldChildIds = getOrderedChildIds(parentRem);
+  const oldChildIdSet = new Set(oldChildIds);
   const md = String(markdown ?? '');
   let createdIds: string[] = [];
 
@@ -712,6 +713,12 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
     createdIds = Array.isArray(result?.created_ids)
       ? result.created_ids.filter((value: any) => typeof value === 'string' && value.trim()).map((value: string) => value.trim())
       : [];
+    if (createdIds.length === 0) {
+      try {
+        const latestParent: any = await plugin.rem.findOne(parentId);
+        createdIds = getOrderedChildIds(latestParent).filter((id) => !oldChildIdSet.has(id));
+      } catch {}
+    }
   }
 
   if (oldChildIds.length === 0) {
@@ -752,11 +759,25 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
         }
       } catch {}
       try {
-        const backupRem: any = await plugin.rem.findOne(backupRemId);
-        if (backupRem) await backupRem.remove();
+        const stillInBackup: string[] = [];
+        for (const id of oldChildIds) {
+          try {
+            const rem: any = await plugin.rem.findOne(id);
+            if (rem && getParentIdOfRem(rem) === backupRemId) stillInBackup.push(id);
+          } catch {}
+        }
+        if (stillInBackup.length === 0) {
+          const backupRem: any = await plugin.rem.findOne(backupRemId);
+          if (backupRem) await backupRem.remove();
+        }
       } catch {}
     }
-    return { ok: false, fatal: true, error: `Failed to move old children to backup: ${String(e?.message || e)}` };
+    return {
+      ok: false,
+      fatal: true,
+      error: `Failed to move old children to backup: ${String(e?.message || e)}`,
+      backup_rem_id: backupRemId,
+    };
   }
 
   let backupDeleted = false;

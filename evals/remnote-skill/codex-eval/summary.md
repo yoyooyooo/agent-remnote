@@ -41,7 +41,7 @@ Codex at medium effort can still over-explore and self-check help text, but with
 The highest-value fix was the added rule:
 
 - if the next step depends on a newly created node, do not write first and then recover the id with `search`
-- go straight to `apply` with aliasing
+- go straight to `apply --payload` with aliasing
 
 ## Conclusion
 
@@ -49,5 +49,5 @@ For Codex, the current skill is in a good state:
 
 - shortest-path routing works for the highest-value cases
 - `replace` is now promoted correctly
-- `apply` is only used when there is a real dependency chain
-- default no-wait behavior is preserved unless the prompt explicitly asks for confirmation
+- `apply --payload` is only used when there is a real dependency chain
+- default no-wait behavior is preserved unless the prompt explicitly asks for confirmation or the next step depends on completion

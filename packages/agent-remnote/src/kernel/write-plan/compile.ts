@@ -78,6 +78,17 @@ function resolveAliasRefsInValue(value: unknown, aliasMap: Readonly<Record<Alias
   return value;
 }
 
+function buildMarkdownPayloadFields(input: Record<string, unknown>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
+  if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
+  if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
+  if (typeof input.staged === 'boolean') payload.staged = input.staged;
+  if (input.prepared !== undefined) payload.prepared = input.prepared;
+  if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+  return payload;
+}
+
 const ACTIONS: Record<string, ActionSpec> = {
   'write.bullet': {
     opType: 'create_rem',
@@ -117,13 +128,8 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
 
       const payload: Record<string, unknown> = { parent_id, markdown };
-      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
-      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
-      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
+      Object.assign(payload, buildMarkdownPayloadFields(input));
       if (typeof input.position === 'number') payload.position = input.position;
-      if (typeof input.staged === 'boolean') payload.staged = input.staged;
-      if (input.prepared !== undefined) payload.prepared = input.prepared;
-      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
 
       return { ops: [{ type: 'create_tree_with_markdown', payload }] };
     },
@@ -185,12 +191,7 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
 
       const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
-      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
-      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
-      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
-      if (typeof input.staged === 'boolean') payload.staged = input.staged;
-      if (input.prepared !== undefined) payload.prepared = input.prepared;
-      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+      Object.assign(payload, buildMarkdownPayloadFields(input));
 
       return { ops: [{ type: 'create_tree_with_markdown', payload }] };
     },
@@ -211,12 +212,7 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
 
       const payload: Record<string, unknown> = { parent_id: rem_id, markdown, position: 0 };
-      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
-      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
-      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
-      if (typeof input.staged === 'boolean') payload.staged = input.staged;
-      if (input.prepared !== undefined) payload.prepared = input.prepared;
-      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+      Object.assign(payload, buildMarkdownPayloadFields(input));
 
       return { ops: [{ type: 'create_tree_with_markdown', payload }] };
     },
@@ -237,12 +233,7 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
 
       const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
-      if (typeof input.indent_mode === 'boolean') payload.indent_mode = input.indent_mode;
-      if (typeof input.indent_size === 'number') payload.indent_size = input.indent_size;
-      if (typeof input.parse_mode === 'string') payload.parse_mode = input.parse_mode;
-      if (typeof input.staged === 'boolean') payload.staged = input.staged;
-      if (input.prepared !== undefined) payload.prepared = input.prepared;
-      if (input.bundle && typeof input.bundle === 'object') payload.bundle = input.bundle;
+      Object.assign(payload, buildMarkdownPayloadFields(input));
 
       return { ops: [{ type: 'replace_children_with_markdown', payload }] };
     },

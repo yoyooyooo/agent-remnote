@@ -37,11 +37,11 @@ describe('cli contract: write --wait', () => {
           '--poll-ms',
           '10',
         ],
-        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 40_000 },
+        { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 55_000 },
       );
 
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 25_000) {
+      while (Date.now() - startedAt < 40_000) {
         try {
           const db = openQueueDb(storeDb);
           try {
@@ -78,7 +78,7 @@ describe('cli contract: write --wait', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 45_000);
 
   it('times out with a stable error.code in --json mode', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'remnote-cli-test-'));

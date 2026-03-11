@@ -6,6 +6,12 @@
 agent-remnote apply --payload <json|@file|->
 ```
 
+Optional completion confirmation:
+
+```bash
+agent-remnote apply --payload <json|@file|-> --wait --timeout-ms <ms> --poll-ms <ms>
+```
+
 ### Canonical Envelope
 
 ```json
@@ -144,14 +150,22 @@ MD
   "kind": "ops",
   "ops": [
     {
-      "type": "delete_rem",
+      "type": "create_rem",
       "payload": {
-        "rem_id": "abc"
+        "parent_id": "demo-parent-id",
+        "text": "demo content"
       }
     }
   ]
 }
 ```
+
+## `apply --wait`
+
+- Default behavior is enqueue-only.
+- `--wait` blocks until the transaction reaches a terminal state.
+- `--timeout-ms` and `--poll-ms` are valid only with `--wait`.
+- Timeout and terminal-state failures use stable machine-readable error codes.
 
 ## Removed Public Commands
 
@@ -164,6 +178,6 @@ The following names are removed from the public CLI contract:
 
 ## Fail-Fast Expectations
 
-- Markdown-taking commands fail with `INVALID_ARGS` when `--markdown` is missing.
+- Commands that require markdown input only fail with `INVALID_ARGS` when `--markdown` is missing (for example, commands that accept only `--markdown` and do not also accept `--text`).
 - `--markdown -` fails with a stable input error when stdin is not piped.
 - Removed command names fail fast instead of delegating to a compatibility path.

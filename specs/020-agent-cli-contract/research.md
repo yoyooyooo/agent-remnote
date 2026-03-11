@@ -56,7 +56,7 @@ Spec: `specs/020-agent-cli-contract/spec.md`
 
 ### Chosen
 
-- Replace the dual write routes with one canonical route, planned as `POST /v1/write/apply`.
+- Replace the dual write routes with one canonical route, which is `POST /v1/write/apply`.
 - The route accepts the same apply envelope used by CLI.
 
 ### Rationale

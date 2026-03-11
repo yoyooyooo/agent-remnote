@@ -144,6 +144,9 @@ As a maintainer, I want obsolete entrypoints removed once the new contract is de
 - **FR-018**: Remote-mode high-level commands in scope MUST compile to the canonical apply envelope and send that envelope through the canonical Host API write route.
 - **FR-019**: System MUST remove the Markdown-specific Host API write route from the supported public API surface and synchronized documentation.
 - **FR-020**: System MUST update remote-mode guidance so commands formerly routed through `import markdown` now route through the new high-level wrappers or canonical apply contract.
+- **FR-021**: `apply` MUST support `--wait` so callers can block until the txn reaches a terminal state.
+- **FR-022**: When `--wait` is enabled, CLI and Host API MUST expose aligned timeout and polling controls (`--timeout-ms` / `timeoutMs`, `--poll-ms` / `pollMs`) in milliseconds.
+- **FR-023**: `apply --wait` timeout and failure responses MUST be deterministic for both CLI and Host API callers, including stable exit/error codes and queue-wait style terminal-state reporting.
 
 ### Non-Functional Requirements (Performance & Diagnosability)
 
@@ -171,3 +174,4 @@ As a maintainer, I want obsolete entrypoints removed once the new contract is de
 - **SC-004**: At least one structured `actions` example and one raw `ops` example can be expressed through the same `apply --payload` entry in docs and contract tests.
 - **SC-005**: Removed write entrypoints are absent from synchronized docs and fail fast when invoked, with no hidden compatibility path.
 - **SC-006**: Host API docs expose one canonical write route for both `actions` and `ops`, and no longer expose a separate Markdown write route.
+- **SC-007**: `apply --wait` is documented and contract-tested with aligned CLI and Host API timeout/poll semantics.
