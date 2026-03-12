@@ -10,7 +10,7 @@ import { remoteModeUnsupportedError } from '../commands/_remoteMode.js';
 import { tryParseRemnoteLink } from '../lib/remnote.js';
 
 export interface RefResolverService {
-  readonly resolve: (ref: string) => Effect.Effect<string, CliError, AppConfig>;
+  readonly resolve: (ref: string, options?: { readonly dbPath?: string | undefined }) => Effect.Effect<string, CliError, AppConfig>;
 }
 
 export class RefResolver extends Context.Tag('RefResolver')<RefResolver, RefResolverService>() {}
@@ -89,7 +89,7 @@ function parseDailyOffset(value: string): number {
 }
 
 export const RefResolverLive = Layer.succeed(RefResolver, {
-  resolve: (ref) =>
+  resolve: (ref, options) =>
     Effect.gen(function* () {
       const cfg = yield* AppConfig;
       const parsed = yield* Effect.try({
@@ -140,7 +140,7 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
         try: async () =>
           await executeSearchRemOverview({
             ...(queryInput as any),
-            dbPath: cfg.remnoteDb,
+            dbPath: options?.dbPath ?? cfg.remnoteDb,
             limit: 1,
             preferExact: true,
             exactFirstSingle: true,

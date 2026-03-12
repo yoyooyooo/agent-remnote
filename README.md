@@ -108,6 +108,8 @@ Recommended one-time config for any remote caller:
 }
 ```
 
+If you expose `apiBaseUrl` outside the host, put it behind an explicit auth boundary first. Sensitive write routes such as `POST /v1/write/apply` are intended for trusted callers only.
+
 Or write it through the CLI:
 
 ```bash

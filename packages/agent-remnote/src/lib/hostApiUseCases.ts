@@ -11,6 +11,7 @@ import { loadBridgeSelectionSnapshot, requireOkRemSelection } from '../commands/
 import { loadBridgeUiContextSnapshot, requireOkUiContext } from '../commands/read/uiContext/_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../commands/_applyEnvelope.js';
 import { enqueueOps, normalizeOp } from '../commands/_enqueue.js';
+import { validateOptionMutationOps } from '../commands/write/_optionRuntimeGuard.js';
 import { waitForTxn } from '../commands/_waitTxn.js';
 import { WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from '../commands/ws/_shared.js';
 import { AppConfig } from '../services/AppConfig.js';
@@ -155,13 +156,15 @@ export function executeReadOutlineUseCase(params: {
       );
     }
 
-    const resolvedId = params.ref ? yield* refs.resolve(params.ref) : params.id;
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({ ref: params.ref });
+    const resolvedId = params.ref
+      ? yield* refs.resolve(params.ref, { dbPath: cfg.remnoteDb ?? workspace?.dbPath })
+      : params.id;
     if (!resolvedId) {
       return yield* Effect.fail(
         new CliError({ code: 'INVALID_ARGS', message: 'You must provide --id or --ref', exitCode: 2 }),
       );
     }
-    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({ ref: params.ref });
 
     return yield* Effect.tryPromise({
       try: async () =>
@@ -244,7 +247,7 @@ export function executeDailyRemIdUseCase(params: {
     } else {
       const offset = params.offsetDays ?? 0;
       ref = `daily:${offset}`;
-      remId = yield* refs.resolve(ref);
+      remId = yield* refs.resolve(ref, { dbPath });
       const target = todayAtMidnight();
       target.setDate(target.getDate() + offset);
       dateString = yield* remDb
@@ -273,8 +276,9 @@ export function executeWriteApplyUseCase(params: {
   readonly wait?: boolean | undefined;
   readonly timeoutMs?: number | undefined;
   readonly pollMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | Queue | Payload | WsClient | RefResolver | any> {
+}): Effect.Effect<any, CliError, AppConfig | Queue | Payload | WsClient | RefResolver | RemDb | any> {
   return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
     const payloadSvc = yield* Payload;
 
     const parsed = yield* Effect.try({
@@ -290,6 +294,7 @@ export function executeWriteApplyUseCase(params: {
     });
 
     const compiled = yield* compileApplyEnvelope(parsed);
+    yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
     if (compiled.ops.length > 500) {
       return yield* Effect.fail(
         new CliError({
@@ -340,6 +345,7 @@ export function executeImportMarkdownUseCase(params: {
   readonly pollMs?: number | undefined;
 }): Effect.Effect<any, CliError, AppConfig | Payload | RefResolver | Queue | WsClient | any> {
   return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
     const payloadSvc = yield* Payload;
 
     if (params.parent && params.ref) {
@@ -373,10 +379,11 @@ export function executeImportMarkdownUseCase(params: {
       );
     }
 
+    const workspace = cfg.remnoteDb ? undefined : params.ref ? yield* requireResolvedWorkspace({ ref: params.ref }) : undefined;
     const parentId = params.ref
       ? yield* Effect.gen(function* () {
           const refs = yield* RefResolver;
-          return yield* refs.resolve(params.ref!);
+          return yield* refs.resolve(params.ref!, { dbPath: cfg.remnoteDb ?? workspace?.dbPath });
         })
       : params.parent!;
 
@@ -492,16 +499,20 @@ export function collectApiStatusUseCase(params: {
   readonly startedAt: number;
 }): Effect.Effect<any, CliError, AppConfig | WsClient | Queue | WorkspaceBindings> {
   return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
     const health = yield* collectApiHealthUseCase(params);
     const uiContext = loadBridgeUiContextSnapshot({ stateFile: undefined, staleMs: undefined, connId: undefined });
     const selection = loadBridgeSelectionSnapshot({ stateFile: undefined, staleMs: undefined, connId: undefined });
     const workspaceResolution = yield* resolveWorkspaceSnapshot({});
     const pluginRpcReady = health.daemon.healthy === true && typeof health.activeWorkerConnId === 'string' && health.activeWorkerConnId.length > 0;
     const uiSessionReady = uiContext.status === 'ok' || selection.status === 'ok';
-    const dbReadReady = workspaceResolution.resolved === true;
+    const effectiveDbPath = workspaceResolution.dbPath ?? cfg.remnoteDb ?? null;
+    const dbReadReady = workspaceResolution.resolved === true || !!cfg.remnoteDb;
     const queueReady = health.queue?.available === true;
     const writeReady = queueReady && pluginRpcReady;
-    const bindingSource = workspaceResolution.bindingSource ?? (workspaceResolution.source === 'unresolved' ? undefined : workspaceResolution.source);
+    const bindingSource =
+      workspaceResolution.bindingSource ??
+      (cfg.remnoteDb ? 'config' : workspaceResolution.source === 'unresolved' ? undefined : workspaceResolution.source);
 
     return {
       ...health,
@@ -514,9 +525,9 @@ export function collectApiStatusUseCase(params: {
       workspace: {
         resolved: workspaceResolution.resolved,
         currentWorkspaceId: workspaceResolution.workspaceId ?? null,
-        currentDbPath: workspaceResolution.dbPath ?? null,
+        currentDbPath: effectiveDbPath,
         bindingSource: bindingSource ?? null,
-        resolutionSource: workspaceResolution.source,
+        resolutionSource: cfg.remnoteDb && workspaceResolution.resolved !== true ? 'config' : workspaceResolution.source,
         candidateWorkspaces: workspaceResolution.candidates,
         reasons: workspaceResolution.reasons,
       },

@@ -163,4 +163,49 @@ describe('api status capabilities (unit)', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('treats explicit remnoteDb config as db_read_ready even without a resolved workspace', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-api-status-config-db-'));
+    const tmpHome = path.join(tmpDir, 'home');
+    const storeDbPath = path.join(tmpDir, 'store.sqlite');
+    const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
+    const explicitDbPath = path.join(tmpDir, 'explicit-remnote.db');
+    const previousHome = process.env.HOME;
+
+    try {
+      process.env.HOME = tmpHome;
+      await touchDbFile(explicitDbPath);
+      await writeWsState(wsStateFilePath, { updatedAt: Date.now(), clients: [] });
+
+      const layer = Layer.mergeAll(
+        Layer.succeed(AppConfig, { ...makeConfig(tmpHome, storeDbPath, wsStateFilePath), remnoteDb: explicitDbPath }),
+        WorkspaceBindingsLive,
+        Layer.succeed(WsClient, {
+          health: () => Effect.succeed({ url: 'ws://127.0.0.1:6789/ws', rtt_ms: 1 }),
+          queryClients: () => Effect.succeed({ clients: [], activeWorkerConnId: undefined }),
+        } as any),
+        Layer.succeed(Queue, {
+          stats: () => Effect.succeed({ pending: 0, in_flight: 0 }),
+        } as any),
+      );
+
+      const data = await Effect.runPromise(
+        collectApiStatusUseCase({
+          pid: 123,
+          host: '127.0.0.1',
+          port: 3000,
+          basePath: '/v1',
+          startedAt: 1_000,
+        }).pipe(Effect.provide(layer)),
+      );
+
+      expect(data.capabilities.db_read_ready).toBe(true);
+      expect(data.workspace.currentDbPath).toBe(explicitDbPath);
+      expect(data.workspace.bindingSource).toBe('config');
+      expect(data.workspace.resolutionSource).toBe('config');
+    } finally {
+      process.env.HOME = previousHome;
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -26,7 +26,7 @@ import {
   executeTriggerSyncUseCase,
   executeWriteApplyUseCase,
 } from '../../lib/hostApiUseCases.js';
-import { apiContainerBaseUrl, apiLocalBaseUrl } from '../../lib/apiUrls.js';
+import { apiContainerBaseUrl, apiLocalBaseUrl, normalizeApiBasePath } from '../../lib/apiUrls.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
@@ -152,7 +152,7 @@ export function runHttpApiRuntime(params?: {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const runtimeCfg = { ...cfg, apiBaseUrl: undefined };
-    const basePath = cfg.apiBasePath ?? '/v1';
+    const basePath = normalizeApiBasePath(cfg.apiBasePath ?? '/v1');
     const apiFiles = yield* ApiDaemonFiles;
     const daemonFiles = yield* DaemonFiles;
     const ws = yield* WsClient;

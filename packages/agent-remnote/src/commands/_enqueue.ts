@@ -89,7 +89,7 @@ function assertPropertyTypeRuntimeSupported(canonicalType: string, payload: any)
     assertTypedPropertyCreationSupported({
       scopeLabel: 'generic',
       type: typeof payload?.type === 'string' ? payload.type : undefined,
-      hasOptions: Array.isArray(payload?.options) ? payload.options.length > 0 : false,
+      hasOptions: Array.isArray(payload?.options),
     });
   }
 }

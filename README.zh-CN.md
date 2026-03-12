@@ -108,6 +108,8 @@ curl http://127.0.0.1:3000/v1/health
 }
 ```
 
+如果要把 `apiBaseUrl` 暴露到宿主机之外，先放到显式鉴权边界之后。像 `POST /v1/write/apply` 这样的写端点默认只面向受信调用方。
+
 也可以直接用 CLI 写入：
 
 ```bash

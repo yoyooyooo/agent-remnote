@@ -263,6 +263,7 @@ function loadCellsForRows(
     if (!propertyId) continue;
 
     const prop = ctx.propertiesById.get(propertyId);
+    if (!prop) continue;
     const kind = String(prop?.kind ?? 'unknown');
     const propertyName = String(prop?.name ?? propertyId);
 
@@ -359,7 +360,7 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
 
     for (const optionRow of optionRows) {
       const optionDoc = safeJsonParse<Record<string, unknown>>(optionRow.doc);
-      if (!optionDoc || typeof optionDoc !== 'object') continue;
+      if (!isOptionDoc(optionDoc, optionRow.rawOptionType, propertyMarkerIds)) continue;
       const optionSummary = summarizeKey(optionDoc?.key, db, { expand: false, maxDepth: 0 });
       const pdRaw = optionDoc?.pd;
       const pdObject =
@@ -421,6 +422,21 @@ function isPropertyDoc(doc: Record<string, unknown> | null, propertyMarkerIds: R
   }
 
   return false;
+}
+
+function isOptionDoc(
+  doc: Record<string, unknown> | null,
+  rawOptionType: unknown,
+  propertyMarkerIds: ReadonlySet<string>,
+): boolean {
+  if (!doc || typeof doc !== 'object') return false;
+  if (isPropertyDoc(doc, propertyMarkerIds)) return false;
+  if ((doc as any).tc === true) return false;
+  if (Array.isArray((doc as any).value)) return false;
+  const key = (doc as any).key;
+  if (!Array.isArray(key) || key.length === 0) return false;
+  if (typeof rawOptionType === 'string' && rawOptionType.trim()) return true;
+  return true;
 }
 
 function inferPropertyKind(params: {

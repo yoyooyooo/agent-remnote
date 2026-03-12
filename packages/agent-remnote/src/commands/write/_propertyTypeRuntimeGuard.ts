@@ -6,7 +6,7 @@ function propertyTypeCapabilityHint(scopeLabel: string): readonly string[] {
   return [
     `Create a plain ${scopeLabel} property without --type/--options if you only need the column shell.`,
     'Configure property type manually in the RemNote UI when you need select/number/date/checkbox behavior.',
-    'table option add/remove still works for properties that already have a select or multi_select type.',
+    'If a property is already select-like, option mutation must run against the host/local RemNote DB rather than a caller-side remote mirror.',
   ];
 }
 

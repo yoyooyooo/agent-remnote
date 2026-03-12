@@ -2,7 +2,9 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
+import { AppConfig } from '../../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../../services/Errors.js';
+import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
@@ -49,8 +51,8 @@ export const writePowerupOptionRemoveCommand = Command.make(
         );
       }
 
-      yield* ensureOptionMutationSupportedForOption({ scopeLabel: 'powerup', optionId: option });
-
+      const cfg = yield* AppConfig;
+      const hostApi = yield* HostApiClient;
       const payloadSvc = yield* Payload;
 
       const op = yield* Effect.try({
@@ -67,6 +69,56 @@ export const writePowerupOptionRemoveCommand = Command.make(
       });
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
+
+      if (cfg.apiBaseUrl) {
+        if (dryRun) {
+          yield* writeSuccess({
+            data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
+            md: `- dry_run: true\n- op: remove_option\n- option_id: ${option}\n`,
+          });
+          return;
+        }
+
+        const data = yield* hostApi.writeApply({
+          baseUrl: cfg.apiBaseUrl,
+          body: {
+            version: 1,
+            kind: 'ops',
+            ops: [op],
+            priority,
+            clientId,
+            idempotencyKey,
+            meta: metaValue,
+            notify,
+            ensureDaemon,
+          },
+        });
+
+        const waited = wait
+          ? yield* hostApi.queueWait({
+              baseUrl: cfg.apiBaseUrl,
+              txnId: String(data.txn_id),
+              timeoutMs,
+              pollMs,
+            })
+          : null;
+        const out = waited ? ({ ...data, ...waited } as any) : data;
+
+        yield* writeSuccess({
+          data: out,
+          ids: [data.txn_id, ...data.op_ids],
+          md: [
+            `- txn_id: ${data.txn_id}`,
+            `- op_ids: ${data.op_ids.length}`,
+            `- notified: ${data.notified}`,
+            `- sent: ${data.sent ?? ''}`,
+            ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          ].join('\n'),
+        });
+        return;
+      }
+
+      yield* ensureOptionMutationSupportedForOption({ scopeLabel: 'powerup', optionId: option });
 
       if (dryRun) {
         yield* writeSuccess({
