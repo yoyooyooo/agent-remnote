@@ -106,18 +106,18 @@ describe('cli contract: table show current property shape', () => {
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
 
-      const env = parseJsonLine(res.stdout);
-      expect(env.ok).toBe(true);
-      expect(env.data.propertyCount).toBe(1);
-      expect(env.data.properties[0].id).toBe(propertyId);
-      expect(env.data.properties[0].name).toBe('Status');
-      expect(env.data.properties[0].kind).toBe('select');
-      expect(env.data.properties[0].options.map((item: any) => item.id)).toEqual([optionTodoId, optionDoneId]);
-      expect(env.data.properties[0].options.map((item: any) => item.name)).toEqual(['Todo', 'Done']);
-      expect(env.data.rowCount).toBe(1);
-      expect(env.data.rows[0].id).toBe(rowId);
-      expect(env.data.rows[0].cells[propertyId].optionIds).toEqual([optionTodoId]);
-      expect(env.data.rows[0].cells[propertyId].optionNames).toEqual(['Todo']);
+      const result = parseJsonLine(res.stdout);
+      expect(result.ok).toBe(true);
+      expect(result.data.propertyCount).toBe(1);
+      expect(result.data.properties[0].id).toBe(propertyId);
+      expect(result.data.properties[0].name).toBe('Status');
+      expect(result.data.properties[0].kind).toBe('select');
+      expect(result.data.properties[0].options.map((item: any) => item.id)).toEqual([optionTodoId, optionDoneId]);
+      expect(result.data.properties[0].options.map((item: any) => item.name)).toEqual(['Todo', 'Done']);
+      expect(result.data.rowCount).toBe(1);
+      expect(result.data.rows[0].id).toBe(rowId);
+      expect(result.data.rows[0].cells[propertyId].optionIds).toEqual([optionTodoId]);
+      expect(result.data.rows[0].cells[propertyId].optionNames).toEqual(['Todo']);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }

@@ -7,51 +7,10 @@ import { promises as fs } from 'node:fs';
 
 import { collectApiStatusUseCase } from '../../src/lib/hostApiUseCases.js';
 import { AppConfig } from '../../src/services/AppConfig.js';
-import type { ResolvedConfig } from '../../src/services/Config.js';
 import { Queue } from '../../src/services/Queue.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
-
-function makeConfig(tmpHome: string, storeDbPath: string, wsStateFilePath: string): ResolvedConfig {
-  return {
-    format: 'json',
-    quiet: true,
-    debug: false,
-    configFile: path.join(tmpHome, '.agent-remnote', 'config.json'),
-    remnoteDb: undefined,
-    storeDb: storeDbPath,
-    wsUrl: 'ws://127.0.0.1:6789/ws',
-    wsScheduler: true,
-    wsDispatchMaxBytes: 512_000,
-    wsDispatchMaxOpBytes: 256_000,
-    repo: undefined,
-    wsStateFile: { disabled: false, path: wsStateFilePath },
-    wsStateStaleMs: 60_000,
-    tmuxRefresh: false,
-    tmuxRefreshMinIntervalMs: 250,
-    statusLineFile: path.join(tmpHome, '.agent-remnote', 'status-line.txt'),
-    statusLineMinIntervalMs: 250,
-    statusLineDebug: false,
-    statusLineJsonFile: path.join(tmpHome, '.agent-remnote', 'status-line.json'),
-    apiBaseUrl: undefined,
-    apiHost: '127.0.0.1',
-    apiPort: 3000,
-    apiBasePath: '/v1',
-    apiPidFile: path.join(tmpHome, '.agent-remnote', 'api.pid'),
-    apiLogFile: path.join(tmpHome, '.agent-remnote', 'api.log'),
-    apiStateFile: path.join(tmpHome, '.agent-remnote', 'api.state.json'),
-  };
-}
-
-async function touchDbFile(dbPath: string): Promise<void> {
-  await fs.mkdir(path.dirname(dbPath), { recursive: true });
-  await fs.writeFile(dbPath, '', 'utf8');
-}
-
-async function writeWsState(wsStateFilePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(wsStateFilePath), { recursive: true });
-  await fs.writeFile(wsStateFilePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-}
+import { makeConfig, touchDbFile, writeWsState } from '../helpers/httpApiTestUtils.js';
 
 describe('api status capabilities (unit)', () => {
   it('returns unresolved workspace diagnostics without failing status', async () => {
