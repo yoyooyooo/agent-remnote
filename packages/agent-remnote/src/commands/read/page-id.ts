@@ -50,15 +50,14 @@ export const readPageIdCommand = Command.make(
         );
       }
 
+      const dbPath = cfg.remnoteDb ?? (yield* requireResolvedWorkspace({ ref: hasRef ? ref! : undefined })).dbPath;
       const link = hasRef ? tryParseRemnoteLinkFromRef(ref!) : undefined;
-      const ids = hasRef ? [link?.remId ?? (yield* refs.resolve(ref!, { dbPath: cfg.remnoteDb }))] : id.map(String);
+      const ids = hasRef ? [link?.remId ?? (yield* refs.resolve(ref!, { dbPath }))] : id.map(String);
       if (ids.length === 0) {
         return yield* Effect.fail(
           new CliError({ code: 'INVALID_ARGS', message: 'Provide at least one Rem ID via --id', exitCode: 2 }),
         );
       }
-
-      const dbPath = cfg.remnoteDb ?? (yield* requireResolvedWorkspace({ ref: hasRef ? ref! : undefined })).dbPath;
 
       const result = yield* Effect.tryPromise({
         try: async () =>
