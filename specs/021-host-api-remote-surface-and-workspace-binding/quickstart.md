@@ -45,13 +45,14 @@ agent-remnote --api-base-url http://127.0.0.1:3011/remnote/v1 plugin current --c
 
 ## 场景 B：首次自动绑定当前 KB
 
-1. 在 RemNote 中切到目标 KB，并确保插件已连接。
-2. 拉起运行时：
+1. 先重置回默认监听参数：
 
 ```bash
+agent-remnote stack stop
 agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000
 ```
 
+2. 在 RemNote 中切到目标 KB，并确保插件已连接。
 3. 检查状态：
 
 ```bash

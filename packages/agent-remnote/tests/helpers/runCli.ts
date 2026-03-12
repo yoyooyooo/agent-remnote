@@ -21,9 +21,16 @@ export async function runCli(
 
   const timeoutMs = options?.timeoutMs ?? 30_000;
   const isolatedHome = options?.env?.HOME ? undefined : await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-test-home-'));
+  const normalizedIsolatedHome = isolatedHome ? path.resolve(isolatedHome) : undefined;
+  const isolatedHomeEnv =
+    normalizedIsolatedHome === undefined
+      ? {}
+      : process.platform === 'win32'
+        ? { HOME: normalizedIsolatedHome, USERPROFILE: normalizedIsolatedHome }
+        : { HOME: normalizedIsolatedHome };
   const env = {
     ...process.env,
-    ...(isolatedHome ? { HOME: isolatedHome } : {}),
+    ...isolatedHomeEnv,
     ...options?.env,
   };
 
@@ -62,9 +69,9 @@ export async function runCli(
     child.on('close', (code) => {
       clearTimeout(timer);
       const finalize = async () => {
-        if (isolatedHome) {
+        if (normalizedIsolatedHome) {
           try {
-            await fs.rm(isolatedHome, { recursive: true, force: true });
+            await fs.rm(normalizedIsolatedHome, { recursive: true, force: true });
           } catch {}
         }
         resolve({ exitCode: typeof code === 'number' ? code : 1, stdout, stderr });

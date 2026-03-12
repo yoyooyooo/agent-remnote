@@ -47,6 +47,20 @@ describe('cli contract: apply property-type runtime guard', () => {
     expect(env.error?.message).toContain('Typed property creation');
   });
 
+  it('rejects add_property ops with explicit empty options arrays', async () => {
+    const payload =
+      '{"version":1,"kind":"ops","ops":[{"type":"add_property","payload":{"tagId":"tag1","name":"Status","options":[]}}]}';
+    const res = await runCli(['--json', 'apply', '--payload', payload]);
+
+    expect(res.exitCode).toBe(1);
+    expect(res.stderr).toBe('');
+
+    const env = parseJsonLine(res.stdout);
+    expect(env.ok).toBe(false);
+    expect(env.error?.code).toBe('WRITE_UNAVAILABLE');
+    expect(env.error?.message).toContain('Typed property creation');
+  });
+
   it('rejects set_property_type ops with a stable error.code in --json mode', async () => {
     const payload =
       '{"version":1,"kind":"ops","ops":[{"type":"set_property_type","payload":{"propertyId":"prop1","type":"text"}}]}';

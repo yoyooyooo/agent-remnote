@@ -87,7 +87,6 @@ export const applyCommand = Command.make(
               }),
       });
       const compiled = yield* compileApplyEnvelope(parsed);
-      yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
 
       const metaFromFlag = meta ? yield* payloadSvc.readJson(meta) : undefined;
       const metaValue = metaFromFlag ?? compiled.meta;
@@ -126,19 +125,22 @@ export const applyCommand = Command.make(
               pollMs,
             },
           })
-        : yield* executeWriteApplyUseCase({
-            raw: {
-              ...(raw as Record<string, unknown>),
-              priority: resolvedPriority,
-              clientId: resolvedClientId,
-              idempotencyKey: resolvedIdempotencyKey,
-              meta: metaValue,
-              notify: notify ?? compiled.notify ?? true,
-              ensureDaemon: ensureDaemon ?? compiled.ensureDaemon ?? true,
-            },
-            wait,
-            timeoutMs,
-            pollMs,
+        : yield* Effect.gen(function* () {
+            yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
+            return yield* executeWriteApplyUseCase({
+              raw: {
+                ...(raw as Record<string, unknown>),
+                priority: resolvedPriority,
+                clientId: resolvedClientId,
+                idempotencyKey: resolvedIdempotencyKey,
+                meta: metaValue,
+                notify: notify ?? compiled.notify ?? true,
+                ensureDaemon: ensureDaemon ?? compiled.ensureDaemon ?? true,
+              },
+              wait,
+              timeoutMs,
+              pollMs,
+            });
           });
 
       const out = compiled.kind === 'actions' ? { ...data, alias_map: compiled.aliasMap } : data;

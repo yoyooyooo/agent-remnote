@@ -3,7 +3,8 @@
 ## TL;DR
 
 - `agent-remnote api serve` 提供本机 Host API（默认 `http://0.0.0.0:3000`）。
-- 该 API 面向宿主机、本地容器、同网段机器与经隧道暴露的远程调用方；当前版本不做鉴权。
+- 该 API 默认面向受信宿主机、本地容器与受控远程调用方；当前版本不内建鉴权。
+- 若要把 `apiBaseUrl` 暴露给同网段机器、隧道端点或公网调用方，必须先放在显式认证/授权边界之后，例如 Cloudflare Access、反向代理鉴权或等价控制面。`POST /v1/write/apply` 等写端点默认视为敏感面。
 - 远程调用方的标准入口是 `apiBaseUrl`；业务 CLI 应保持同一套命令形状，remote API mode 通过用户配置层注入。
 - `api` 命令组只负责 API 生命周期；业务命令仍保留原命令名。
 

@@ -48,6 +48,8 @@ Recommended one-time config:
 }
 ```
 
+If this base URL is exposed beyond the host, put it behind an explicit auth boundary first. Sensitive write routes such as `POST /v1/write/apply` are intended for trusted callers only.
+
 You can also write it through the CLI:
 
 ```bash

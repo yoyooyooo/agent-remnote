@@ -137,6 +137,10 @@
   - plain property create 仍支持
   - `table/powerup option add/remove` 仍支持，但目标 property 必须已经是 UI 中存在的 select/multi_select 列，并且本地 DB 中 `ft` 已落为 `single_select` 或 `multi_select`
   - 若需要带 schema 的 typed property，当前只能走 plugin-owned powerup schema registration，而不是 generic property mutation
+- 这同样适用于 raw `apply`/op 入口：
+  - 通过 `apply` 发送 `set_property_type` 会稳定失败
+  - 通过 `apply` 发送 typed `add_property` 也会稳定失败
+  - 这些 raw 形式与 `rem.setPropertyType` / `rem.setSlotType` 缺失是同一条宿主边界，不是子命令特例
 
 ### 写后双链校验（推荐）
 

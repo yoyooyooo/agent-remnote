@@ -13,7 +13,12 @@ async function findRemByIdRobust(plugin: ReactRNPlugin, remId: string): Promise<
   try {
     const rem = await plugin.rem.findOne(id);
     if (rem) return rem;
-  } catch {}
+  } catch (error) {
+    console.warn('[agent-remnote][tableOps] findOne failed', {
+      remId: id,
+      error: String((error as any)?.message || error),
+    });
+  }
 
   try {
     const rems = await plugin.rem.findMany([id]);
@@ -21,14 +26,12 @@ async function findRemByIdRobust(plugin: ReactRNPlugin, remId: string): Promise<
       const found = rems.find((rem: any) => rem?._id === id);
       if (found) return found;
     }
-  } catch {}
-
-  try {
-    const rems = await plugin.rem.getAll();
-    if (Array.isArray(rems)) {
-      return rems.find((rem: any) => rem?._id === id);
-    }
-  } catch {}
+  } catch (error) {
+    console.warn('[agent-remnote][tableOps] findMany failed', {
+      remId: id,
+      error: String((error as any)?.message || error),
+    });
+  }
 
   return undefined;
 }

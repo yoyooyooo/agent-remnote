@@ -1,7 +1,9 @@
 export function normalizeApiBasePath(basePath: string): string {
   const trimmed = basePath.trim();
   if (!trimmed) return '/v1';
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const withoutTrailing = normalized.replace(/\/+$/, '');
+  return withoutTrailing && withoutTrailing !== '/' ? withoutTrailing : '/';
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -10,7 +12,7 @@ function normalizeBaseUrl(baseUrl: string): string {
 
 function resolveBasePrefix(baseUrl: string, fallbackBasePath: string): string {
   const parsed = new URL(normalizeBaseUrl(baseUrl));
-  const pathname = parsed.pathname.replace(/\/+$/, '');
+  const pathname = normalizeApiBasePath(parsed.pathname);
   if (pathname && pathname !== '/') return normalizeApiBasePath(pathname);
   return normalizeApiBasePath(fallbackBasePath);
 }
@@ -18,12 +20,13 @@ function resolveBasePrefix(baseUrl: string, fallbackBasePath: string): string {
 function normalizeRoutePath(routePath: string): string {
   const trimmed = routePath.trim();
   if (!trimmed) return '';
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `/${trimmed.replace(/^\/+/, '')}`;
 }
 
 export function buildApiBaseUrl(baseUrl: string, fallbackBasePath = '/v1'): string {
   const parsed = new URL(normalizeBaseUrl(baseUrl));
-  return `${parsed.origin}${resolveBasePrefix(baseUrl, fallbackBasePath)}`;
+  const prefix = resolveBasePrefix(baseUrl, fallbackBasePath);
+  return prefix === '/' ? parsed.origin : `${parsed.origin}${prefix}`;
 }
 
 export function apiLocalBaseUrl(port: number, basePath = '/v1'): string {
