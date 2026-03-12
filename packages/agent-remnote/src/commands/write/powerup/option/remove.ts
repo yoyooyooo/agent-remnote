@@ -7,6 +7,7 @@ import { Payload } from '../../../../services/Payload.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
+import { ensureOptionMutationSupportedForOption } from '../../_optionRuntimeGuard.js';
 
 import { writeCommonOptions } from '../../_shared.js';
 
@@ -47,6 +48,8 @@ export const writePowerupOptionRemoveCommand = Command.make(
           }),
         );
       }
+
+      yield* ensureOptionMutationSupportedForOption({ scopeLabel: 'powerup', optionId: option });
 
       const payloadSvc = yield* Payload;
 

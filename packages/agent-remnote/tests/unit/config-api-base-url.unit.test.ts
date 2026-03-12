@@ -8,7 +8,14 @@ import { buildCliEnvConfigProvider } from '../../src/services/CliConfigProvider.
 import { resolveConfig } from '../../src/services/Config.js';
 
 function runWithProvider(cli: ReadonlyMap<string, string>, env: NodeJS.ProcessEnv = {}) {
-  const provider = buildCliEnvConfigProvider({ cli, env });
+  const isolatedConfigFile =
+    env.REMNOTE_CONFIG_FILE || env.HOME
+      ? undefined
+      : path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-remnote-config-home-')), 'config.json');
+  const provider = buildCliEnvConfigProvider({
+    cli,
+    env: { ...(isolatedConfigFile ? { REMNOTE_CONFIG_FILE: isolatedConfigFile } : {}), ...env },
+  });
   return Effect.runPromise(resolveConfig().pipe(Effect.withConfigProvider(provider)));
 }
 

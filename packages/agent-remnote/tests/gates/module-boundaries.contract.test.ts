@@ -16,6 +16,7 @@ const ALLOWED_INTERNAL_TS_FILES = new Set([
   'packages/agent-remnote/src/internal/store/migrations/0003-add-op-attempts-table.ts',
   'packages/agent-remnote/src/internal/store/migrations/0004-add-txns-dispatch-mode.ts',
   'packages/agent-remnote/src/internal/store/migrations/0005-prefix-queue-tables.ts',
+  'packages/agent-remnote/src/internal/store/migrations/0006-add-workspace-bindings.ts',
   'packages/agent-remnote/src/internal/store/migrations/index.ts',
   'packages/agent-remnote/src/internal/remdb-tools/executeSearchQuery.ts',
   'packages/agent-remnote/src/internal/remdb-tools/findRemsByReference.ts',

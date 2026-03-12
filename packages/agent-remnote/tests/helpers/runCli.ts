@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export type RunCliResult = {
@@ -18,11 +20,17 @@ export async function runCli(
   const entry = path.join(repoRoot, 'packages/agent-remnote/src/main.ts');
 
   const timeoutMs = options?.timeoutMs ?? 30_000;
+  const isolatedHome = options?.env?.HOME ? undefined : await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-test-home-'));
+  const env = {
+    ...process.env,
+    ...(isolatedHome ? { HOME: isolatedHome } : {}),
+    ...options?.env,
+  };
 
   return await new Promise<RunCliResult>((resolve) => {
     const child = spawn('node', ['--import', 'tsx', entry, ...args], {
       cwd: repoRoot,
-      env: { ...process.env, ...options?.env },
+      env,
       stdio: 'pipe',
     });
 
@@ -53,7 +61,15 @@ export async function runCli(
 
     child.on('close', (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: typeof code === 'number' ? code : 1, stdout, stderr });
+      const finalize = async () => {
+        if (isolatedHome) {
+          try {
+            await fs.rm(isolatedHome, { recursive: true, force: true });
+          } catch {}
+        }
+        resolve({ exitCode: typeof code === 'number' ? code : 1, stdout, stderr });
+      };
+      void finalize();
     });
   });
 }

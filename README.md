@@ -77,9 +77,9 @@ agent-remnote --json daemon status
 
 You should see a `remnote-plugin` client and an `activeWorkerConnId`.
 
-### Host API (authoritative on host, reusable from containers)
+### Host API (authoritative on host, reusable from local and remote callers)
 
-If you want container agents to access RemNote through the host, do not mount `remnote.db` / `store.sqlite` directly. Prefer:
+If you want callers to access RemNote through the host, do not mount `remnote.db` / `store.sqlite` directly. Prefer:
 
 ```bash
 agent-remnote stack ensure
@@ -92,11 +92,19 @@ Direct HTTP:
 curl http://127.0.0.1:3000/v1/health
 ```
 
-Recommended one-time config for container or remote agents:
+Recommended one-time config for any remote caller:
 
 ```json
 {
   "apiBaseUrl": "http://host.docker.internal:3000"
+}
+```
+
+`apiBaseUrl` can be any reachable base URL. It may already include the path prefix:
+
+```json
+{
+  "apiBaseUrl": "https://host.example.com/remnote/v1"
 }
 ```
 
@@ -123,6 +131,8 @@ agent-remnote plugin current --compact
 Strict remote mode rule:
 
 - When `apiBaseUrl` is configured, business commands must use the host API.
+- `REMNOTE_API_BASE_URL` and user config `apiBaseUrl` are equivalent inputs in the same precedence chain.
+- `apiBasePath` only affects listener/status URL assembly. If `apiBaseUrl` already includes a path prefix, that prefix wins.
 - Commands that still depend on direct local DB/filesystem access now fail fast instead of silently falling back to local reads.
 - Remote-capable examples now include `search`, `queue wait`, `plugin current`, `rem outline`, `daily rem-id`, `daily write`, and `rem children *`.
 - For structured writes in remote mode, use `daily write --markdown ...`, `rem children ...`, or `apply --payload ...`.
@@ -243,7 +253,7 @@ Tip: always pass a stable `--idempotency-key` for “the same logical write” s
 
 When writing large content, injecting hundreds of Rems directly under an existing page is risky and hard to clean up.
 
-`daily write` supports a **bundle mode**: large inputs (default: ≥80 lines or ≥5000 chars) are wrapped into a single “container Rem”, and the container Rem text is the bundle title.
+`rem children append/prepend/replace` and `daily write` support a **bundle mode**: large inputs (default: ≥80 lines or ≥5000 chars) are wrapped into a single “container Rem”, and the container Rem text is the bundle title.
 
 - Disable bundling: `--bulk never`
 - Force bundling: `--bulk always`
@@ -290,6 +300,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Append Markdown to a Rem's children      | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
 | Replace a Rem's direct children          | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
+| Clear a Rem's direct children            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |

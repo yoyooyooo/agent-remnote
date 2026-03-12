@@ -34,7 +34,8 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
     const pid = pidInfo?.pid;
     const running = typeof pid === 'number' ? yield* proc.isPidRunning(pid) : false;
     const port = pidInfo?.port ?? state?.port ?? cfg.apiPort ?? 3000;
-    const localBaseUrl = apiLocalBaseUrl(port);
+    const basePath = pidInfo?.base_path ?? state?.basePath ?? cfg.apiBasePath ?? '/v1';
+    const localBaseUrl = apiLocalBaseUrl(port, basePath);
 
     const health = yield* api.health({ baseUrl: localBaseUrl, timeoutMs: API_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     const status = yield* api.status({ baseUrl: localBaseUrl, timeoutMs: API_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
@@ -52,6 +53,7 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
       api: {
         healthy: health._tag === 'Right',
         base_url: localBaseUrl,
+        base_path: basePath,
         status: status._tag === 'Right' ? status.right : null,
         error: health._tag === 'Left' ? health.left.message : undefined,
       },
@@ -66,6 +68,15 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
       `- started_at: ${data.service.started_at ?? ''}`,
       `- api_healthy: ${data.api.healthy}`,
       `- base_url: ${data.api.base_url}`,
+      `- base_path: ${data.api.base_path}`,
+      `- db_read_ready: ${data.api.status?.capabilities?.db_read_ready ?? ''}`,
+      `- plugin_rpc_ready: ${data.api.status?.capabilities?.plugin_rpc_ready ?? ''}`,
+      `- write_ready: ${data.api.status?.capabilities?.write_ready ?? ''}`,
+      `- ui_session_ready: ${data.api.status?.capabilities?.ui_session_ready ?? ''}`,
+      `- workspace_resolved: ${data.api.status?.workspace?.resolved ?? ''}`,
+      `- current_workspace_id: ${data.api.status?.workspace?.currentWorkspaceId ?? ''}`,
+      `- current_db_path: ${data.api.status?.workspace?.currentDbPath ?? ''}`,
+      `- binding_source: ${data.api.status?.workspace?.bindingSource ?? ''}`,
     ].join('\n');
 
     yield* writeSuccess({ data, md });

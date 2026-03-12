@@ -245,7 +245,7 @@ function loadCellsForRows(
               json_extract(doc, '$.parent') AS parentId
          FROM quanta
         WHERE json_extract(doc, '$.parent') IN (${placeholders})
-          AND json_extract(doc, '$.type') = 2`,
+       `,
     )
     .all(...rowIds) as Array<{ id: string; doc: string; parentId: string }>;
 
@@ -317,13 +317,13 @@ function loadCellsForRows(
 }
 
 function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContext {
+  const propertyMarkerIds = loadPropertyMarkerIds(db);
   const stmt = db.prepare(
     `SELECT _id AS id,
             doc,
             json_extract(doc, '$.rcrs') AS rawType
        FROM quanta
       WHERE json_extract(doc, '$.parent') = @tagId
-        AND json_extract(doc, '$.rcrs') IS NOT NULL
       ORDER BY json_extract(doc, '$.f')`,
   );
 
@@ -333,7 +333,6 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
             json_extract(doc, '$.rcre') AS rawOptionType
        FROM quanta
       WHERE json_extract(doc, '$.parent') = @parent
-        AND json_extract(doc, '$.rcre') IS NOT NULL
       ORDER BY json_extract(doc, '$.f')`,
   );
 
@@ -344,9 +343,11 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
 
   for (const row of propertyRows) {
     const doc = safeJsonParse<Record<string, unknown>>(row.doc);
+    if (!isPropertyDoc(doc, propertyMarkerIds) && typeof row.rawType !== 'string') {
+      continue;
+    }
     const rawType = typeof row.rawType === 'string' ? row.rawType : null;
     const typeCode = rawType ? (rawType.split('.')[1] ?? null) : null;
-    const kind = mapPropertyType(typeCode);
     const summary = summarizeKey(doc?.key, db, { expand: false, maxDepth: 0 });
 
     const options: Array<{ id: string; name: string; rowIds: Set<string> }> = [];
@@ -358,6 +359,7 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
 
     for (const optionRow of optionRows) {
       const optionDoc = safeJsonParse<Record<string, unknown>>(optionRow.doc);
+      if (!optionDoc || typeof optionDoc !== 'object') continue;
       const optionSummary = summarizeKey(optionDoc?.key, db, { expand: false, maxDepth: 0 });
       const pdRaw = optionDoc?.pd;
       const pdObject =
@@ -379,6 +381,8 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
       optionNameById.set(optionRow.id, optionSummary.text || optionRow.id);
     }
 
+    const kind = inferPropertyKind({ typeCode, options });
+
     properties.push({
       id: row.id,
       name: summary.text || row.id,
@@ -392,6 +396,40 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
     properties,
     optionNameById,
   };
+}
+
+function loadPropertyMarkerIds(db: BetterSqliteInstance): Set<string> {
+  const rows = db
+    .prepare(
+      `SELECT _id AS id
+         FROM quanta
+        WHERE json_extract(doc, '$.rcrt') = 'y'`,
+    )
+    .all() as Array<{ id: string }>;
+  return new Set(rows.map((row) => String(row.id ?? '')).filter(Boolean));
+}
+
+function isPropertyDoc(doc: Record<string, unknown> | null, propertyMarkerIds: ReadonlySet<string>): boolean {
+  if (!doc || typeof doc !== 'object') return false;
+  const tp = (doc as any).tp;
+  if (!tp || typeof tp !== 'object' || Array.isArray(tp)) return false;
+
+  for (const markerId of propertyMarkerIds) {
+    const value = (tp as Record<string, unknown>)[markerId];
+    if (!value || typeof value !== 'object') continue;
+    if ((value as any).t === true) return true;
+  }
+
+  return false;
+}
+
+function inferPropertyKind(params: {
+  readonly typeCode: string | null;
+  readonly options: readonly { id: string; name: string; rowIds: Set<string> }[];
+}): string {
+  if (params.typeCode) return mapPropertyType(params.typeCode);
+  if (params.options.length > 0) return 'select';
+  return 'text';
 }
 
 function loadRows(db: BetterSqliteInstance, tagId: string, options: { limit: number; offset: number }): RowContext {

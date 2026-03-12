@@ -77,9 +77,9 @@ agent-remnote --json daemon status
 
 你应该能看到 `remnote-plugin` client 以及 `activeWorkerConnId`。
 
-### Host API（宿主机 authoritative，容器/本机 agent 复用）
+### Host API（宿主机 authoritative，本地与远程调用方复用）
 
-如果你希望容器内 agent 通过宿主机访问 RemNote，不要直接挂载 `remnote.db` / `store.sqlite`。推荐：
+如果你希望调用方通过宿主机访问 RemNote，不要直接挂载 `remnote.db` / `store.sqlite`。推荐：
 
 ```bash
 agent-remnote stack ensure
@@ -92,11 +92,19 @@ agent-remnote api status --json
 curl http://127.0.0.1:3000/v1/health
 ```
 
-容器内或远端 agent 推荐一次性写入用户配置：
+远程调用方推荐一次性写入用户配置：
 
 ```json
 {
   "apiBaseUrl": "http://host.docker.internal:3000"
+}
+```
+
+`apiBaseUrl` 可以是任何可达的 base URL，也可以直接带前缀路径：
+
+```json
+{
+  "apiBaseUrl": "https://host.example.com/remnote/v1"
 }
 ```
 
@@ -123,6 +131,8 @@ agent-remnote plugin current --compact
 严格 remote mode 规则：
 
 - 配置了 `apiBaseUrl` 之后，业务命令必须走宿主机 Host API。
+- `REMNOTE_API_BASE_URL` 与用户配置 `apiBaseUrl` 在语义上完全等价，只是优先级来源不同。
+- `apiBasePath` 只影响监听与状态输出里的 URL 组装；若 `apiBaseUrl` 已经自带路径前缀，则优先使用该前缀。
 - 仍依赖本地 DB 或本地文件系统的命令会直接 fail fast，不再静默回落到本地读取。
 - 当前已支持远程模式的代表性命令包括 `search`、`queue wait`、`plugin current`、`rem outline`、`daily rem-id`、`daily write` 与 `rem children *`。
 - 远程模式下的结构化写入，使用 `daily write --markdown ...`、`rem children ...` 或 `apply --payload ...`。
@@ -243,7 +253,7 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 当内容很大时，把大量 Rem 直接插入到既有页面的根下既危险也难清理。
 
-`daily write` 支持 **bundle 模式**：当输入很大（默认：≥80 行或 ≥5000 字符）时，会先创建一个“容器 Rem”，把导入内容写入容器子树；**容器 Rem 的文本即 bundle title**。
+`rem children append/prepend/replace` 与 `daily write` 支持 **bundle 模式**：当输入很大（默认：≥80 行或 ≥5000 字符）时，会先创建一个“容器 Rem”，把导入内容写入容器子树；**容器 Rem 的文本即 bundle title**。
 
 - 禁用 bundling：`--bulk never`
 - 强制 bundling：`--bulk always`

@@ -7,6 +7,7 @@ import { Payload } from '../../../../services/Payload.js';
 import { enqueueOps, normalizeOp } from '../../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { waitForTxn } from '../../../_waitTxn.js';
+import { ensureTypedPropertyCreationSupported } from '../../_propertyTypeRuntimeGuard.js';
 
 import { normalizeRemIdInput, resolvePowerup } from '../../../_powerup.js';
 import { optionToUndefined, writeCommonOptions } from '../../_shared.js';
@@ -86,6 +87,12 @@ export const writePowerupPropertyAddCommand = Command.make(
           }),
         );
       }
+
+      yield* ensureTypedPropertyCreationSupported({
+        scopeLabel: 'powerup',
+        type,
+        hasOptions: typeof options === 'string' && options.trim().length > 0,
+      });
 
       const payloadSvc = yield* Payload;
 

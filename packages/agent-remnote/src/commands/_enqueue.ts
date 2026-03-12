@@ -12,6 +12,10 @@ import type { SupervisorState } from '../services/SupervisorState.js';
 import { StatusLineController } from '../runtime/status-line/StatusLineController.js';
 import { canonicalizeOpType } from '../kernel/op-catalog/index.js';
 import { WS_HEALTH_TIMEOUT_MS, WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from './ws/_shared.js';
+import {
+  assertSupportedPropertyTypeMutation,
+  assertTypedPropertyCreationSupported,
+} from './write/_propertyTypeRuntimeGuard.js';
 
 export type EnqueueAndNotifyResult = {
   readonly txn_id: string;
@@ -44,6 +48,7 @@ export function normalizeOp(raw: any, normalizer: (u: unknown) => unknown): Enqu
   }
 
   const payload = normalizer(raw.payload ?? {});
+  assertPropertyTypeRuntimeSupported(canonicalType, payload);
 
   const idempotencyKey =
     typeof raw.idempotencyKey === 'string'
@@ -73,6 +78,20 @@ export function normalizeOp(raw: any, normalizer: (u: unknown) => unknown): Enqu
     maxAttempts,
     deliverAfterMs,
   };
+}
+
+function assertPropertyTypeRuntimeSupported(canonicalType: string, payload: any): void {
+  if (canonicalType === 'set_property_type') {
+    assertSupportedPropertyTypeMutation('generic');
+  }
+
+  if (canonicalType === 'add_property') {
+    assertTypedPropertyCreationSupported({
+      scopeLabel: 'generic',
+      type: typeof payload?.type === 'string' ? payload.type : undefined,
+      hasOptions: Array.isArray(payload?.options) ? payload.options.length > 0 : false,
+    });
+  }
 }
 
 const OP_TYPES_REQUIRE_PARENT_ID = new Set([

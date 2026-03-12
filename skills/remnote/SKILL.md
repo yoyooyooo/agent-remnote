@@ -24,6 +24,9 @@ description: 'Use this skill for any RemNote-specific read/write request, includ
 - 默认不要加 `--wait`。
 - 默认不要在写入前先 `inspect`、`search`、`outline`。
 - 用户给了明确 `remId` / `parentRemId` 时，直接写，不要再多查一轮。
+- `table/powerup property set-type` 当前不支持，`property add --type/--options` 也不能承诺建出真正的 typed property。
+- `table/powerup option add/remove` 只适用于已经在 UI 中存在的 `single_select` / `multi_select` 列；CLI 会先读本地 DB 检查 `ft`。
+- 因为上面这层 `ft` 校验依赖本地 DB，`table/powerup option add/remove` 在 remote `apiBaseUrl` 模式下不能透明远程执行，默认应在宿主机运行。
 
 ## Command Selection Ladder
 
@@ -214,6 +217,23 @@ agent-remnote --json apply --payload @plan.json
 
 不要把单步写入也升级成 `apply`。
 
+## Table / Property Boundaries
+
+这块需要单独记住，避免选错命令：
+
+- 如果用户要“把某列改成单选/多选/日期/数字”：
+  - 不要调用 `table property set-type`
+  - 不要调用 `powerup property set-type`
+  - 直接说明当前宿主未暴露 property type mutation 能力
+- 如果用户要“创建一个带类型的列”：
+  - 不要用 `table property add --type ...`
+  - 不要用 `powerup property add --type ...`
+  - 当前只能创建 plain property，真正的 typed column 需要用户在 RemNote UI 里配置，或改走 plugin-owned powerup schema
+- 如果用户要“给列加 option / 删 option”：
+  - 先假定目标 property 必须已经是 UI 中存在的 `single_select` / `multi_select`
+  - 如果没有明确本地 DB 支持，就不要承诺成功
+  - `apply --payload` 里的 `add_option/remove_option` 也受同样门槛约束，不是绕过路径
+
 ## Wait Policy
 
 默认策略：不等待。
@@ -279,6 +299,11 @@ remote mode 下也保持同样原则：
 - 优先一步到位业务命令
 - 默认不 wait
 - 默认不额外验证
+
+但有两个例外要记住：
+
+- `table/powerup option add/remove` 依赖本地 DB 校验，remote mode 下默认不能透明执行
+- `table/powerup property set-type` 与 typed `property add` 在本地和远端都不支持
 
 ## DN Rule
 
@@ -357,6 +382,24 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ### 3. `daily write --text` 把 Markdown 当字面文本写进去了
 
 删除错误条目，然后改走 `daily write --markdown` 或 `rem children append`。
+
+### 4. `table/powerup option add/remove` 被拒绝
+
+优先判断三件事：
+
+1. 当前是不是在 remote `apiBaseUrl` 模式
+2. 目标 property 是否已经在 UI 中配置成 `single_select` / `multi_select`
+3. 本地 DB 里的 `ft` 是否已经落出来
+
+如果第 2 或第 3 条不成立，不要重试同一条命令，先让用户在 UI 中完成列类型配置。
+
+### 5. 用户要求“程序化创建 typed property”
+
+直接说明当前宿主边界：
+
+- generic property 没有公开的 type mutation endpoint
+- 当前只能创建 plain property
+- typed schema 需要 UI 配置，或改走 plugin-owned powerup schema
 
 ## Minimal Command Set
 

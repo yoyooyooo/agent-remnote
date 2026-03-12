@@ -178,6 +178,38 @@ CREATE TABLE IF NOT EXISTS queue_consumers (
 );
 ```
 
+10) Workspace 绑定（长期事实源）
+
+```sql
+CREATE TABLE IF NOT EXISTS workspace_bindings (
+  workspace_id       TEXT PRIMARY KEY,
+  kb_name            TEXT,
+  db_path            TEXT NOT NULL,
+  source             TEXT NOT NULL CHECK (source IN (
+                        'explicit',
+                        'live_ui_context',
+                        'single_candidate_auto',
+                        'deep_link'
+                      )),
+  is_current         INTEGER NOT NULL DEFAULT 0 CHECK (is_current IN (0, 1)),
+  first_seen_at      INTEGER NOT NULL,
+  last_verified_at   INTEGER NOT NULL,
+  last_ui_context_at INTEGER,
+  updated_at         INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_bindings_current
+  ON workspace_bindings(is_current)
+  WHERE is_current = 1;
+```
+
+约束（硬不变量）：
+
+- `workspace_bindings` 是宿主机侧 `workspaceId -> dbPath` 的长期事实源。
+- 任一时刻最多只有一个 `is_current = 1`，作为默认 workspace 指针。
+- 多候选目录扫描只负责枚举和单候选自动采用，不得把“最新 DB”写成长期默认值。
+- 当 live `uiContext.kbId` 可解析到 `~/remnote/remnote-<workspaceId>/remnote.db` 时，必须刷新或创建对应 binding，并把它设为 current。
+
 ## 推荐状态流转
 - 入队：queue_ops.status = 'pending'，next_attempt_at = now
 - 派发：queue_txns 成为 ready 后，从 queue_ops 选取 `status='pending' AND next_attempt_at<=now` 的最小 `(priority, created_at, op_seq)`；同一 txn 内要求“无 in_flight 且前序 op 全部 succeeded”；加锁并置 `in_flight`，设置 `locked_by(connId)/lease_expires_at`

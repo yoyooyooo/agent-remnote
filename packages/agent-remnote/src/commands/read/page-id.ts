@@ -5,7 +5,8 @@ import * as Option from 'effect/Option';
 
 import { executeResolveRemPage } from '../../adapters/core.js';
 
-import { tryParseRemnoteLinkFromRef, tryResolveRemnoteDbPathForWorkspaceIdSync } from '../../lib/remnote.js';
+import { requireResolvedWorkspace } from '../../lib/workspaceResolver.js';
+import { tryParseRemnoteLinkFromRef } from '../../lib/remnote.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
 import { RefResolver } from '../../services/RefResolver.js';
@@ -57,10 +58,8 @@ export const readPageIdCommand = Command.make(
         );
       }
 
-      const inferredDbPath = link?.workspaceId
-        ? tryResolveRemnoteDbPathForWorkspaceIdSync(link.workspaceId)
-        : undefined;
-      const dbPath = cfg.remnoteDb ?? inferredDbPath;
+      const workspace = yield* requireResolvedWorkspace({ ref: hasRef ? ref! : undefined });
+      const dbPath = cfg.remnoteDb ?? workspace.dbPath;
 
       const result = yield* Effect.tryPromise({
         try: async () =>

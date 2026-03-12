@@ -10,7 +10,7 @@ import { HostApiClient } from '../../../services/HostApiClient.js';
 import type { CliError } from '../../../services/Errors.js';
 import { RemDb } from '../../../services/RemDb.js';
 
-import { remnoteDbPathForWorkspaceId } from '../../../lib/remnote.js';
+import { resolveWorkspaceSnapshot } from '../../../lib/workspaceResolver.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { loadBridgeSelectionSnapshot } from '../selection/_shared.js';
 import { loadBridgeUiContextSnapshot } from './_shared.js';
@@ -197,12 +197,10 @@ export const readUiContextDescribeCommand = Command.make(
       ]);
 
       const warnings: string[] = [];
-      const dbPathCandidate =
-        cfg.remnoteDb ||
-        (() => {
-          const kbId = normalizeText(ui?.kbId);
-          return kbId ? remnoteDbPathForWorkspaceId(kbId) : undefined;
-        })();
+      const workspace = yield* resolveWorkspaceSnapshot({ stateFile, staleMs }).pipe(
+        Effect.catchAll(() => Effect.succeed(undefined)),
+      );
+      const dbPathCandidate = cfg.remnoteDb ?? (workspace?.resolved ? workspace.dbPath : undefined);
 
       const titles = yield* Effect.gen(function* () {
         if (!dbPathCandidate || idsToResolve.length === 0) return new Map<string, string>();
