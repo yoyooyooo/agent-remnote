@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import * as Effect from 'effect/Effect';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
@@ -21,69 +20,7 @@ import { SupervisorState } from '../../src/services/SupervisorState.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
-
-async function getFreePort(): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      const port = typeof addr === 'object' && addr ? addr.port : 0;
-      server.close((err) => {
-        if (err) reject(err);
-        else resolve(port);
-      });
-    });
-  });
-}
-
-async function waitForPort(port: number, timeoutMs = 3000): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const socket = net.connect({ host: '127.0.0.1', port });
-      socket.once('connect', () => {
-        socket.destroy();
-        resolve(true);
-      });
-      socket.once('error', () => resolve(false));
-    });
-    if (ok) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`timeout waiting for port ${port}`);
-}
-
-function makeConfig(tmpHome: string, storeDbPath: string, wsStateFilePath: string, port: number): ResolvedConfig {
-  return {
-    format: 'json',
-    quiet: true,
-    debug: false,
-    configFile: path.join(tmpHome, '.agent-remnote', 'config.json'),
-    remnoteDb: undefined,
-    storeDb: storeDbPath,
-    wsUrl: 'ws://127.0.0.1:6789/ws',
-    wsScheduler: true,
-    wsDispatchMaxBytes: 512_000,
-    wsDispatchMaxOpBytes: 256_000,
-    repo: undefined,
-    wsStateFile: { disabled: false, path: wsStateFilePath },
-    wsStateStaleMs: 60_000,
-    tmuxRefresh: false,
-    tmuxRefreshMinIntervalMs: 250,
-    statusLineFile: path.join(tmpHome, '.agent-remnote', 'status-line.txt'),
-    statusLineMinIntervalMs: 250,
-    statusLineDebug: false,
-    statusLineJsonFile: path.join(tmpHome, '.agent-remnote', 'status-line.json'),
-    apiBaseUrl: undefined,
-    apiHost: '127.0.0.1',
-    apiPort: port,
-    apiBasePath: '/v1',
-    apiPidFile: path.join(tmpHome, '.agent-remnote', 'api.pid'),
-    apiLogFile: path.join(tmpHome, '.agent-remnote', 'api.log'),
-    apiStateFile: path.join(tmpHome, '.agent-remnote', 'api.state.json'),
-  };
-}
+import { makeConfig, waitForPort } from '../helpers/httpApiTestUtils.js';
 
 describe('runtime contract: endpoint binding scope', () => {
   it('keeps no_binding endpoints available while db endpoints fail with WORKSPACE_UNRESOLVED', async () => {
@@ -91,8 +28,8 @@ describe('runtime contract: endpoint binding scope', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
-    const port = await getFreePort();
-    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, port);
+    let actualPort: number | null = null;
+    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, 0);
     const previousHome = process.env.HOME;
 
     try {
@@ -103,8 +40,20 @@ describe('runtime contract: endpoint binding scope', () => {
       await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
-            yield* runHttpApiRuntime({ host: '127.0.0.1', port, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
-            yield* Effect.promise(() => waitForPort(port));
+            yield* runHttpApiRuntime({ host: '127.0.0.1', port: 0, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
+            yield* Effect.promise(async () => {
+              const startedAt = Date.now();
+              while (Date.now() - startedAt < 3000) {
+                if (typeof actualPort === 'number' && actualPort > 0) {
+                  await waitForPort(actualPort);
+                  return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              throw new Error('timeout waiting for api runtime to publish its actual port');
+            });
+
+            const port = actualPort!;
 
             const healthRes = yield* Effect.promise(() => fetch(`http://127.0.0.1:${port}/v1/health`));
             const healthJson = yield* Effect.promise(() => healthRes.json() as Promise<any>);
@@ -168,7 +117,10 @@ describe('runtime contract: endpoint binding scope', () => {
               writePidFile: () => Effect.void,
               deletePidFile: () => Effect.void,
               readStateFile: () => Effect.succeed(undefined),
-              writeStateFile: () => Effect.void,
+              writeStateFile: (_stateFilePath, value) =>
+                Effect.sync(() => {
+                  actualPort = value.port;
+                }),
               deleteStateFile: () => Effect.void,
             }),
             Effect.provideService(DaemonFiles, {
