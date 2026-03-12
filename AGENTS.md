@@ -2,8 +2,9 @@
 
 采用 forward-only evolution：
 
-- 可以重构，不需要为了历史版本做兼容层
-- 新规划与旧实现冲突时，优先寻找新的更优解
+- 内部实现可以重构，不需要为了历史代码做兼容层
+- 外部契约仍然受 SSoT 约束，不能静默破坏
+- 若确实要做 breaking change，必须在 `docs/ssot/agent-remnote/**` 与相关 `specs/**` 中显式写明
 - 禁止长期保留“临时兼容”与“双真相源”
 
 # agent-remnote
@@ -41,7 +42,11 @@
 RemNote 官方资料：
 
 - plugin docs: `https://plugins.remnote.com/`
-- 本机提炼版优先：`~/llms.txt/docs/remnote`
+- 本机提炼版可作为便利副本：`~/llms.txt/docs/remnote`
+  - 这份本地镜像可能过时，也不是版本化来源
+  - 仓库 SSoT 仍是最高裁决点，官方 plugin docs 作为外部参考
+  - 任何实现、语义、协议变更都必须同步回写 `docs/ssot/agent-remnote/**`
+  - 未定型方案放 `docs/proposals/**`
 
 ## 仓库结构与边界
 

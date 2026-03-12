@@ -5,6 +5,7 @@ import { collectLeafValues, mapLeafValuesInPlace, parsePathTokens } from '../ker
 import type { AppConfig } from '../services/AppConfig.js';
 import { CliError } from '../services/Errors.js';
 import { RefResolver } from '../services/RefResolver.js';
+import type { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 
 function shouldResolveRef(value: string): boolean {
   const s = value.trim();
@@ -20,7 +21,7 @@ function shouldResolveRef(value: string): boolean {
 export function resolveRefsInPayload(params: {
   readonly opType: string;
   readonly payload: Record<string, unknown>;
-}): Effect.Effect<Record<string, unknown>, CliError, AppConfig | RefResolver> {
+}): Effect.Effect<Record<string, unknown>, CliError, AppConfig | RefResolver | WorkspaceBindings> {
   return Effect.gen(function* () {
     const refs = yield* RefResolver;
     const out: Record<string, unknown> = structuredClone(params.payload);

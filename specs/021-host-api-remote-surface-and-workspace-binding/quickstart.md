@@ -102,7 +102,7 @@ curl http://127.0.0.1:3000/v1/status
 
 预期：
 
-- 返回 `resolved=false`
+- 返回 `workspace.resolved=false`
 - 返回 `candidateWorkspaces[]`
 - 若直接调用依赖 DB 的端点，应返回 `WORKSPACE_UNRESOLVED`
 

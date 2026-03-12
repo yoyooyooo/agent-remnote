@@ -1,23 +1,9 @@
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import type { ResolvedConfig } from '../../src/services/Config.js';
-
-export async function getFreePort(): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      const port = typeof addr === 'object' && addr ? addr.port : 0;
-      server.close((err) => {
-        if (err) reject(err);
-        else resolve(port);
-      });
-    });
-  });
-}
 
 export async function waitForPort(port: number, timeoutMs = 3000): Promise<void> {
   const startedAt = Date.now();
@@ -34,6 +20,36 @@ export async function waitForPort(port: number, timeoutMs = 3000): Promise<void>
     await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error(`timeout waiting for port ${port}`);
+}
+
+export function overrideHome(tmpHome: string): () => void {
+  const previous = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    HOMEDRIVE: process.env.HOMEDRIVE,
+    HOMEPATH: process.env.HOMEPATH,
+  };
+
+  process.env.HOME = tmpHome;
+  process.env.USERPROFILE = tmpHome;
+  delete process.env.HOMEDRIVE;
+  delete process.env.HOMEPATH;
+
+  return () => {
+    const restore = (key: keyof typeof previous) => {
+      const value = previous[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    };
+
+    restore('HOME');
+    restore('USERPROFILE');
+    restore('HOMEDRIVE');
+    restore('HOMEPATH');
+  };
 }
 
 export function makeConfig(
@@ -77,7 +93,18 @@ export async function touchDbFile(dbPath: string): Promise<void> {
   await fs.writeFile(dbPath, '', 'utf8');
 }
 
-export async function writeWsState(wsStateFilePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(wsStateFilePath), { recursive: true });
-  await fs.writeFile(wsStateFilePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+export async function writeWsState(
+  wsStateFilePath: string,
+  payload:
+    | {
+        readonly updatedAt: number;
+        readonly clients: readonly unknown[];
+        readonly activeWorkerConnId?: string | undefined;
+        readonly [key: string]: unknown;
+      }
+    | undefined,
+): Promise<void> {
+  const normalized = os.platform() === 'win32' ? path.normalize(wsStateFilePath) : wsStateFilePath;
+  await fs.mkdir(path.dirname(normalized), { recursive: true });
+  await fs.writeFile(normalized, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }

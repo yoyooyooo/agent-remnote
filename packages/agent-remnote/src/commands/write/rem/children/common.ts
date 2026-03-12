@@ -8,6 +8,7 @@ import { CliError, isCliError } from '../../../../services/Errors.js';
 import { FileInput } from '../../../../services/FileInput.js';
 import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
+import type { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
 import { readMarkdownTextFromInputSpec } from '../../../_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../../../_applyEnvelope.js';
 import { RefResolver } from '../../../../services/RefResolver.js';
@@ -95,7 +96,7 @@ export function dryRunEnvelope(
 ): Effect.Effect<
   { readonly kind: string; readonly ops: unknown; readonly aliasMap?: unknown },
   CliError,
-  AppConfig | Payload | RefResolver
+  AppConfig | Payload | RefResolver | WorkspaceBindings
 > {
   return Effect.gen(function* () {
     const payloadSvc = yield* Payload;

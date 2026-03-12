@@ -1,6 +1,8 @@
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
+import { homedir } from 'node:os';
+import path from 'node:path';
 
 import { executeSearchRemOverview } from '../adapters/core.js';
 
@@ -8,9 +10,14 @@ import { AppConfig } from './AppConfig.js';
 import { CliError } from './Errors.js';
 import { remoteModeUnsupportedError } from '../commands/_remoteMode.js';
 import { tryParseRemnoteLink } from '../lib/remnote.js';
+import { resolveWorkspaceSnapshot } from '../lib/workspaceResolver.js';
+import { WorkspaceBindings } from './WorkspaceBindings.js';
 
 export interface RefResolverService {
-  readonly resolve: (ref: string, options?: { readonly dbPath?: string | undefined }) => Effect.Effect<string, CliError, AppConfig>;
+  readonly resolve: (
+    ref: string,
+    options?: { readonly dbPath?: string | undefined },
+  ) => Effect.Effect<string, CliError, AppConfig | WorkspaceBindings>;
 }
 
 export class RefResolver extends Context.Tag('RefResolver')<RefResolver, RefResolverService>() {}
@@ -88,6 +95,18 @@ function parseDailyOffset(value: string): number {
   return n;
 }
 
+function normalizeDbPathInput(dbPath: string | undefined): string | undefined {
+  const raw = typeof dbPath === 'string' ? dbPath.trim() : '';
+  if (!raw) return undefined;
+  const expanded =
+    raw === '~'
+      ? homedir()
+      : raw.startsWith('~/') || raw.startsWith('~\\')
+        ? path.join(homedir(), raw.slice(2))
+        : raw;
+  return path.resolve(path.normalize(expanded));
+}
+
 export const RefResolverLive = Layer.succeed(RefResolver, {
   resolve: (ref, options) =>
     Effect.gen(function* () {
@@ -116,6 +135,32 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
 
       if (parsed.kind === 'id') return parsed.value;
 
+      const normalizedDbPath = normalizeDbPathInput(options?.dbPath) ?? normalizeDbPathInput(cfg.remnoteDb);
+      const workspace =
+        normalizedDbPath || cfg.apiBaseUrl
+          ? undefined
+          : yield* resolveWorkspaceSnapshot({ ref }).pipe(
+              Effect.catchAll(() =>
+                Effect.fail(
+                  new CliError({
+                    code: 'WORKSPACE_UNRESOLVED',
+                    message: `Workspace is unresolved for ref: ${ref}`,
+                    exitCode: 1,
+                  }),
+                ),
+              ),
+            );
+      const dbPath = normalizedDbPath ?? workspace?.dbPath;
+      if (!dbPath) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'WORKSPACE_UNRESOLVED',
+            message: `Workspace is unresolved for ref: ${ref}`,
+            exitCode: 1,
+          }),
+        );
+      }
+
       const dailyOffset =
         parsed.kind === 'daily'
           ? yield* Effect.try({
@@ -140,7 +185,7 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
         try: async () =>
           await executeSearchRemOverview({
             ...(queryInput as any),
-            dbPath: options?.dbPath ?? cfg.remnoteDb,
+            dbPath,
             limit: 1,
             preferExact: true,
             exactFirstSingle: true,
