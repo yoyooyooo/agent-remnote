@@ -20,7 +20,7 @@ import { SupervisorState } from '../../src/services/SupervisorState.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
-import { getFreePort, makeConfig, touchDbFile, waitForPort, writeWsState } from '../helpers/httpApiTestUtils.js';
+import { makeConfig, touchDbFile, waitForPort, writeWsState } from '../helpers/httpApiTestUtils.js';
 
 describe('runtime contract: api status capabilities', () => {
   it('exposes resolved workspace and ready capabilities from the status endpoint', async () => {
@@ -28,8 +28,8 @@ describe('runtime contract: api status capabilities', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
-    const port = await getFreePort();
-    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, port);
+    let actualPort: number | null = null;
+    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, 0);
     const workspaceId = 'ws-live';
     const now = Date.now();
     const previousHome = process.env.HOME;
@@ -57,8 +57,20 @@ describe('runtime contract: api status capabilities', () => {
       await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
-            yield* runHttpApiRuntime({ host: '127.0.0.1', port, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
-            yield* Effect.promise(() => waitForPort(port));
+            yield* runHttpApiRuntime({ host: '127.0.0.1', port: 0, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
+            yield* Effect.promise(async () => {
+              const startedAt = Date.now();
+              while (Date.now() - startedAt < 3000) {
+                if (typeof actualPort === 'number' && actualPort > 0) {
+                  await waitForPort(actualPort);
+                  return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              throw new Error('timeout waiting for api runtime to publish its actual port');
+            });
+
+            const port = actualPort!;
 
             const res = yield* Effect.promise(() => fetch(`http://127.0.0.1:${port}/v1/status`));
             const json = yield* Effect.promise(() => res.json() as Promise<any>);
@@ -82,7 +94,10 @@ describe('runtime contract: api status capabilities', () => {
               writePidFile: () => Effect.void,
               deletePidFile: () => Effect.void,
               readStateFile: () => Effect.succeed(undefined),
-              writeStateFile: () => Effect.void,
+              writeStateFile: (_stateFilePath, value) =>
+                Effect.sync(() => {
+                  actualPort = value.port;
+                }),
               deleteStateFile: () => Effect.void,
             }),
             Effect.provideService(DaemonFiles, {
@@ -136,8 +151,8 @@ describe('runtime contract: api status capabilities', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
-    const port = await getFreePort();
-    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, port);
+    let actualPort: number | null = null;
+    const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, 0);
     const previousHome = process.env.HOME;
 
     try {
@@ -149,8 +164,20 @@ describe('runtime contract: api status capabilities', () => {
       await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
-            yield* runHttpApiRuntime({ host: '127.0.0.1', port, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
-            yield* Effect.promise(() => waitForPort(port));
+            yield* runHttpApiRuntime({ host: '127.0.0.1', port: 0, stateFile: cfg.apiStateFile }).pipe(Effect.forkScoped);
+            yield* Effect.promise(async () => {
+              const startedAt = Date.now();
+              while (Date.now() - startedAt < 3000) {
+                if (typeof actualPort === 'number' && actualPort > 0) {
+                  await waitForPort(actualPort);
+                  return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              throw new Error('timeout waiting for api runtime to publish its actual port');
+            });
+
+            const port = actualPort!;
 
             const res = yield* Effect.promise(() => fetch(`http://127.0.0.1:${port}/v1/status`));
             const json = yield* Effect.promise(() => res.json() as Promise<any>);
@@ -172,7 +199,10 @@ describe('runtime contract: api status capabilities', () => {
               writePidFile: () => Effect.void,
               deletePidFile: () => Effect.void,
               readStateFile: () => Effect.succeed(undefined),
-              writeStateFile: () => Effect.void,
+              writeStateFile: (_stateFilePath, value) =>
+                Effect.sync(() => {
+                  actualPort = value.port;
+                }),
               deleteStateFile: () => Effect.void,
             }),
             Effect.provideService(DaemonFiles, {

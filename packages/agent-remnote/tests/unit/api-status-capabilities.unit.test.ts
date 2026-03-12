@@ -10,7 +10,7 @@ import { AppConfig } from '../../src/services/AppConfig.js';
 import { Queue } from '../../src/services/Queue.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
-import { makeConfig, touchDbFile, writeWsState } from '../helpers/httpApiTestUtils.js';
+import { makeConfig, overrideHome, touchDbFile, writeWsState } from '../helpers/httpApiTestUtils.js';
 
 describe('api status capabilities (unit)', () => {
   it('returns unresolved workspace diagnostics without failing status', async () => {
@@ -18,10 +18,9 @@ describe('api status capabilities (unit)', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
-    const previousHome = process.env.HOME;
+    const restoreHome = overrideHome(tmpHome);
 
     try {
-      process.env.HOME = tmpHome;
       await touchDbFile(path.join(tmpHome, 'remnote', 'remnote-ws-1', 'remnote.db'));
       await touchDbFile(path.join(tmpHome, 'remnote', 'remnote-ws-2', 'remnote.db'));
       await writeWsState(wsStateFilePath, { updatedAt: Date.now(), clients: [] });
@@ -54,7 +53,7 @@ describe('api status capabilities (unit)', () => {
       expect(data.capabilities.plugin_rpc_ready).toBe(false);
       expect(data.capabilities.write_ready).toBe(false);
     } finally {
-      process.env.HOME = previousHome;
+      restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
@@ -64,12 +63,11 @@ describe('api status capabilities (unit)', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
-    const previousHome = process.env.HOME;
+    const restoreHome = overrideHome(tmpHome);
     const workspaceId = 'ws-live';
     const now = Date.now();
 
     try {
-      process.env.HOME = tmpHome;
       await touchDbFile(path.join(tmpHome, 'remnote', `remnote-${workspaceId}`, 'remnote.db'));
       await writeWsState(wsStateFilePath, {
         updatedAt: now,
@@ -118,7 +116,7 @@ describe('api status capabilities (unit)', () => {
       expect(data.capabilities.write_ready).toBe(true);
       expect(data.capabilities.ui_session_ready).toBe(true);
     } finally {
-      process.env.HOME = previousHome;
+      restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
@@ -129,10 +127,9 @@ describe('api status capabilities (unit)', () => {
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
     const wsStateFilePath = path.join(tmpHome, '.agent-remnote', 'ws.bridge.state.json');
     const explicitDbPath = path.join(tmpDir, 'explicit-remnote.db');
-    const previousHome = process.env.HOME;
+    const restoreHome = overrideHome(tmpHome);
 
     try {
-      process.env.HOME = tmpHome;
       await touchDbFile(explicitDbPath);
       await writeWsState(wsStateFilePath, { updatedAt: Date.now(), clients: [] });
 
@@ -163,7 +160,7 @@ describe('api status capabilities (unit)', () => {
       expect(data.workspace.bindingSource).toBe('config');
       expect(data.workspace.resolutionSource).toBe('config');
     } finally {
-      process.env.HOME = previousHome;
+      restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });

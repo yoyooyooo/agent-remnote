@@ -347,9 +347,11 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
     if (!isPropertyDoc(doc, propertyMarkerIds) && typeof row.rawType !== 'string') {
       continue;
     }
-    const rawType = typeof row.rawType === 'string' ? row.rawType : null;
-    const typeCode = rawType ? (rawType.split('.')[1] ?? null) : null;
+    const fieldType = typeof (doc as any)?.ft === 'string' ? String((doc as any).ft) : null;
+    const rawType = typeof row.rawType === 'string' ? row.rawType : fieldType;
+    const typeCode = rawType ? (rawType.split('.')[1] ?? rawType) : null;
     const summary = summarizeKey(doc?.key, db, { expand: false, maxDepth: 0 });
+    const propertyKindHint = typeCode ? mapPropertyType(typeCode) : null;
 
     const options: Array<{ id: string; name: string; rowIds: Set<string> }> = [];
     const optionRows = optionStmt.all({ parent: row.id }) as Array<{
@@ -360,7 +362,7 @@ function loadProperties(db: BetterSqliteInstance, tagId: string): PropertyContex
 
     for (const optionRow of optionRows) {
       const optionDoc = safeJsonParse<Record<string, unknown>>(optionRow.doc);
-      if (!isOptionDoc(optionDoc, optionRow.rawOptionType, propertyMarkerIds)) continue;
+      if (!isOptionDoc(optionDoc, optionRow.rawOptionType, propertyMarkerIds, propertyKindHint)) continue;
       const optionSummary = summarizeKey(optionDoc?.key, db, { expand: false, maxDepth: 0 });
       const pdRaw = optionDoc?.pd;
       const pdObject =
@@ -428,6 +430,7 @@ function isOptionDoc(
   doc: Record<string, unknown> | null,
   rawOptionType: unknown,
   propertyMarkerIds: ReadonlySet<string>,
+  propertyKindHint: string | null,
 ): boolean {
   if (!doc || typeof doc !== 'object') return false;
   if (isPropertyDoc(doc, propertyMarkerIds)) return false;
@@ -436,7 +439,7 @@ function isOptionDoc(
   const key = (doc as any).key;
   if (!Array.isArray(key) || key.length === 0) return false;
   if (typeof rawOptionType === 'string' && rawOptionType.trim()) return true;
-  return true;
+  return propertyKindHint === 'select' || propertyKindHint === 'multi_select';
 }
 
 function inferPropertyKind(params: {
@@ -444,7 +447,7 @@ function inferPropertyKind(params: {
   readonly options: readonly { id: string; name: string; rowIds: Set<string> }[];
 }): string {
   if (params.typeCode) return mapPropertyType(params.typeCode);
-  if (params.options.length > 0) return 'select';
+  if (params.options.length > 0) return 'unknown';
   return 'text';
 }
 
@@ -490,16 +493,22 @@ function mapPropertyType(code: string | null): string {
   if (!code) return 'unknown';
   switch (code) {
     case 's':
+    case 'single_select':
       return 'select';
     case 'm':
+    case 'multi_select':
       return 'multi_select';
     case 't':
+    case 'text':
       return 'text';
     case 'n':
+    case 'number':
       return 'number';
     case 'd':
+    case 'date':
       return 'date';
     case 'c':
+    case 'checkbox':
       return 'checkbox';
     default:
       return `unknown(${code})`;

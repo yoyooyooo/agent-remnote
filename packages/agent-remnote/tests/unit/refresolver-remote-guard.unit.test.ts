@@ -5,6 +5,7 @@ import * as Layer from 'effect/Layer';
 import { AppConfig } from '../../src/services/AppConfig.js';
 import type { ResolvedConfig } from '../../src/services/Config.js';
 import { RefResolver, RefResolverLive } from '../../src/services/RefResolver.js';
+import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 
 function makeConfig(apiBaseUrl?: string): ResolvedConfig {
   return {
@@ -44,7 +45,7 @@ describe('RefResolver remote guard (unit)', () => {
       Effect.gen(function* () {
         const refs = yield* RefResolver;
         return yield* refs.resolve('id:RID-1');
-      }).pipe(Effect.provide([cfgLayer, RefResolverLive])),
+      }).pipe(Effect.provide([cfgLayer, WorkspaceBindingsLive, RefResolverLive])),
     );
 
     expect(result).toBe('RID-1');
@@ -57,7 +58,7 @@ describe('RefResolver remote guard (unit)', () => {
         Effect.gen(function* () {
           const refs = yield* RefResolver;
           return yield* refs.resolve('daily:today');
-        }).pipe(Effect.provide([cfgLayer, RefResolverLive])),
+        }).pipe(Effect.provide([cfgLayer, WorkspaceBindingsLive, RefResolverLive])),
       ),
     );
 

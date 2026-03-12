@@ -5,6 +5,7 @@ import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
 import { Payload } from '../services/Payload.js';
 import { RefResolver } from '../services/RefResolver.js';
+import type { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 
 import { normalizeOp, normalizeOps } from './_enqueue.js';
 import { resolveRefsInPayload } from './_resolveRefsInPayload.js';
@@ -184,7 +185,7 @@ export function parseApplyEnvelope(raw: unknown): ParsedApplyEnvelope {
 
 export function compileApplyEnvelope(
   parsed: ParsedApplyEnvelope,
-): Effect.Effect<CompiledApplyEnvelope, CliError, AppConfig | Payload | RefResolver> {
+): Effect.Effect<CompiledApplyEnvelope, CliError, AppConfig | Payload | RefResolver | WorkspaceBindings> {
   return Effect.gen(function* () {
     const payloadSvc = yield* Payload;
 

@@ -40,6 +40,7 @@ function createCurrentTableShapeDb(dbPath: string) {
         _id: propertyId,
         parent: tagId,
         key: [{ i: 'm', text: 'Status' }],
+        ft: 'single_select',
         tp: { [slotTagId]: { t: true } },
         crt: { y: {} },
         f: 'a0',

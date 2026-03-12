@@ -20,7 +20,7 @@ import { SupervisorState } from '../../src/services/SupervisorState.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
-import { makeConfig, waitForPort } from '../helpers/httpApiTestUtils.js';
+import { makeConfig, overrideHome, waitForPort } from '../helpers/httpApiTestUtils.js';
 
 describe('runtime contract: endpoint binding scope', () => {
   it('keeps no_binding endpoints available while db endpoints fail with WORKSPACE_UNRESOLVED', async () => {
@@ -30,10 +30,9 @@ describe('runtime contract: endpoint binding scope', () => {
     const storeDbPath = path.join(tmpDir, 'store.sqlite');
     let actualPort: number | null = null;
     const cfg = makeConfig(tmpHome, storeDbPath, wsStateFilePath, 0);
-    const previousHome = process.env.HOME;
+    const restoreHome = overrideHome(tmpHome);
 
     try {
-      process.env.HOME = tmpHome;
       await fs.mkdir(path.dirname(wsStateFilePath), { recursive: true });
       await fs.writeFile(wsStateFilePath, `${JSON.stringify({ updatedAt: Date.now(), clients: [] }, null, 2)}\n`, 'utf8');
 
@@ -178,7 +177,7 @@ describe('runtime contract: endpoint binding scope', () => {
         ),
       );
     } finally {
-      process.env.HOME = previousHome;
+      restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   }, 15_000);

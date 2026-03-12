@@ -110,7 +110,7 @@ export async function executeSetPropertyType(plugin: ReactRNPlugin, op: OpDispat
     await (prop as any).setPropertyType(type);
     return { ok: true };
   }
-  throw createUnsupportedPropertyTypeMutationError(property_id ?? (prop as any)?._id);
+  throw createUnsupportedPropertyTypeMutationError(property_id ?? (prop as any)._id);
 }
 
 export async function executeSetTableFilter(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
