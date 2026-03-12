@@ -30,11 +30,14 @@ describe('cli contract: api lifecycle', () => {
     const logFile = path.join(tmpDir, 'api.log');
     const stateFile = path.join(tmpDir, 'api.state.json');
     const port = await getFreePort();
+    const basePath = '/remnote/v1';
 
     try {
       const startRes = await runCli(
         [
           '--json',
+          '--api-base-path',
+          basePath,
           'api',
           'start',
           '--port',
@@ -53,13 +56,14 @@ describe('cli contract: api lifecycle', () => {
       expect(startRes.stderr).toBe('');
       const startEnv = JSON.parse(startRes.stdout.trim());
       expect(startEnv.ok).toBe(true);
-      expect(startEnv.data.base_url).toBe(`http://127.0.0.1:${port}`);
+      expect(startEnv.data.base_url).toBe(`http://127.0.0.1:${port}${basePath}`);
 
-      const healthRes = await fetch(`http://127.0.0.1:${port}/v1/health`);
+      const healthRes = await fetch(`http://127.0.0.1:${port}${basePath}/health`);
       expect(healthRes.status).toBe(200);
       const healthJson = await healthRes.json();
       expect(healthJson.ok).toBe(true);
       expect(healthJson.data.api.running).toBe(true);
+      expect(healthJson.data.basePath).toBe(basePath);
 
       const statusRes = await runCli(['--json', 'api', 'status', '--pid-file', pidFile, '--state-file', stateFile], {
         env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },
@@ -71,6 +75,8 @@ describe('cli contract: api lifecycle', () => {
       expect(statusEnv.ok).toBe(true);
       expect(statusEnv.data.service.running).toBe(true);
       expect(statusEnv.data.api.healthy).toBe(true);
+      expect(statusEnv.data.api.base_url).toBe(`http://127.0.0.1:${port}${basePath}`);
+      expect(statusEnv.data.state.basePath).toBe(basePath);
 
       const stopRes = await runCli(['--json', 'api', 'stop', '--pid-file', pidFile, '--state-file', stateFile], {
         env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' },

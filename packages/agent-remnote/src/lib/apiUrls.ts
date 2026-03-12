@@ -4,14 +4,36 @@ export function normalizeApiBasePath(basePath: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
-export function apiLocalBaseUrl(port: number): string {
-  return `http://127.0.0.1:${port}`;
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, '');
 }
 
-export function apiContainerBaseUrl(port: number): string {
-  return `http://host.docker.internal:${port}`;
+function resolveBasePrefix(baseUrl: string, fallbackBasePath: string): string {
+  const parsed = new URL(normalizeBaseUrl(baseUrl));
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  if (pathname && pathname !== '/') return normalizeApiBasePath(pathname);
+  return normalizeApiBasePath(fallbackBasePath);
 }
 
-export function joinApiUrl(baseUrl: string, basePath: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}${normalizeApiBasePath(basePath)}`;
+function normalizeRoutePath(routePath: string): string {
+  const trimmed = routePath.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+export function buildApiBaseUrl(baseUrl: string, fallbackBasePath = '/v1'): string {
+  const parsed = new URL(normalizeBaseUrl(baseUrl));
+  return `${parsed.origin}${resolveBasePrefix(baseUrl, fallbackBasePath)}`;
+}
+
+export function apiLocalBaseUrl(port: number, basePath = '/v1'): string {
+  return buildApiBaseUrl(`http://127.0.0.1:${port}`, basePath);
+}
+
+export function apiContainerBaseUrl(port: number, basePath = '/v1'): string {
+  return buildApiBaseUrl(`http://host.docker.internal:${port}`, basePath);
+}
+
+export function joinApiUrl(baseUrl: string, routePath: string, fallbackBasePath = '/v1'): string {
+  return `${buildApiBaseUrl(baseUrl, fallbackBasePath)}${normalizeRoutePath(routePath)}`;
 }

@@ -21,14 +21,30 @@
   - Powerup 属性：`rem.setPowerupProperty(powerupCode, propertyCode, value)` / `getPowerupProperty(...)`
   - Tag 属性（表格单元格）：`rem.setTagPropertyValue(propertyId, value)`
 
+## 2.1 当前宿主边界
+
+- 当前公开 SDK 只暴露 `getPropertyType()`，没有暴露 `setPropertyType()`。
+- 进一步探测宿主端 plugin endpoint 后，`rem.setPropertyType` 与 `rem.setSlotType` 也都不存在。
+- 结论：generic property 的列类型当前不能通过插件 API 改写。
+- 直接影响：
+  - `table property set-type` 当前应视为 unsupported
+  - `table property add --type/--options` 当前不能承诺建出真正的 typed column
+  - `powerup property set-type` 与 `powerup property add --type/--options` 同样受限
+- 目前仍可用：
+  - plain property create
+  - `row.setTagPropertyValue(...)`
+  - 对已经在 UI 中存在的 select/multi_select 列执行 option add/remove
+  - 本仓库当前会在 option add/remove 前读取本地 DB，确认目标 property 的 `ft` 已经是 `single_select` 或 `multi_select`
+- 若需要可编程的 typed schema，当前只能走 `plugin.app.registerPowerup(...)` 注册出的 plugin-owned schema。
+
 ## 3) 本仓库：表格/属性写入 op（与 SDK 对应）
 
 本仓库的写入建议优先走队列 op（由插件端执行），避免外部直接操控 UI：
 
 - 表与属性
   - `create_table`（`plugin.rem.createTable`）
-  - `add_property`（创建属性 Rem，`setIsProperty(true)`，可设置类型与 options）
-  - `set_property_type`
+  - `add_property`（当前只支持 plain property create；typed property create 不支持）
+  - `set_property_type`（当前不支持）
   - `add_option` / `remove_option`
   - `set_table_filter`（内部构造 `Query.tableColumn(...)`）
 - 行与单元格

@@ -3,13 +3,11 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { executeSearchRemOverview } from '../../adapters/core.js';
-
 import { AppConfig } from '../../services/AppConfig.js';
 import { HostApiClient } from '../../services/HostApiClient.js';
 import { CliError } from '../../services/Errors.js';
+import { executeDbSearchUseCase } from '../../lib/hostApiUseCases.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
-import { cliErrorFromUnknown } from '../_tool.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -56,35 +54,15 @@ export const readSearchCommand = Command.make(
             offset,
             timeoutMs: effectiveTimeoutMs,
           })
-        : yield* Effect.tryPromise({
-            try: async () =>
-              await executeSearchRemOverview({
-                query,
-                dbPath: cfg.remnoteDb,
-                timeRange: timeRange as any,
-                parentId,
-                pagesOnly,
-                excludePages,
-                limit: limit as any,
-                offset: offset as any,
-                timeoutMs: effectiveTimeoutMs,
-              } as any),
-            catch: (e) => {
-              if ((e as any)?.code === 'TIMEOUT') {
-                return new CliError({
-                  code: 'TIMEOUT',
-                  message: `DB query timed out after ${effectiveTimeoutMs}ms`,
-                  exitCode: 1,
-                  details: { timeoutMs: effectiveTimeoutMs },
-                  hint: [
-                    'Narrow the search scope (e.g. add --time 30d, or --parent <remId>)',
-                    'Reduce the result count (e.g. --limit 10)',
-                    'Try plugin candidates: agent-remnote plugin search --query "<keywords>"',
-                  ],
-                });
-              }
-              return cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' });
-            },
+        : yield* executeDbSearchUseCase({
+            query,
+            timeRange,
+            parentId,
+            pagesOnly,
+            excludePages,
+            limit,
+            offset,
+            timeoutMs: effectiveTimeoutMs,
           });
       yield* writeSuccess({ data: result, md: (result as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),

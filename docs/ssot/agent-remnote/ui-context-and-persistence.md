@@ -53,6 +53,12 @@
 - `remnote.db`：RemNote 官方库（只读），作为“知识库数据态”事实来源。
 - 原则：SQLite 只用于**内容/结构/引用**等重数据；不尝试用它模拟 UI 运行态。
 
+补充：
+
+- `store.sqlite` 现在还持久化 `workspace_bindings`，用于维护 `workspaceId -> dbPath` 的长期绑定关系。
+- 当前默认 workspace 指针也存于 `workspace_bindings.is_current`，供零配置 DB read 与 Host API status 复用。
+- `api.state.json` 继续只是运行时快照，不承载长期 binding。
+
 ## UI 快照协议（WS 消息）
 
 ### `SelectionChanged`（已存在）
@@ -92,6 +98,12 @@
 - `focusedPortalId`：焦点所在的 Portal 容器（例如嵌入/投影视图）。用于区分“用户在可视化上正在操作哪个容器”；当用户说“在这个嵌入里…”，应优先参考该字段并在不确定实际落库位置时追问澄清。
 - `kbId`：当前 Knowledge Base（workspace）标识。Agent 做 DB Pull 前应优先确保 kbId 正确，以免读取到另一个知识库的 `remnote.db`。
 - `url`：用于粗判界面是否处在“普通页面编辑”之外（例如 Search/Queue）。在这类界面里 `pageRemId`/focus 可能为空或不稳定，应更保守地询问目标页面/父级 ID。
+
+当前定型行为：
+
+- live `uiContext.kbId` 是建立或刷新 workspace binding 的最强信号。
+- 一旦 `kbId` 能解析到 `~/remnote/remnote-<kbId>/remnote.db`，宿主机应立即把该 binding 写入 Store DB，并更新 current workspace。
+- 后续即使插件短暂离线，只要 binding 仍可验证，DB read 也应继续命中同一 workspace。
 
 ## 快照归一化（Normalization）
 

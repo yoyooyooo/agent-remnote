@@ -2,6 +2,8 @@ import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 
+import { joinApiUrl } from '../lib/apiUrls.js';
+import { AppConfig } from './AppConfig.js';
 import { CliError, type CliErrorCode } from './Errors.js';
 
 type JsonEnvelope =
@@ -72,6 +74,7 @@ function buildQuery(params: Record<string, unknown>): string {
 
 function requestJson<A>(params: {
   readonly baseUrl: string;
+  readonly basePath: string;
   readonly path: string;
   readonly method: 'GET' | 'POST';
   readonly body?: unknown;
@@ -79,7 +82,7 @@ function requestJson<A>(params: {
 }): Effect.Effect<A, CliError> {
   const timeoutMs = Math.max(1, params.timeoutMs ?? 15_000);
   const baseUrl = normalizeBaseUrl(params.baseUrl);
-  const url = `${baseUrl}${params.path}`;
+  const url = joinApiUrl(baseUrl, params.path, params.basePath);
 
   return Effect.async<A, CliError>((resume) => {
     const controller = new AbortController();
@@ -266,86 +269,100 @@ export interface HostApiClientService {
 
 export class HostApiClient extends Context.Tag('HostApiClient')<HostApiClient, HostApiClientService>() {}
 
-export const HostApiClientLive = Layer.succeed(HostApiClient, {
-  health: ({ baseUrl, timeoutMs }) => requestJson({ baseUrl, path: '/v1/health', method: 'GET', timeoutMs }),
-  status: ({ baseUrl, timeoutMs }) => requestJson({ baseUrl, path: '/v1/status', method: 'GET', timeoutMs }),
-  uiContextSnapshot: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/ui-context/snapshot${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  uiContextPage: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/ui-context/page${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  uiContextFocusedRem: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/ui-context/focused-rem${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  uiContextDescribe: ({ baseUrl, stateFile, staleMs, selectionLimit, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/ui-context/describe${buildQuery({ stateFile, staleMs, selectionLimit })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  selectionSnapshot: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/selection/snapshot${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  selectionRoots: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/selection/roots${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  selectionCurrent: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/selection/current${buildQuery({ stateFile, staleMs })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  pluginCurrent: ({ baseUrl, stateFile, staleMs, selectionLimit, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/plugin/current${buildQuery({ stateFile, staleMs, selectionLimit })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  selectionOutline: ({ baseUrl, body, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/plugin/selection/outline', method: 'POST', body, timeoutMs }),
-  uiContext: ({ baseUrl, timeoutMs }) => requestJson({ baseUrl, path: '/v1/ui-context', method: 'GET', timeoutMs }),
-  selection: ({ baseUrl, timeoutMs }) => requestJson({ baseUrl, path: '/v1/selection', method: 'GET', timeoutMs }),
-  searchDb: ({ baseUrl, ...body }) => requestJson({ baseUrl, path: '/v1/search/db', method: 'POST', body }),
-  searchPlugin: ({ baseUrl, ...body }) => requestJson({ baseUrl, path: '/v1/search/plugin', method: 'POST', body }),
-  writeApply: ({ baseUrl, body, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/write/apply', method: 'POST', body, timeoutMs }),
-  readOutline: ({ baseUrl, body, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/read/outline', method: 'POST', body, timeoutMs }),
-  dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>
-    requestJson({
-      baseUrl,
-      path: `/v1/daily/rem-id${buildQuery({ date, offsetDays })}`,
-      method: 'GET',
-      timeoutMs,
-    }),
-  queueWait: ({ baseUrl, txnId, timeoutMs, pollMs }) =>
-    requestJson({ baseUrl, path: '/v1/queue/wait', method: 'POST', body: { txnId, timeoutMs, pollMs } }),
-  queueTxn: ({ baseUrl, txnId, timeoutMs }) =>
-    requestJson({ baseUrl, path: `/v1/queue/txns/${encodeURIComponent(txnId)}`, method: 'GET', timeoutMs }),
-  triggerSync: ({ baseUrl, timeoutMs }) =>
-    requestJson({ baseUrl, path: '/v1/actions/trigger-sync', method: 'POST', timeoutMs }),
-} satisfies HostApiClientService);
+export const HostApiClientLive = Layer.effect(
+  HostApiClient,
+  Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const basePath = cfg.apiBasePath ?? '/v1';
+    const request = <A>(params: {
+      readonly baseUrl: string;
+      readonly path: string;
+      readonly method: 'GET' | 'POST';
+      readonly body?: unknown;
+      readonly timeoutMs?: number;
+    }) => requestJson<A>({ ...params, basePath });
+
+    return {
+      health: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/health', method: 'GET', timeoutMs }),
+      status: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/status', method: 'GET', timeoutMs }),
+      uiContextSnapshot: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/ui-context/snapshot${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      uiContextPage: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/ui-context/page${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      uiContextFocusedRem: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/ui-context/focused-rem${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      uiContextDescribe: ({ baseUrl, stateFile, staleMs, selectionLimit, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/ui-context/describe${buildQuery({ stateFile, staleMs, selectionLimit })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      selectionSnapshot: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/selection/snapshot${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      selectionRoots: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/selection/roots${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      selectionCurrent: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/selection/current${buildQuery({ stateFile, staleMs })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      pluginCurrent: ({ baseUrl, stateFile, staleMs, selectionLimit, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/plugin/current${buildQuery({ stateFile, staleMs, selectionLimit })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      selectionOutline: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/plugin/selection/outline', method: 'POST', body, timeoutMs }),
+      uiContext: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/ui-context', method: 'GET', timeoutMs }),
+      selection: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/selection', method: 'GET', timeoutMs }),
+      searchDb: ({ baseUrl, ...body }) => request({ baseUrl, path: '/search/db', method: 'POST', body }),
+      searchPlugin: ({ baseUrl, ...body }) => request({ baseUrl, path: '/search/plugin', method: 'POST', body }),
+      writeApply: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/write/apply', method: 'POST', body, timeoutMs }),
+      readOutline: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/read/outline', method: 'POST', body, timeoutMs }),
+      dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>
+        request({
+          baseUrl,
+          path: `/daily/rem-id${buildQuery({ date, offsetDays })}`,
+          method: 'GET',
+          timeoutMs,
+        }),
+      queueWait: ({ baseUrl, txnId, timeoutMs, pollMs }) =>
+        request({ baseUrl, path: '/queue/wait', method: 'POST', body: { txnId, timeoutMs, pollMs } }),
+      queueTxn: ({ baseUrl, txnId, timeoutMs }) =>
+        request({ baseUrl, path: `/queue/txns/${encodeURIComponent(txnId)}`, method: 'GET', timeoutMs }),
+      triggerSync: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/actions/trigger-sync', method: 'POST', timeoutMs }),
+    } satisfies HostApiClientService;
+  }),
+);

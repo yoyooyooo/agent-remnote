@@ -20,9 +20,11 @@
 - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
 - `agent-remnote table create`：创建 Table（对应 `create_table`；避免调用方手写 ops）。
 - `agent-remnote table record add/update/delete`：Table 视角的记录写入/修改/删除（对应 `table_add_row`/`update_text`/`set_cell_*`/`delete_rem`）。
-- `agent-remnote table property add/set-type`：Table 列定义管理（对应 `add_property`/`set_property_type`）。
-- `agent-remnote table option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。
-- `agent-remnote powerup apply/remove/...`：Powerup(Tag) 视角的封装命令（常见场景：列 schema、给 Rem 打 Powerup Tag 并设置 properties；内部仍生成标准 ops 入队）。
+- `agent-remnote table property add/set-type`：Table 列定义管理。当前只支持 plain property create；`--type`/`--options` 与 `set-type` 会稳定返回 `WRITE_UNAVAILABLE`（宿主未暴露 property-type mutation endpoint）。
+- `agent-remnote table option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。命令会先读取本地 RemNote DB，确认目标 property 的 `ft` 已是 `single_select` 或 `multi_select`。
+- `agent-remnote powerup apply/remove/...`：Powerup(Tag) 视角的封装命令（常见场景：给 Rem 打 Powerup Tag 并设置 properties；内部仍生成标准 ops 入队）。
+- `agent-remnote powerup property add/set-type`：当前只支持 plain property create；`--type`/`--options` 与 `set-type` 会稳定返回 `WRITE_UNAVAILABLE`（宿主未暴露 property-type mutation endpoint）。
+- `agent-remnote powerup option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。命令会先读取本地 RemNote DB，确认目标 property 的 `ft` 已是 `single_select` 或 `multi_select`。
 - `agent-remnote replace markdown/literal`：替换目标 Rem（`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids）。
 - `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
 - `agent-remnote queue stats`：查看队列统计（pending/in_flight/dead/ready_txns；可选 `--include-conflicts` 追加冲突摘要）。
@@ -118,6 +120,23 @@
         4. 最后尝试 delete 备份容器（等价于删除旧内容子树；若删除失败则回滚：删除新内容、把旧内容 move 回原位，并 best-effort 清理备份容器；仍失败时返回 `backup_rem_id` 供手动处理）
       - 说明：队列 txn 只能保证 **op 顺序**，不能保证跨 op 的 all-or-nothing；要做到“失败可回滚”，必须把替换封装为插件侧的单 op（或等价的可补偿 saga）。
 - 入队后默认会通过 WS 主动通知插件开始同步（`notify` 默认 true，可传 `notify=false` 禁用）。
+
+## 当前宿主边界
+
+- RemNote 当前公开插件 API 暴露了 `getPropertyType()`、`setTagPropertyValue()`、`setIsProperty()`，没有暴露 `setPropertyType()`。
+- 进一步验证宿主端内部 plugin router 后，`rem.setPropertyType` 与 `rem.setSlotType` 这两个 endpoint 也都不存在；直接调用会得到 `Invalid endpoint`。
+- 因此，generic property 的“写类型”当前无法通过 CLI/插件执行器完成。
+- 受影响命令：
+  - `table property set-type`
+  - `powerup property set-type`
+  - `table property add --type ...`
+  - `table property add --options ...`
+  - `powerup property add --type ...`
+  - `powerup property add --options ...`
+- 当前可用面：
+  - plain property create 仍支持
+  - `table/powerup option add/remove` 仍支持，但目标 property 必须已经是 UI 中存在的 select/multi_select 列，并且本地 DB 中 `ft` 已落为 `single_select` 或 `multi_select`
+  - 若需要带 schema 的 typed property，当前只能走 plugin-owned powerup schema registration，而不是 generic property mutation
 
 ### 写后双链校验（推荐）
 

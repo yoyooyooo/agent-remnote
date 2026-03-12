@@ -49,6 +49,7 @@ import { WsBridgeStateFileLive } from '../services/WsBridgeStateFile.js';
 import { WsClientLive } from '../services/WsClient.js';
 import { HostApiClientLive } from '../services/HostApiClient.js';
 import { UserConfigFileLive } from '../services/UserConfigFile.js';
+import { WorkspaceBindingsLive } from '../services/WorkspaceBindings.js';
 
 import { StatusLineControllerLive } from '../runtime/status-line/StatusLineController.js';
 import { StatusLineUpdaterLive } from '../runtime/status-line/StatusLineUpdater.js';
@@ -91,8 +92,9 @@ const servicesLive = Layer.mergeAll(
   ProcessLive,
   ChildProcessLive,
   WsClientLive,
-  HostApiClientLive,
+  HostApiClientLive.pipe(Layer.provide(appConfigLive)),
   UserConfigFileLive,
+  WorkspaceBindingsLive,
   QueueLive,
   RefResolverLive,
   RemDbLive,

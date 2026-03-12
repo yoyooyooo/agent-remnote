@@ -10,6 +10,7 @@ import { Payload } from '../services/Payload.js';
 import { executeWriteApplyUseCase } from '../lib/hostApiUseCases.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from './_applyEnvelope.js';
 import { writeFailure, writeSuccess } from './_shared.js';
+import { validateOptionMutationOps } from './write/_optionRuntimeGuard.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -86,6 +87,7 @@ export const applyCommand = Command.make(
               }),
       });
       const compiled = yield* compileApplyEnvelope(parsed);
+      yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
 
       const metaFromFlag = meta ? yield* payloadSvc.readJson(meta) : undefined;
       const metaValue = metaFromFlag ?? compiled.meta;

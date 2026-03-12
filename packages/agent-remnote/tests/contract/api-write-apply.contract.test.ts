@@ -18,6 +18,7 @@ import { Queue } from '../../src/services/Queue.js';
 import { RefResolver } from '../../src/services/RefResolver.js';
 import { RemDb } from '../../src/services/RemDb.js';
 import { SupervisorState } from '../../src/services/SupervisorState.js';
+import { WorkspaceBindings } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { StatusLineController } from '../../src/runtime/status-line/StatusLineController.js';
 
@@ -175,6 +176,7 @@ describe('runtime contract: http api write apply', () => {
               resolve: () => Effect.fail(new Error('unexpected ref resolve')),
             } as any),
             Effect.provideService(HostApiClient, {} as any),
+            Effect.provideService(WorkspaceBindings, {} as any),
             Effect.provideService(RemDb, {} as any),
             Effect.provideService(Process, {
               isPidRunning: () => Effect.succeed(false),

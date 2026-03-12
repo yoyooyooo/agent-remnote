@@ -32,7 +32,8 @@ export const stackStatusCommand = Command.make('status', {}, () =>
     const apiPidFile = resolveUserFilePath(apiFiles.defaultPidFile());
     const apiPidInfo = yield* apiFiles.readPidFile(apiPidFile);
     const apiRunning = apiPidInfo ? yield* proc.isPidRunning(apiPidInfo.pid) : false;
-    const apiBaseUrl = apiLocalBaseUrl(apiPidInfo?.port ?? cfg.apiPort ?? 3000);
+    const apiBasePath = apiPidInfo?.base_path ?? cfg.apiBasePath ?? '/v1';
+    const apiBaseUrl = apiLocalBaseUrl(apiPidInfo?.port ?? cfg.apiPort ?? 3000, apiBasePath);
     const apiStatus = yield* api.status({ baseUrl: apiBaseUrl, timeoutMs: 2000 }).pipe(Effect.either);
 
     const queueStats = yield* queue.stats({ dbPath: cfg.storeDb }).pipe(Effect.either);
@@ -54,6 +55,7 @@ export const stackStatusCommand = Command.make('status', {}, () =>
         pid: apiPidInfo?.pid ?? null,
         pid_file: apiPidFile,
         base_url: apiBaseUrl,
+        base_path: apiBasePath,
         healthy: apiStatus._tag === 'Right',
         status: apiStatus._tag === 'Right' ? apiStatus.right : null,
       },
@@ -69,6 +71,13 @@ export const stackStatusCommand = Command.make('status', {}, () =>
       `- api_pid: ${data.api.pid ?? ''}`,
       `- api_healthy: ${data.api.healthy}`,
       `- api_base_url: ${data.api.base_url}`,
+      `- api_base_path: ${data.api.base_path}`,
+      `- db_read_ready: ${data.api.status?.capabilities?.db_read_ready ?? ''}`,
+      `- plugin_rpc_ready: ${data.api.status?.capabilities?.plugin_rpc_ready ?? ''}`,
+      `- write_ready: ${data.api.status?.capabilities?.write_ready ?? ''}`,
+      `- ui_session_ready: ${data.api.status?.capabilities?.ui_session_ready ?? ''}`,
+      `- workspace_resolved: ${data.api.status?.workspace?.resolved ?? ''}`,
+      `- current_workspace_id: ${data.api.status?.workspace?.currentWorkspaceId ?? ''}`,
       `- active_worker_conn_id: ${data.active_worker_conn_id ?? ''}`,
       `- queue_pending: ${data.queue?.pending ?? ''}`,
       `- queue_in_flight: ${data.queue?.in_flight ?? ''}`,

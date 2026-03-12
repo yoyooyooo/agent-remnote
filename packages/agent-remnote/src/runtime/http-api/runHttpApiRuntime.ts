@@ -38,6 +38,7 @@ import { Queue } from '../../services/Queue.js';
 import { RemDb } from '../../services/RemDb.js';
 import { RefResolver } from '../../services/RefResolver.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
+import { WorkspaceBindings } from '../../services/WorkspaceBindings.js';
 import { WsClient } from '../../services/WsClient.js';
 import { StatusLineController } from '../status-line/StatusLineController.js';
 
@@ -47,9 +48,13 @@ function statusCodeFromCliError(error: CliError): number {
     case 'INVALID_PAYLOAD':
     case 'PAYLOAD_TOO_LARGE':
       return 400;
+    case 'WORKSPACE_UNRESOLVED':
     case 'TXN_FAILED':
     case 'ID_MAP_CONFLICT':
       return 409;
+    case 'PLUGIN_UNAVAILABLE':
+    case 'WRITE_UNAVAILABLE':
+    case 'UI_SESSION_UNAVAILABLE':
     case 'WS_UNAVAILABLE':
     case 'WS_TIMEOUT':
     case 'DB_UNAVAILABLE':
@@ -138,6 +143,7 @@ export function runHttpApiRuntime(params?: {
   | Payload
   | RefResolver
   | HostApiClient
+  | WorkspaceBindings
   | RemDb
   | Process
   | SupervisorState
@@ -146,6 +152,7 @@ export function runHttpApiRuntime(params?: {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const runtimeCfg = { ...cfg, apiBaseUrl: undefined };
+    const basePath = cfg.apiBasePath ?? '/v1';
     const apiFiles = yield* ApiDaemonFiles;
     const daemonFiles = yield* DaemonFiles;
     const ws = yield* WsClient;
@@ -153,6 +160,7 @@ export function runHttpApiRuntime(params?: {
     const payload = yield* Payload;
     const refs = yield* RefResolver;
     const hostApi = yield* HostApiClient;
+    const workspaceBindings = yield* WorkspaceBindings;
     const remDb = yield* RemDb;
     const processSvc = yield* Process;
     const supervisorState = yield* SupervisorState;
@@ -173,15 +181,24 @@ export function runHttpApiRuntime(params?: {
         Effect.provideService(Payload, payload),
         Effect.provideService(RefResolver, refs),
         Effect.provideService(HostApiClient, hostApi),
+        Effect.provideService(WorkspaceBindings, workspaceBindings),
         Effect.provideService(RemDb, remDb),
         Effect.provideService(Process, processSvc),
         Effect.provideService(SupervisorState, supervisorState),
         Effect.provideService(StatusLineController, statusLine),
       ) as Effect.Effect<A, CliError, never>;
 
+    const routePathFor = (pathname: string): string | null => {
+      if (basePath === '/') return pathname || '/';
+      if (pathname === basePath) return '/';
+      if (pathname.startsWith(`${basePath}/`)) return pathname.slice(basePath.length) || '/';
+      return null;
+    };
+
     const server = createServer((req, res) => {
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
       const method = req.method || 'GET';
+      const routePath = routePathFor(url.pathname);
 
       const run = async (effect: Effect.Effect<any, CliError, any>, statusCode = 200) => {
         const exit = await Effect.runPromiseExit(provide(effect));
@@ -201,14 +218,14 @@ export function runHttpApiRuntime(params?: {
         sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
       };
 
-      if (method === 'GET' && url.pathname === '/v1/health') {
+      if (method === 'GET' && routePath === '/health') {
         void run(
           Effect.gen(function* () {
             return yield* collectApiHealthUseCase({
               pid: process.pid,
               host,
               port: currentPort(),
-              basePath: '/v1',
+              basePath,
               startedAt,
             });
           }),
@@ -216,14 +233,14 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/status') {
+      if (method === 'GET' && routePath === '/status') {
         void run(
           Effect.gen(function* () {
             return yield* collectApiStatusUseCase({
               pid: process.pid,
               host,
               port: currentPort(),
-              basePath: '/v1',
+              basePath,
               startedAt,
             });
           }),
@@ -231,17 +248,17 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/ui-context') {
+      if (method === 'GET' && routePath === '/ui-context') {
         sendJson(res, 200, ok(loadBridgeUiContextSnapshot({})));
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/selection') {
+      if (method === 'GET' && routePath === '/selection') {
         sendJson(res, 200, ok(loadBridgeSelectionSnapshot({})));
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/ui-context/snapshot') {
+      if (method === 'GET' && routePath === '/plugin/ui-context/snapshot') {
         void run(
           collectUiContextSnapshotUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -251,7 +268,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/ui-context/page') {
+      if (method === 'GET' && routePath === '/plugin/ui-context/page') {
         void run(
           collectUiContextPageUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -261,7 +278,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/ui-context/focused-rem') {
+      if (method === 'GET' && routePath === '/plugin/ui-context/focused-rem') {
         void run(
           collectUiContextFocusedRemUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -271,7 +288,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/ui-context/describe') {
+      if (method === 'GET' && routePath === '/plugin/ui-context/describe') {
         void run(
           collectUiContextDescribeUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -284,7 +301,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/selection/snapshot') {
+      if (method === 'GET' && routePath === '/plugin/selection/snapshot') {
         void run(
           collectSelectionSnapshotUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -294,7 +311,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/selection/roots') {
+      if (method === 'GET' && routePath === '/plugin/selection/roots') {
         void run(
           collectSelectionRootsUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -304,7 +321,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/selection/current') {
+      if (method === 'GET' && routePath === '/plugin/selection/current') {
         void run(
           collectSelectionCurrentUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -314,7 +331,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/plugin/current') {
+      if (method === 'GET' && routePath === '/plugin/current') {
         void run(
           collectPluginCurrentUseCase({
             stateFile: url.searchParams.get('stateFile') ?? undefined,
@@ -325,7 +342,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname === '/v1/daily/rem-id') {
+      if (method === 'GET' && routePath === '/daily/rem-id') {
         void run(
           executeDailyRemIdUseCase({
             date: url.searchParams.get('date') ?? undefined,
@@ -335,7 +352,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/plugin/selection/outline') {
+      if (method === 'POST' && routePath === '/plugin/selection/outline') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -368,7 +385,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/search/db') {
+      if (method === 'POST' && routePath === '/search/db') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -397,7 +414,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/read/outline') {
+      if (method === 'POST' && routePath === '/read/outline') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -431,7 +448,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/search/plugin') {
+      if (method === 'POST' && routePath === '/search/plugin') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -457,7 +474,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/write/apply') {
+      if (method === 'POST' && routePath === '/write/apply') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -488,7 +505,7 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/queue/wait') {
+      if (method === 'POST' && routePath === '/queue/wait') {
         void (async () => {
           try {
             const body = await Effect.runPromise(readJsonBody(req));
@@ -508,13 +525,13 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
-      if (method === 'GET' && url.pathname.startsWith('/v1/queue/txns/')) {
-        const txnId = decodeURIComponent(url.pathname.slice('/v1/queue/txns/'.length));
+      if (method === 'GET' && typeof routePath === 'string' && routePath.startsWith('/queue/txns/')) {
+        const txnId = decodeURIComponent(routePath.slice('/queue/txns/'.length));
         void run(executeQueueTxnUseCase({ txnId }));
         return;
       }
 
-      if (method === 'POST' && url.pathname === '/v1/actions/trigger-sync') {
+      if (method === 'POST' && routePath === '/actions/trigger-sync') {
         void run(executeTriggerSyncUseCase());
         return;
       }
@@ -574,10 +591,10 @@ export function runHttpApiRuntime(params?: {
       pid: process.pid,
       host,
       port: actualPort,
-      basePath: '/v1',
+      basePath,
       startedAt,
-      localBaseUrl: apiLocalBaseUrl(actualPort),
-      containerBaseUrl: apiContainerBaseUrl(actualPort),
+      localBaseUrl: apiLocalBaseUrl(actualPort, basePath),
+      containerBaseUrl: apiContainerBaseUrl(actualPort, basePath),
       daemon: { healthy: daemonHealth._tag === 'Right', wsUrl: cfg.wsUrl },
     });
 

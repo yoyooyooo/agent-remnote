@@ -38,6 +38,7 @@ function childCommandLine(params: {
   readonly remnoteDb?: string | undefined;
   readonly host: string;
   readonly port: number;
+  readonly basePath: string;
   readonly stateFile: string;
 }): { command: string; args: string[] } {
   const command = process.argv[0];
@@ -53,6 +54,7 @@ function childCommandLine(params: {
   const execArgv = Array.isArray(process.execArgv) ? process.execArgv : [];
   const args = [...execArgv, script, '--daemon-url', params.wsUrl, '--store-db', params.storeDb];
   if (params.remnoteDb) args.push('--remnote-db', params.remnoteDb);
+  args.push('--api-base-path', params.basePath);
   args.push('api', 'serve', '--host', params.host, '--port', String(params.port), '--state-file', params.stateFile);
   return { command, args };
 }
@@ -127,10 +129,11 @@ export function startApiDaemon(
 
     const host = params.host ?? cfg.apiHost ?? '0.0.0.0';
     const port = params.port ?? cfg.apiPort ?? 3000;
+    const basePath = cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? apiFiles.defaultStateFile());
-    const localBaseUrl = apiLocalBaseUrl(port);
+    const localBaseUrl = apiLocalBaseUrl(port, basePath);
 
     const existing = yield* apiFiles.readPidFile(pidFilePath);
     if (existing) {
@@ -168,6 +171,7 @@ export function startApiDaemon(
           remnoteDb: cfg.remnoteDb,
           host,
           port,
+          basePath,
           stateFile: stateFilePath,
         }),
       catch: (e) =>
@@ -189,7 +193,7 @@ export function startApiDaemon(
         startedAt: Date.now(),
         host,
         port,
-        basePath: '/v1',
+        basePath,
         logFile: logFilePath,
         stateFile: stateFilePath,
         cmd: [cmd.command, ...cmd.args],
@@ -218,10 +222,11 @@ export function ensureApiDaemon(
     const proc = yield* Process;
 
     const port = params.port ?? cfg.apiPort ?? 3000;
+    const basePath = cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? apiFiles.defaultStateFile());
-    const localBaseUrl = apiLocalBaseUrl(port);
+    const localBaseUrl = apiLocalBaseUrl(port, basePath);
 
     const pre = yield* api.health({ baseUrl: localBaseUrl, timeoutMs: API_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     if (Either.isRight(pre)) {

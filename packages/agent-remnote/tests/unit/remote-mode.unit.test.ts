@@ -82,4 +82,19 @@ describe('remote mode guard (unit)', () => {
 
     expect(result).toBeUndefined();
   });
+
+  it('stays in direct mode when only apiHost apiPort and apiBasePath are configured', async () => {
+    const cfgLayer = Layer.succeed(
+      AppConfig,
+      makeConfig(undefined),
+    );
+    const result = await Effect.runPromise(
+      failInRemoteMode({
+        command: 'table show',
+        reason: 'this command still reads local metadata',
+      }).pipe(Effect.provide(cfgLayer)),
+    );
+
+    expect(result).toBeUndefined();
+  });
 });

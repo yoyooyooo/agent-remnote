@@ -24,6 +24,7 @@
   - 行即为被该 Tag 标记的 Rem，`tableRem.taggedRem()` 会返回所有匹配 Rem；数据库中表现为子 Rem（或任意位置 Rem）挂上相同的 Tag ID。
   - 行/列的值通过 `row.setTagPropertyValue(propertyId, RichText[])` 写入，底层会在 Rem JSON 中追加属性映射（可在 `doc.tp` 等字段看到子条目）。插件 API 在上层封装了这些写入逻辑，无需手动维护。
   - 表过滤器 `tableRem.setTableFilter(Query.tableColumn(...))` 其实会生成搜索查询（`Query` 类），底层仍依赖搜索索引和 `remsSearchInfos`；这解释了为什么表格过滤属于搜索派生逻辑而不是单独的表结构。
+  - 2026-03-12 的实机结论：公开 SDK 暴露 `getPropertyType()`，但没有 `setPropertyType()`；宿主 plugin router 也没有 `rem.setPropertyType` / `rem.setSlotType` endpoint。generic property 的列类型当前不能通过插件 API 改写。
 
 ### remsContents（FTS5）
 - **作用**：Rem 文本的全文索引，虚拟表及其伴生数据：
@@ -67,6 +68,25 @@
 - **插件文档补充（Powerups 与 Key-Value 存储）**：
   - Powerup 系统在数据库层体现为：自定义 Powerup 注册后会生成一个 Powerup Rem（同样存于 `quanta`），其子 Rem 定义属性；被 Powerup 标记的 Rem 会在 `tp` 区域写入属性/状态标记。`setPowerupProperty(code, property, value)` 与 `setTagPropertyValue` 使用同一套存储机制。
   - 插件还提供 `useSyncedStorageState` / `useSessionStorageState` / `useLocalStorageState` 钩子，用于 Key-Value 存储；这些值并不写入 SQLite，而是存于宿主的同步存储层（与 `quanta` 无关）。
+
+## 运行时边界补充
+
+- 宿主内部当然有列类型这一层，内部字段就是 `FIELD_TYPE`，值如 `single_select`、`multi_select`、`date`。
+- 但这条写入能力只在宿主内部代码路径里使用。当前实机观察到的 plugin-owned powerup slot 初始化路径是：
+  1. `setIsSlot(true)`
+  2. `update({ FIELD_TYPE, FIELD_LOCATION, SELECT_SOURCE_TYPE })`
+- 这条路径没有被公开成插件 endpoint，因此外部插件无法对 generic property 复用。
+- 直接后果：
+  - `table property set-type` 当前不支持
+  - `powerup property set-type` 当前不支持
+  - `table/powerup property add --type/--options` 当前不能稳定创建 typed property
+  - `table/powerup option add/remove` 只适用于已经在 UI 中存在的 select/multi_select 列
+  - 当前 CLI 会在 option add/remove 前读取本地 DB，要求目标 property 的 `ft` 已经落为 `single_select` 或 `multi_select`
+- 手工创建的 single_select 列与 CLI 误建出的“plain property + child options”有明确结构差异：
+  - 手工列定义上会出现 `ft:"single_select"`、`ie:true`、`opfl:"label"`
+  - 行内 cell 值保存为对 option Rem 的引用 token
+  - CLI 误建路径只留下 `setIsProperty(true)` 打出的 property 标记，缺少 `ft/ie/opfl`
+  - 同一路径下手动附加的 option child 只是普通子 Rem，不能把列升级成真正的 select property
 
 ## 触发器总结
 - **quanta**：插入/更新 → `pendingRecomputeRems`；删除 → 清理搜索相关表。

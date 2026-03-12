@@ -19,10 +19,11 @@ import { Payload } from '../services/Payload.js';
 import { RemDb } from '../services/RemDb.js';
 import { Queue } from '../services/Queue.js';
 import { RefResolver } from '../services/RefResolver.js';
+import { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 import { WsClient } from '../services/WsClient.js';
 import { apiContainerBaseUrl, apiLocalBaseUrl } from './apiUrls.js';
-import { remnoteDbPathForWorkspaceId } from './remnote.js';
 import { dropBlankLinesOutsideFences, trimBoundaryBlankLines } from './text.js';
+import { requireResolvedWorkspace, resolveWorkspaceSnapshot } from './workspaceResolver.js';
 import { cliErrorFromUnknown } from '../commands/_tool.js';
 
 function clampInt(value: number, min: number, max: number): number {
@@ -64,15 +65,16 @@ export function executeDbSearchUseCase(params: {
   readonly limit?: number | undefined;
   readonly offset?: number | undefined;
   readonly timeoutMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig> {
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const effectiveTimeoutMs = clampInt(params.timeoutMs ?? 30_000, 1, 30_000);
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
     return yield* Effect.tryPromise({
       try: async () =>
         await executeSearchRemOverview({
           query: params.query,
-          dbPath: cfg.remnoteDb,
+          dbPath: cfg.remnoteDb ?? workspace!.dbPath,
           timeRange: params.timeRange as any,
           parentId: params.parentId,
           pagesOnly: params.pagesOnly,
@@ -142,10 +144,10 @@ export function executeReadOutlineUseCase(params: {
   readonly expandReferences?: boolean | undefined;
   readonly maxReferenceDepth?: number | undefined;
   readonly detail?: boolean | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RefResolver> {
+}): Effect.Effect<any, CliError, AppConfig | RefResolver | WorkspaceBindings> {
   return Effect.gen(function* () {
-    const cfg = yield* AppConfig;
     const refs = yield* RefResolver;
+    const cfg = yield* AppConfig;
 
     if (params.id && params.ref) {
       return yield* Effect.fail(
@@ -159,12 +161,13 @@ export function executeReadOutlineUseCase(params: {
         new CliError({ code: 'INVALID_ARGS', message: 'You must provide --id or --ref', exitCode: 2 }),
       );
     }
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({ ref: params.ref });
 
     return yield* Effect.tryPromise({
       try: async () =>
         await executeOutlineRemSubtree({
           id: resolvedId,
-          dbPath: cfg.remnoteDb,
+          dbPath: cfg.remnoteDb ?? workspace!.dbPath,
           maxDepth: params.depth as any,
           startOffset: params.offset as any,
           maxNodes: params.nodes as any,
@@ -183,7 +186,7 @@ export function executeReadOutlineUseCase(params: {
 export function executeDailyRemIdUseCase(params: {
   readonly date?: string | undefined;
   readonly offsetDays?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RefResolver | RemDb> {
+}): Effect.Effect<any, CliError, AppConfig | RefResolver | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     if (params.date && params.offsetDays !== undefined) {
       return yield* Effect.fail(
@@ -191,9 +194,11 @@ export function executeDailyRemIdUseCase(params: {
       );
     }
 
-    const cfg = yield* AppConfig;
     const refs = yield* RefResolver;
     const remDb = yield* RemDb;
+    const cfg = yield* AppConfig;
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
 
     let ref = `daily:${params.offsetDays ?? 0}`;
     let remId = '';
@@ -202,7 +207,7 @@ export function executeDailyRemIdUseCase(params: {
     if (params.date) {
       const target = parseDateInput(params.date);
       dateString = yield* remDb
-        .withDb(cfg.remnoteDb, async (db) => {
+        .withDb(dbPath, async (db) => {
           const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
           return formatDateWithPattern(target, format);
         })
@@ -215,7 +220,7 @@ export function executeDailyRemIdUseCase(params: {
         try: async () =>
           await executeSearchRemOverview({
             query: dateString,
-            dbPath: cfg.remnoteDb,
+            dbPath,
             limit: 1,
             preferExact: true,
             exactFirstSingle: true,
@@ -243,7 +248,7 @@ export function executeDailyRemIdUseCase(params: {
       const target = todayAtMidnight();
       target.setDate(target.getDate() + offset);
       dateString = yield* remDb
-        .withDb(cfg.remnoteDb, async (db) => {
+        .withDb(dbPath, async (db) => {
           const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
           return formatDateWithPattern(target, format);
         })
@@ -464,10 +469,14 @@ export function collectApiHealthUseCase(params: {
       activeWorkerConnId: clientsRes._tag === 'Right' ? (clientsRes.right.activeWorkerConnId ?? null) : null,
       queue:
         queueStats._tag === 'Right'
-          ? { pending: (queueStats.right as any).pending ?? 0, in_flight: (queueStats.right as any).in_flight ?? 0 }
-          : { pending: 0, in_flight: 0 },
-      localBaseUrl: apiLocalBaseUrl(params.port),
-      containerBaseUrl: apiContainerBaseUrl(params.port),
+          ? {
+              available: true,
+              pending: (queueStats.right as any).pending ?? 0,
+              in_flight: (queueStats.right as any).in_flight ?? 0,
+            }
+          : { available: false, pending: 0, in_flight: 0 },
+      localBaseUrl: apiLocalBaseUrl(params.port, params.basePath),
+      containerBaseUrl: apiContainerBaseUrl(params.port, params.basePath),
       basePath: params.basePath,
       host: params.host,
       port: params.port,
@@ -481,14 +490,45 @@ export function collectApiStatusUseCase(params: {
   readonly port: number;
   readonly basePath: string;
   readonly startedAt: number;
-}): Effect.Effect<any, CliError, AppConfig | WsClient | Queue> {
+}): Effect.Effect<any, CliError, AppConfig | WsClient | Queue | WorkspaceBindings> {
   return Effect.gen(function* () {
     const health = yield* collectApiHealthUseCase(params);
     const uiContext = loadBridgeUiContextSnapshot({ stateFile: undefined, staleMs: undefined, connId: undefined });
     const selection = loadBridgeSelectionSnapshot({ stateFile: undefined, staleMs: undefined, connId: undefined });
+    const workspaceResolution = yield* resolveWorkspaceSnapshot({});
+    const pluginRpcReady = health.daemon.healthy === true && typeof health.activeWorkerConnId === 'string' && health.activeWorkerConnId.length > 0;
+    const uiSessionReady = uiContext.status === 'ok' || selection.status === 'ok';
+    const dbReadReady = workspaceResolution.resolved === true;
+    const queueReady = health.queue?.available === true;
+    const writeReady = queueReady && pluginRpcReady;
+    const bindingSource = workspaceResolution.bindingSource ?? (workspaceResolution.source === 'unresolved' ? undefined : workspaceResolution.source);
 
     return {
       ...health,
+      capabilities: {
+        db_read_ready: dbReadReady,
+        plugin_rpc_ready: pluginRpcReady,
+        write_ready: writeReady,
+        ui_session_ready: uiSessionReady,
+      },
+      workspace: {
+        resolved: workspaceResolution.resolved,
+        currentWorkspaceId: workspaceResolution.workspaceId ?? null,
+        currentDbPath: workspaceResolution.dbPath ?? null,
+        bindingSource: bindingSource ?? null,
+        resolutionSource: workspaceResolution.source,
+        candidateWorkspaces: workspaceResolution.candidates,
+        reasons: workspaceResolution.reasons,
+      },
+      plugin: {
+        ws_healthy: health.daemon.healthy,
+        active_worker_conn_id: health.activeWorkerConnId,
+      },
+      write: {
+        daemon_ready: health.daemon.healthy,
+        queue_ready: queueReady,
+        worker_ready: pluginRpcReady,
+      },
       uiContext,
       selection,
     };
@@ -641,7 +681,7 @@ export function collectPluginCurrentUseCase(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
   readonly selectionLimit?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RemDb> {
+}): Effect.Effect<any, CliError, AppConfig | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const remDb = yield* RemDb;
@@ -672,12 +712,11 @@ export function collectPluginCurrentUseCase(params: {
     const idsToResolve = uniqueNonEmpty([currentId, pageRemId, focusedRemId, ...selectionShownIds]);
 
     const warnings: string[] = [];
-    const dbPathCandidate =
-      cfg.remnoteDb ||
-      (() => {
-        const kbId = normalizeText(ui?.kbId);
-        return kbId ? remnoteDbPathForWorkspaceId(kbId) : undefined;
-      })();
+    const workspace = yield* resolveWorkspaceSnapshot({
+      stateFile: params.stateFile,
+      staleMs: params.staleMs,
+    }).pipe(Effect.catchAll(() => Effect.succeed(undefined)));
+    const dbPathCandidate = cfg.remnoteDb ?? (workspace?.resolved ? workspace.dbPath : undefined);
 
     const titles = yield* Effect.gen(function* () {
       if (!dbPathCandidate || idsToResolve.length === 0) return new Map<string, string>();
@@ -714,7 +753,7 @@ export function collectPluginCurrentUseCase(params: {
 export function collectSelectionCurrentUseCase(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RemDb> {
+}): Effect.Effect<any, CliError, AppConfig | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const remDb = yield* RemDb;
@@ -736,12 +775,11 @@ export function collectSelectionCurrentUseCase(params: {
 
     const idsToResolve = uniqueNonEmpty([currentId, pageRemId, focusedRemId]);
     const warnings: string[] = [];
-    const dbPathCandidate =
-      cfg.remnoteDb ||
-      (() => {
-        const kbId = normalizeText(ui?.kbId);
-        return kbId ? remnoteDbPathForWorkspaceId(kbId) : undefined;
-      })();
+    const workspace = yield* resolveWorkspaceSnapshot({
+      stateFile: params.stateFile,
+      staleMs: params.staleMs,
+    }).pipe(Effect.catchAll(() => Effect.succeed(undefined)));
+    const dbPathCandidate = cfg.remnoteDb ?? (workspace?.resolved ? workspace.dbPath : undefined);
 
     const titles = yield* Effect.gen(function* () {
       if (!dbPathCandidate || idsToResolve.length === 0) return new Map<string, string>();
@@ -783,11 +821,13 @@ export function collectSelectionOutlineUseCase(params: {
   readonly expandReferences?: boolean | undefined;
   readonly maxReferenceDepth?: number | undefined;
   readonly detail?: boolean | undefined;
-}): Effect.Effect<any, CliError, AppConfig> {
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const snapshot = loadBridgeSelectionSnapshot({ stateFile: params.stateFile, staleMs: params.staleMs });
     const selection = yield* requireOkRemSelection(snapshot);
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({ stateFile: params.stateFile, staleMs: params.staleMs });
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
     const rootIds = selection.remIds.map(String);
 
     if (rootIds.length === 0) {
@@ -816,7 +856,7 @@ export function collectSelectionOutlineUseCase(params: {
         try: async () =>
           await executeOutlineRemSubtree({
             id: rootId,
-            dbPath: cfg.remnoteDb,
+            dbPath,
             maxDepth: maxDepthValue as any,
             startOffset: 0,
             maxNodes: perRootMax as any,
@@ -828,7 +868,14 @@ export function collectSelectionOutlineUseCase(params: {
             detail: params.detail === true,
           } as any),
         catch: (e) =>
-          cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE', details: { root_id: rootId, db_path: cfg.remnoteDb } }),
+          cliErrorFromUnknown(e, {
+            code: 'DB_UNAVAILABLE',
+            details: {
+              root_id: rootId,
+              db_path: dbPath,
+              workspace_id: workspace?.workspaceId,
+            },
+          }),
       });
       const nodeCount = Number((result as any).nodeCount ?? 0);
       const n = Number.isFinite(nodeCount) && nodeCount >= 0 ? Math.floor(nodeCount) : 0;
@@ -864,7 +911,7 @@ export function collectUiContextDescribeUseCase(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
   readonly selectionLimit?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RemDb> {
+}): Effect.Effect<any, CliError, AppConfig | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const remDb = yield* RemDb;
@@ -908,12 +955,11 @@ export function collectUiContextDescribeUseCase(params: {
     const idsToResolve = uniqueNonEmpty([pageRemId, focusedPortalId, focusedRemId, anchorRemId, ...selectionShownIds]);
 
     const warnings: string[] = [];
-    const dbPathCandidate =
-      cfg.remnoteDb ||
-      (() => {
-        const kbId = normalizeText(ui?.kbId);
-        return kbId ? remnoteDbPathForWorkspaceId(kbId) : undefined;
-      })();
+    const workspace = yield* resolveWorkspaceSnapshot({
+      stateFile: params.stateFile,
+      staleMs: params.staleMs,
+    }).pipe(Effect.catchAll(() => Effect.succeed(undefined)));
+    const dbPathCandidate = cfg.remnoteDb ?? (workspace?.resolved ? workspace.dbPath : undefined);
 
     const titles = yield* Effect.gen(function* () {
       if (!dbPathCandidate || idsToResolve.length === 0) return new Map<string, string>();

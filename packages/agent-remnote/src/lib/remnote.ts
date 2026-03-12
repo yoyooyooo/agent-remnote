@@ -9,6 +9,16 @@ export type RemnoteLink = {
   readonly remId: string;
 };
 
+export type WorkspaceCandidate = {
+  readonly workspaceId: string;
+  readonly dbPath: string;
+  readonly kind: 'primary' | 'secondary';
+  readonly dirName: string;
+  readonly mtimeMs: number;
+};
+
+const SECONDARY_WORKSPACE_DIRS = new Set(['browser', 'remnote-browser', 'lnotes']);
+
 export function tryParseRemnoteLink(input: string): RemnoteLink | undefined {
   const raw = input.trim();
   let u: URL;
@@ -58,6 +68,50 @@ export function tryParseRemnoteLinkFromRef(input: string): RemnoteLink | undefin
 
 export function remnoteDbPathForWorkspaceId(workspaceId: string): string {
   return path.join(homeDir(), 'remnote', `remnote-${workspaceId}`, 'remnote.db');
+}
+
+export function discoverWorkspaceCandidatesSync(baseDir = path.join(homeDir(), 'remnote')): WorkspaceCandidate[] {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(baseDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const out: WorkspaceCandidate[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === 'backups') continue;
+
+    const isPrimary = entry.name.startsWith('remnote-');
+    const isSecondary = SECONDARY_WORKSPACE_DIRS.has(entry.name);
+    if (!isPrimary && !isSecondary) continue;
+
+    const workspaceId = isPrimary ? entry.name.slice('remnote-'.length).trim() : entry.name.trim();
+    if (!workspaceId) continue;
+
+    const dbPath = path.join(baseDir, entry.name, 'remnote.db');
+    try {
+      const stat = fs.statSync(dbPath);
+      if (!stat.isFile()) continue;
+      out.push({
+        workspaceId,
+        dbPath,
+        kind: isPrimary ? 'primary' : 'secondary',
+        dirName: entry.name,
+        mtimeMs: Number(stat.mtimeMs ?? 0),
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  out.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'primary' ? -1 : 1;
+    return b.mtimeMs - a.mtimeMs;
+  });
+
+  return out;
 }
 
 export async function tryResolveRemnoteDbPathForWorkspaceId(workspaceId: string): Promise<string | undefined> {

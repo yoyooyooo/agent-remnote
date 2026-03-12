@@ -4,7 +4,8 @@
 
 ## 最短阅读路径
 
-1. 操作队列 schema：`docs/ssot/agent-remnote/queue-schema.md`
+1. Store DB schema：`docs/ssot/agent-remnote/queue-schema.md`
+   - 包含写入队列与 `workspace_bindings`
 2. WS bridge 协议与插件集成：`docs/ssot/agent-remnote/ws-bridge-protocol.md`
 3. CLI 对外契约：`docs/ssot/agent-remnote/cli-contract.md`
 4. Host API 契约：`docs/ssot/agent-remnote/http-api-contract.md`

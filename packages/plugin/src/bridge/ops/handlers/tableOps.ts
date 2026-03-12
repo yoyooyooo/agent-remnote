@@ -6,6 +6,39 @@ import { toRichText } from '../../remnote/richText';
 
 import type { OpDispatch } from '../types';
 
+async function findRemByIdRobust(plugin: ReactRNPlugin, remId: string): Promise<any | undefined> {
+  const id = typeof remId === 'string' ? remId.trim() : '';
+  if (!id) return undefined;
+
+  try {
+    const rem = await plugin.rem.findOne(id);
+    if (rem) return rem;
+  } catch {}
+
+  try {
+    const rems = await plugin.rem.findMany([id]);
+    if (Array.isArray(rems)) {
+      const found = rems.find((rem: any) => rem?._id === id);
+      if (found) return found;
+    }
+  } catch {}
+
+  try {
+    const rems = await plugin.rem.getAll();
+    if (Array.isArray(rems)) {
+      return rems.find((rem: any) => rem?._id === id);
+    }
+  } catch {}
+
+  return undefined;
+}
+
+function createUnsupportedPropertyTypeMutationError(propertyId: unknown): Error {
+  return new Error(
+    `Property type mutation is unsupported by the current RemNote plugin runtime: public rem.setPropertyType() is unavailable, and host endpoints rem.setPropertyType/rem.setSlotType are not exposed for ${String(propertyId ?? 'unknown-property')}`,
+  );
+}
+
 export async function executeCreateTable(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { tag_id, client_temp_id, parent_id, position } = op.payload || {};
   const parentId = typeof parent_id === 'string' ? parent_id.trim() : '';
@@ -37,8 +70,12 @@ export async function executeAddProperty(plugin: ReactRNPlugin, op: OpDispatch):
     // @ts-ignore
     await prop.setText(toRichText(name ?? 'Property'));
     if ((prop as any).setIsProperty) await (prop as any).setIsProperty(true);
-    if (type && typeof (prop as any).setPropertyType === 'function') {
-      await (prop as any).setPropertyType(type);
+    if (type) {
+      if (typeof (prop as any).setPropertyType === 'function') {
+        await (prop as any).setPropertyType(type);
+      } else {
+        throw createUnsupportedPropertyTypeMutationError((prop as any)?._id ?? property_id);
+      }
     }
     if (Array.isArray(options) && options.length > 0) {
       for (const opt of options) {
@@ -64,13 +101,13 @@ export async function executeAddProperty(plugin: ReactRNPlugin, op: OpDispatch):
 
 export async function executeSetPropertyType(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { property_id, type } = op.payload || {};
-  const prop = await plugin.rem.findOne(property_id);
+  const prop = await findRemByIdRobust(plugin, property_id);
   if (!prop) throw new Error('property rem not found');
   if (typeof (prop as any).setPropertyType === 'function') {
     await (prop as any).setPropertyType(type);
     return { ok: true };
   }
-  return { ok: false };
+  throw createUnsupportedPropertyTypeMutationError(property_id ?? (prop as any)?._id);
 }
 
 export async function executeSetTableFilter(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
@@ -111,7 +148,7 @@ export async function executeSetTableFilter(plugin: ReactRNPlugin, op: OpDispatc
 
 export async function executeAddOption(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { property_id, text, option_id } = op.payload || {};
-  const prop = await plugin.rem.findOne(property_id);
+  const prop = await findRemByIdRobust(plugin, property_id);
   if (!prop) throw new Error('property rem not found');
   const opt = await plugin.rem.createRem();
   if (!opt) throw new Error('createRem returned null');
@@ -134,7 +171,7 @@ export async function executeAddOption(plugin: ReactRNPlugin, op: OpDispatch): P
 
 export async function executeRemoveOption(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { option_id } = op.payload || {};
-  const opt = await plugin.rem.findOne(option_id);
+  const opt = await findRemByIdRobust(plugin, option_id);
   if (!opt) return { ok: true };
   await opt.remove();
   return { ok: true };
