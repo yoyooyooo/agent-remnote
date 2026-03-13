@@ -35,10 +35,9 @@ describe('cli contract: plugin lifecycle', () => {
     const stateFile = path.join(tmpDir, 'plugin-server.state.json');
     const port = await getFreePort();
     const baseUrl = `http://127.0.0.1:${port}`;
+    const env = { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' };
 
     try {
-      const env = { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' };
-
       const startRes = await runCli(
         ['--json', 'plugin', 'start', '--port', String(port), '--pid-file', pidFile, '--log-file', logFile, '--state-file', stateFile],
         { env, timeoutMs: 20_000 },
@@ -108,6 +107,12 @@ describe('cli contract: plugin lifecycle', () => {
       expect(stopEnv.ok).toBe(true);
       expect(stopEnv.data.stopped).toBe(true);
     } finally {
+      try {
+        await runCli(['--json', 'plugin', 'stop', '--pid-file', pidFile, '--state-file', stateFile], {
+          env,
+          timeoutMs: 20_000,
+        });
+      } catch {}
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   }, 60_000);
