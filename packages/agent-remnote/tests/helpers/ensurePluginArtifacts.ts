@@ -9,7 +9,8 @@ function repoRoot(): string {
 }
 
 function artifactsReady(root: string): boolean {
-  return existsSync(path.join(root, 'packages/agent-remnote/plugin-artifacts/dist/manifest.json'));
+  const distPath = path.join(root, 'packages/agent-remnote/plugin-artifacts/dist');
+  return existsSync(path.join(distPath, 'manifest.json')) && existsSync(path.join(distPath, 'index-sandbox.js'));
 }
 
 async function sleep(ms: number): Promise<void> {

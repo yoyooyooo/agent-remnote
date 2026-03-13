@@ -7,6 +7,7 @@ import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { checkPluginServerHealth } from '../../lib/pluginServerHealth.js';
+import { CliError } from '../../services/Errors.js';
 import {
   PLUGIN_SERVER_DEFAULT_HOST,
   PLUGIN_SERVER_DEFAULT_PORT,
@@ -45,7 +46,7 @@ export function getPluginStatus(params: {
       readonly error?: string | undefined;
     };
   },
-  never,
+  CliError,
   PluginServerFiles | Process
 > {
   return Effect.gen(function* () {
@@ -85,7 +86,7 @@ export function getPluginStatus(params: {
         error: health._tag === 'Left' ? health.left.message : undefined,
       },
     };
-  }).pipe(Effect.orDie);
+  });
 }
 
 export const pluginStatusCommand = Command.make('status', { pidFile, stateFile }, ({ pidFile, stateFile }) =>
