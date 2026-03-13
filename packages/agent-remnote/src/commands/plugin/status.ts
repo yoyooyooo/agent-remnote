@@ -6,8 +6,8 @@ import * as Option from 'effect/Option';
 import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { checkPluginServerHealth } from '../../lib/pluginServerHealth.js';
 import {
-  checkPluginServerHealth,
   PLUGIN_SERVER_DEFAULT_HOST,
   PLUGIN_SERVER_DEFAULT_PORT,
   PLUGIN_SERVER_HEALTH_TIMEOUT_MS,

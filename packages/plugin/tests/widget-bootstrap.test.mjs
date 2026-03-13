@@ -1,18 +1,19 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { describe, expect, it } from 'vitest';
 
 import { createSandboxScript, resolveWidgetName } from '../public/widget-bootstrap.js';
 
-test('resolveWidgetName uses query param when present', () => {
-  assert.equal(resolveWidgetName('http://localhost:8080/index.html?widgetName=sample_widget'), 'sample_widget');
-});
+describe('widget bootstrap', () => {
+  it('resolveWidgetName uses query param when present', () => {
+    expect(resolveWidgetName('http://localhost:8080/index.html?widgetName=sample_widget')).toBe('sample_widget');
+  });
 
-test('resolveWidgetName falls back to index on root path', () => {
-  assert.equal(resolveWidgetName('http://localhost:8080/'), 'index');
-});
+  it('resolveWidgetName falls back to index on root path', () => {
+    expect(resolveWidgetName('http://localhost:8080/')).toBe('index');
+  });
 
-test('createSandboxScript never emits undefined-sandbox.js for root path', () => {
-  const script = createSandboxScript('http://localhost:8080/');
-  assert.equal(script.src, 'index-sandbox.js');
-  assert.equal(script.type, 'module');
+  it('createSandboxScript never emits undefined-sandbox.js for root path', () => {
+    const script = createSandboxScript('http://localhost:8080/');
+    expect(script.src).toBe('index-sandbox.js');
+    expect(script.type).toBe('module');
+  });
 });
