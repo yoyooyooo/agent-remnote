@@ -60,7 +60,11 @@ export function runPluginStaticRuntime(params?: {
     const host = params?.host ?? '127.0.0.1';
     const port = params?.port ?? 8080;
     const server = createServer((req, res) => {
-      void handleRequest(req, res, distPath);
+      handleRequest(req, res, distPath).catch(() => {
+        if (!res.headersSent) {
+          sendText(res, 500, 'Internal server error');
+        }
+      });
     });
 
     const listen = Effect.async<void, CliError>((resume) => {
