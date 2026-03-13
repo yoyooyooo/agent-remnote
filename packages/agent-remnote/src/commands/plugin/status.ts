@@ -22,15 +22,41 @@ function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
 const pidFile = Options.text('pid-file').pipe(Options.optional, Options.map(optionToUndefined));
 const stateFile = Options.text('state-file').pipe(Options.optional, Options.map(optionToUndefined));
 
-export const pluginStatusCommand = Command.make('status', { pidFile, stateFile }, ({ pidFile, stateFile }) =>
-  Effect.gen(function* () {
+export function getPluginStatus(params: {
+  readonly pidFilePath: string;
+  readonly explicitStateFilePath?: string | undefined;
+}): Effect.Effect<
+  {
+    readonly service: {
+      readonly running: boolean;
+      readonly pid: number | null;
+      readonly pid_file: string;
+      readonly log_file: string;
+      readonly state_file: string;
+      readonly started_at: number | null;
+    };
+    readonly state: any;
+    readonly plugin_server: {
+      readonly healthy: boolean;
+      readonly base_url: string;
+      readonly host: string;
+      readonly port: number;
+      readonly dist_path: string;
+      readonly error?: string | undefined;
+    };
+  },
+  never,
+  PluginServerFiles | Process
+> {
+  return Effect.gen(function* () {
     const files = yield* PluginServerFiles;
     const proc = yield* Process;
 
-    const pidFilePath = resolveUserFilePath(pidFile ?? files.defaultPidFile());
-    const stateFilePath = resolveUserFilePath(stateFile ?? files.defaultStateFile());
-    const pidInfo = yield* files.readPidFile(pidFilePath);
-    const state = yield* files.readStateFile(stateFilePath);
+    const pidInfo = yield* files.readPidFile(params.pidFilePath);
+    const effectiveStateFilePath = resolveUserFilePath(
+      params.explicitStateFilePath ?? pidInfo?.state_file ?? files.defaultStateFile(),
+    );
+    const state = yield* files.readStateFile(effectiveStateFilePath);
 
     const pid = pidInfo?.pid;
     const running = typeof pid === 'number' ? yield* proc.isPidRunning(pid) : false;
@@ -40,13 +66,13 @@ export const pluginStatusCommand = Command.make('status', { pidFile, stateFile }
 
     const health = yield* checkPluginServerHealth(baseUrl, PLUGIN_SERVER_HEALTH_TIMEOUT_MS).pipe(Effect.either);
 
-    const data = {
+    return {
       service: {
         running,
         pid: pid ?? null,
-        pid_file: pidFilePath,
+        pid_file: params.pidFilePath,
         log_file: pidInfo?.log_file ?? files.defaultLogFile(),
-        state_file: pidInfo?.state_file ?? stateFilePath,
+        state_file: effectiveStateFilePath,
         started_at: pidInfo?.started_at ?? state?.startedAt ?? null,
       },
       state: state ?? null,
@@ -59,6 +85,18 @@ export const pluginStatusCommand = Command.make('status', { pidFile, stateFile }
         error: health._tag === 'Left' ? health.left.message : undefined,
       },
     };
+  }).pipe(Effect.orDie);
+}
+
+export const pluginStatusCommand = Command.make('status', { pidFile, stateFile }, ({ pidFile, stateFile }) =>
+  Effect.gen(function* () {
+    const files = yield* PluginServerFiles;
+
+    const pidFilePath = resolveUserFilePath(pidFile ?? files.defaultPidFile());
+    const data = yield* getPluginStatus({
+      pidFilePath,
+      explicitStateFilePath: stateFile ? resolveUserFilePath(stateFile) : undefined,
+    });
 
     const md = [
       `- service_running: ${data.service.running}`,
