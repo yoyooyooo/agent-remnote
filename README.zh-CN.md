@@ -59,6 +59,29 @@ agent-remnote --help
 
 你需要插件来支持 **写入** 与 **Plugin RPC** 读取。
 
+本地 URL 方式：
+
+1. 启动内置静态服务器：
+
+```bash
+agent-remnote plugin serve
+```
+
+启动后会以接近 Vite 的格式输出 `Local:`。若需要排障，使用 `--debug` 可额外输出 `Dist:`。
+
+也支持后台生命周期命令：
+
+```bash
+agent-remnote plugin ensure
+agent-remnote plugin status
+agent-remnote plugin logs --lines 50
+agent-remnote plugin stop
+```
+
+2. 在 RemNote → Settings → Plugins → Developer 中填写 `http://127.0.0.1:8080` 作为插件地址。
+
+Zip 方式：
+
 1. 下载 `PluginZip.zip`（如有 Releases，可从 Releases 获取），或从源码构建（见“从源码开发与调试”）。
 2. RemNote → Settings → Plugins → Developer → Install From Zip → 选择 `PluginZip.zip`。
 
@@ -422,13 +445,29 @@ npm run build
 
 产物：`packages/plugin/PluginZip.zip`
 
-### 4) 从源码运行 CLI
+### 4) 从源码启动插件静态服务器
+
+```bash
+npm run dev -- plugin serve
+```
+
+默认地址：`http://127.0.0.1:8080`
+
+后台管理命令与 API/daemon 保持同型：
+
+```bash
+npm run dev -- plugin ensure
+npm run dev -- plugin status
+npm run dev -- plugin stop
+```
+
+### 5) 从源码运行 CLI
 
 ```bash
 npm run dev -- --help
 ```
 
-## 质量门禁
+### 6) 质量门禁
 
 ```bash
 npm run check

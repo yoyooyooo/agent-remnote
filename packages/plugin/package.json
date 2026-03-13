@@ -13,7 +13,7 @@
     "lint": "oxlint --config ../../.oxlintrc.json --ignore-path ../../.eslintignore .",
     "format": "oxfmt -c ../../.oxfmtrc.json --ignore-path ../../.gitignore --ignore-path ../../.prettierignore .",
     "format:check": "oxfmt -c ../../.oxfmtrc.json --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --check .",
-    "test": "node -e \"process.exit(0)\""
+    "test": "node --test tests/**/*.test.mjs"
   },
   "dependencies": {
     "@remnote/plugin-sdk": "latest",

@@ -59,6 +59,29 @@ agent-remnote --help
 
 You need the plugin for **writes** and **Plugin RPC** reads.
 
+Local URL workflow:
+
+1. Start the built-in static server:
+
+```bash
+agent-remnote plugin serve
+```
+
+Startup output follows a Vite-like style with `Local:`. Add `--debug` to also print `Dist:`.
+
+Background lifecycle commands are also available:
+
+```bash
+agent-remnote plugin ensure
+agent-remnote plugin status
+agent-remnote plugin logs --lines 50
+agent-remnote plugin stop
+```
+
+2. In RemNote → Settings → Plugins → Developer, load the plugin from `http://127.0.0.1:8080`.
+
+Zip workflow:
+
 1. Download `PluginZip.zip` (from Releases, if available), or build it from source (see “Development & debugging”).
 2. In RemNote → Settings → Plugins → Developer → Install From Zip → select `PluginZip.zip`.
 
@@ -422,13 +445,29 @@ npm run build
 
 Output: `packages/plugin/PluginZip.zip`
 
-### 4) Run the CLI from source
+### 4) Serve the plugin from source
+
+```bash
+npm run dev -- plugin serve
+```
+
+Default URL: `http://127.0.0.1:8080`
+
+Background management mirrors the API/daemon lifecycle:
+
+```bash
+npm run dev -- plugin ensure
+npm run dev -- plugin status
+npm run dev -- plugin stop
+```
+
+### 5) Run the CLI from source
 
 ```bash
 npm run dev -- --help
 ```
 
-### 5) Quality gate
+### 6) Quality gate
 
 ```bash
 npm run check

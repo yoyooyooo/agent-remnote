@@ -34,3 +34,17 @@ npm run dev
 Then open:
 
 - `http://localhost:8080/index.html?widgetName=index`
+
+## Built Dist Preview
+
+```bash
+cd packages/plugin
+npm run build
+npx serve dist -l 8080
+```
+
+Notes:
+
+- Some static servers normalize `/index.html` to `/` and drop the query string.
+- `dist/index.html` now falls back to the `index` widget on `/`, which avoids requests like `undefined-sandbox.js`.
+- If you need to preview a non-`index` widget, use a static server that preserves `?widgetName=...`.

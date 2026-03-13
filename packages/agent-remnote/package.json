@@ -8,15 +8,17 @@
   "files": [
     "cli.js",
     "dist",
+    "plugin-artifacts",
     "LICENSE",
     "README.md",
     "CHANGELOG.md"
   ],
   "type": "module",
   "scripts": {
+    "prepare:plugin-artifacts": "node --import tsx ./scripts/prepare-plugin-artifacts.ts",
     "cli": "node --import tsx ./src/main.ts",
     "dev": "node --import tsx ./src/main.ts",
-    "build": "bun build ./src/main.ts --target node --packages bundle --external better-sqlite3 --outdir dist",
+    "build": "npm run prepare:plugin-artifacts && bun build ./src/main.ts --target node --packages bundle --external better-sqlite3 --outdir dist",
     "build:verified": "npm run build && node ./scripts/assert-bundled-effect-cli-patch.js",
     "smoke:dist": "npm run build && node ./cli.js --help",
     "prepack": "npm run build:verified",
