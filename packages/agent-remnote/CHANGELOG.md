@@ -1,5 +1,11 @@
 # agent-remnote
 
+## 1.1.0
+
+### Minor Changes
+
+- 3676681: Add host API workspace binding resolution and `apiBaseUrl`-driven remote command support for the main read/write surface, plus runtime guards for unsupported property type mutations and invalid table option targets.
+
 ## 1.0.0
 
 ### Major Changes
