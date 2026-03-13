@@ -1,6 +1,6 @@
 ---
 name: remnote
-description: 'Use this skill for any RemNote-specific read/write request, including Chinese prompts like 写到今天日记, 当前 page/focus, rem id, 替换/清空/追加某个 rem 的子级, Daily Note, sent=0, queue/WS/plugin sync, or remote apiBaseUrl writes. Prefer the shortest `agent-remnote` business command first: `plugin current --compact`, `rem children replace|clear|append|prepend`, or `daily write`. Only escalate to `apply --payload` for dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
+description: 'Use this skill for any RemNote-specific read/write task. Trigger it whenever the user mentions RemNote, Daily Note, 今日笔记, 当前 page/focus/selection, remId, 替换/清空/追加子级, queue/WS/plugin sync, sent=0, powerup/table/property changes, or remote `apiBaseUrl` mode, even if they only say “记到笔记里” or “查一下当前 page”. Prefer the shortest `agent-remnote` business command first, such as `plugin current --compact`, `rem children replace|clear|append|prepend`, `daily write`, `rem outline`, or `daily rem-id`. Only escalate to `apply --payload` for true dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
 ---
 
 # RemNote
@@ -26,7 +26,8 @@ description: 'Use this skill for any RemNote-specific read/write request, includ
 - 用户给了明确 `remId` / `parentRemId` 时，直接写，不要再多查一轮。
 - `table/powerup property set-type` 当前不支持，`property add --type/--options` 也不能承诺建出真正的 typed property。
 - `table/powerup option add/remove` 只适用于已经在 UI 中存在的 `single_select` / `multi_select` 列；CLI 会先读本地 DB 检查 `ft`。
-- 因为上面这层 `ft` 校验依赖本地 DB，`table/powerup option add/remove` 在 remote `apiBaseUrl` 模式下不能透明远程执行，默认应在宿主机运行。
+- `table/powerup option add/remove` 现在可以在 remote `apiBaseUrl` 模式下通过 Host API 透明执行，但校验仍然发生在宿主机的本地 DB 上，不是调用方本地镜像。
+- 真正“宿主做不到”的是 generic property type mutation；仍然 host-only 的其它命令大多只是还没铺到 Host API，不要混为一谈。
 
 ## Command Selection Ladder
 
@@ -231,7 +232,8 @@ agent-remnote --json apply --payload @plan.json
   - 当前只能创建 plain property，真正的 typed column 需要用户在 RemNote UI 里配置，或改走 plugin-owned powerup schema
 - 如果用户要“给列加 option / 删 option”：
   - 先假定目标 property 必须已经是 UI 中存在的 `single_select` / `multi_select`
-  - 如果没有明确本地 DB 支持，就不要承诺成功
+  - 如果没有明确宿主机本地 DB 支持，就不要承诺成功
+  - remote `apiBaseUrl` 模式下这类命令可以直接走 Host API，由宿主机完成校验和执行
   - `apply --payload` 里的 `add_option/remove_option` 也受同样门槛约束，不是绕过路径
 
 ## Wait Policy
@@ -300,10 +302,64 @@ remote mode 下也保持同样原则：
 - 默认不 wait
 - 默认不额外验证
 
-但有两个例外要记住：
+但要把 remote surface 分成三类：
 
-- `table/powerup option add/remove` 依赖本地 DB 校验，remote mode 下默认不能透明执行
-- `table/powerup property set-type` 与 typed `property add` 在本地和远端都不支持
+### 1. 已经支持透明 remote 执行
+
+- `plugin current --compact`
+- `plugin selection current --compact`
+- `plugin ui-context describe`
+- `search`
+- `rem outline`
+- `daily rem-id`
+- `rem children append|prepend|replace|clear`
+- `daily write`
+- `apply`
+- `queue wait`
+- `table/powerup option add/remove`
+
+说明：
+
+- 这些命令在 `apiBaseUrl` 存在时应优先走 Host API。
+- `table/powerup option add/remove` 虽然依赖本地 DB 校验，但这个“本地”指宿主机；调用方仍然可以透明远程调用。
+
+### 2. 当前仍然 host-only，但本质上是未实现成 Host API
+
+- `powerup schema`
+- `powerup apply`
+- `powerup record add/update/delete`
+- `powerup todo add/remove`
+- `table record add/update/delete`
+- `table show`
+- `rem page-id`
+- `inspect`
+- `by-reference`
+- `resolve-ref`
+- `query`
+- `references`
+- `connections`
+- `todos list`
+- `daily summary`
+- `topic summary`
+
+说明：
+
+- 这类命令之所以在 `apiBaseUrl` 模式下 fail fast，主要是因为它们还会在本地读取 RemNote DB 元数据或宿主机状态。
+- 这类边界大多属于“还没实现成等价 Host API”，不是宿主能力做不到。
+
+### 3. 当前宿主能力本身就不支持
+
+- `table property set-type`
+- `powerup property set-type`
+- typed `table property add --type/--options`
+- typed `powerup property add --type/--options`
+- raw `apply` 里的 `set_property_type`
+- raw `apply` 里的 typed `add_property`
+
+说明：
+
+- 这块是 generic property type mutation 的宿主边界。
+- 在本地和远端都不支持，不要把它包装成“切回宿主机再试”。
 
 ## DN Rule
 
@@ -387,11 +443,17 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 优先判断三件事：
 
-1. 当前是不是在 remote `apiBaseUrl` 模式
-2. 目标 property 是否已经在 UI 中配置成 `single_select` / `multi_select`
-3. 本地 DB 里的 `ft` 是否已经落出来
+1. 目标 property 是否已经在 UI 中配置成 `single_select` / `multi_select`
+2. 宿主机本地 DB 里的 `ft` 是否已经落出来
+3. 当前 remote mode 是否真的打到了正确的宿主机 workspace / DB
 
-如果第 2 或第 3 条不成立，不要重试同一条命令，先让用户在 UI 中完成列类型配置。
+如果第 1 或第 2 条不成立，不要重试同一条命令，先让用户在 UI 中完成列类型配置。
+
+如果是第 3 条不成立：
+
+- 优先排查当前 Host API 指向的宿主机是否正确
+- 再排查 workspace binding 是否已经稳定到目标 DB
+- 不要把问题误判成“remote mode 本身不支持 option mutation”
 
 ### 5. 用户要求“程序化创建 typed property”
 
