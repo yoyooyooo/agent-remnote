@@ -26,9 +26,12 @@
     "version-packages": "changeset version",
     "release": "changeset publish",
     "release:check": "changeset status --verbose",
-    "ci:release": "npm run typecheck && npm test",
-    "ci:premerge": "npm run ci:release && npm run test:stability",
-    "test:stability": "node ./scripts/repeat-command.mjs 10 npm test --workspace agent-remnote -- write-wait.contract.test.ts"
+    "ci:release:raw": "npm run typecheck && npm test",
+    "ci:release": "node ./scripts/with-clean-test-env.mjs npm run ci:release:raw",
+    "test:stability:raw": "node ./scripts/repeat-command.mjs 10 npm test --workspace agent-remnote -- write-wait.contract.test.ts",
+    "test:stability": "node ./scripts/with-clean-test-env.mjs npm run test:stability:raw",
+    "ci:premerge:raw": "npm run ci:release:raw && npm run test:stability:raw",
+    "ci:premerge": "node ./scripts/with-clean-test-env.mjs npm run ci:premerge:raw"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
