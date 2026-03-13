@@ -114,6 +114,24 @@ describe('cli contract: --help', () => {
     expect(out).toContain('describe');
   });
 
+  it('prints plugin help with serve', async () => {
+    const res = await runCli(['plugin', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('current');
+    expect(out).toContain('search');
+    expect(out).toContain('serve');
+    expect(out).toContain('start');
+    expect(out).toContain('ensure');
+    expect(out).toContain('status');
+    expect(out).toContain('stop');
+    expect(out).toContain('logs');
+    expect(out).toContain('restart');
+  });
+
   it('prints config help with subcommands', async () => {
     const res = await runCli(['config', '--help']);
 

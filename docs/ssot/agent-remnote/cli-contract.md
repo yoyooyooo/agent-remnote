@@ -72,10 +72,30 @@ export type JsonEnvelope =
 为降低 Agent “选错入口”的概率，命令树归属做如下裁决：
 
 - 顶层命令集合固定为：`daemon` / `queue` / `apply` / `plugin` / `search` / `query` / `rem` / `daily` / `todo` / `topic` / `powerup` / `table` / `tag` / `portal` / `replace` / `db` / `config` / `doctor` / `ops`
-- `plugin/*`：依赖 RemNote UI/插件/WS bridge state 的能力（例如候选集搜索、selection、ui-context）
+- `plugin/*`：依赖 RemNote UI/插件/WS bridge state 的能力，或直接服务插件运行时工件（例如候选集搜索、selection、ui-context、local static plugin server）
 - 其余 **只读** 能力优先直挂顶层实体子命令（例如 `search` / `query` / `db ...` / `powerup list/schema` / `todo list` / `rem outline`）
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
 - raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口同样统一到 `apply` 的 `kind=actions`）
+
+### `plugin serve`
+
+- `plugin serve`：启动本地静态文件服务器，服务 RemNote 插件构建产物
+- 默认监听：`127.0.0.1:8080`
+- 运行时工件来源优先级：
+  - 已发布包内的 `plugin-artifacts/dist`
+  - 源码仓库中的 `packages/plugin/dist`
+- 该命令用于 RemNote Developer URL 加载场景，不改变 Zip 安装路径契约
+- human surface 默认输出类 Vite 的 `Local:` 行；`--debug` 时可额外输出 `Dist:`
+
+### `plugin start|ensure|status|stop|logs|restart`
+
+- 这组命令负责插件静态服务器的后台生命周期治理
+- 默认文件：
+  - pid：`~/.agent-remnote/plugin-server.pid`
+  - log：`~/.agent-remnote/plugin-server.log`
+  - state：`~/.agent-remnote/plugin-server.state.json`
+- `plugin ensure` / `plugin start` 默认目标地址仍为 `127.0.0.1:8080`
+- 当前**不**属于 `stack ensure/status/stop` 的默认编排范围
 
 ## 6) `config` 命令组契约
 

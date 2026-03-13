@@ -1,6 +1,6 @@
 ---
 name: remnote
-description: 'Use this skill for any RemNote-specific read/write task. Trigger it whenever the user mentions RemNote, Daily Note, 今日笔记, 当前 page/focus/selection, remId, 替换/清空/追加子级, queue/WS/plugin sync, sent=0, powerup/table/property changes, or remote `apiBaseUrl` mode, even if they only say “记到笔记里” or “查一下当前 page”. Prefer the shortest `agent-remnote` business command first, such as `plugin current --compact`, `rem children replace|clear|append|prepend`, `daily write`, `rem outline`, or `daily rem-id`. Only escalate to `apply --payload` for true dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
+description: 'Use this skill for any RemNote-specific read/write or local plugin-loading task. Trigger it whenever the user mentions RemNote, Daily Note, 今日笔记, 当前 page/focus/selection, remId, 替换/清空/追加子级, queue/WS/plugin sync, sent=0, powerup/table/property changes, local Developer URL / plugin server (`plugin serve|ensure|status|logs|stop`), or remote `apiBaseUrl` mode, even if they only say “记到笔记里” or “查一下当前 page”. Prefer the shortest `agent-remnote` business command first, such as `plugin current --compact`, `rem children replace|clear|append|prepend`, `daily write`, `rem outline`, `daily rem-id`, or `plugin ensure`. Only escalate to `apply --payload` for true dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
 ---
 
 # RemNote
@@ -270,6 +270,26 @@ agent-remnote --json apply --payload @plan.json
 - `outline` 适合确认树结构
 - `search` 适合只知道关键词时做回退
 
+## Plugin Local URL
+
+如果用户是在处理 RemNote Developer URL、本地插件静态服、或“为什么本地插件地址打不开”，优先用这组命令：
+
+```bash
+agent-remnote plugin ensure
+agent-remnote plugin status
+agent-remnote plugin logs --lines 50
+agent-remnote plugin stop
+```
+
+补充裁决：
+
+- 用户只想前台跑起来看地址，用 `plugin serve`
+- 用户想后台常驻，用 `plugin ensure`
+- 用户想看当前地址、pid、健康状态，用 `plugin status`
+- 用户想排查启动失败或 404，用 `plugin logs`
+- 用户想关闭后台服务，用 `plugin stop`
+- 这组命令当前不属于默认 `stack ensure/status/stop` 编排
+
 ## Remote Mode
 
 如果 Agent 不在宿主机，不要碰本地 `remnote.db` / `store.sqlite`。
@@ -420,6 +440,10 @@ agent-remnote --json portal create --parent "<parentRemId>" --target "<targetRem
 
 ```bash
 agent-remnote --json daemon status
+agent-remnote plugin ensure
+agent-remnote plugin status
+agent-remnote plugin logs --lines 50
+agent-remnote plugin stop
 ```
 
 只有在用户要求确认时，再继续：
