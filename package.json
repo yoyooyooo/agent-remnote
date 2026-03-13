@@ -28,7 +28,7 @@
     "release:check": "changeset status --verbose",
     "ci:release": "npm run typecheck && npm test",
     "ci:premerge": "npm run ci:release && npm run test:stability",
-    "test:stability": "node ./scripts/repeat-command.mjs 4 npm test --workspace agent-remnote -- write-wait.contract.test.ts"
+    "test:stability": "node ./scripts/repeat-command.mjs 10 npm test --workspace agent-remnote -- write-wait.contract.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
