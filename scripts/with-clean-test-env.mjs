@@ -42,22 +42,32 @@ for (const key of [
   delete env[key];
 }
 
-const exitCode = await new Promise((resolve) => {
-  const child = spawn(command, args, {
-    stdio: 'inherit',
-    env,
-    shell: process.platform === 'win32',
-  });
+let exitCode = 1;
 
-  child.on('close', (code, signal) => {
-    if (signal) {
-      console.error(`with-clean-test-env: child terminated by signal ${signal}`);
+try {
+  exitCode = await new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      env,
+      shell: process.platform === 'win32',
+    });
+
+    child.on('error', (error) => {
+      console.error(`with-clean-test-env: failed to spawn child: ${String(error?.message || error)}`);
       resolve(1);
-      return;
-    }
-    resolve(typeof code === 'number' ? code : 1);
-  });
-});
+    });
 
-await fs.rm(tmpHome, { recursive: true, force: true });
+    child.on('close', (code, signal) => {
+      if (signal) {
+        console.error(`with-clean-test-env: child terminated by signal ${signal}`);
+        resolve(1);
+        return;
+      }
+      resolve(typeof code === 'number' ? code : 1);
+    });
+  });
+} finally {
+  await fs.rm(tmpHome, { recursive: true, force: true });
+}
+
 process.exit(exitCode);
