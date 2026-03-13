@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import path from 'node:path';
+
+import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 
 async function getFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -51,6 +53,10 @@ async function waitForText(read: () => string, pattern: string, timeoutMs = 10_0
 
 describe('cli contract: plugin serve', () => {
   const children = new Set<ChildProcessWithoutNullStreams>();
+
+  beforeAll(async () => {
+    await ensurePluginArtifacts();
+  });
 
   afterEach(async () => {
     for (const child of children) {
