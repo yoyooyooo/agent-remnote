@@ -16,4 +16,15 @@ describe('widget bootstrap', () => {
     expect(script.src).toBe('index-sandbox.js');
     expect(script.type).toBe('module');
   });
+
+  it('resolveWidgetName extracts widget name from path segment', () => {
+    expect(resolveWidgetName('http://localhost:8080/todo/')).toBe('todo');
+    expect(resolveWidgetName('http://localhost:8080/my-widget')).toBe('my-widget');
+  });
+
+  it('createSandboxScript uses path-based widget name', () => {
+    const script = createSandboxScript('http://localhost:8080/todo/');
+    expect(script.src).toBe('todo-sandbox.js');
+    expect(script.type).toBe('module');
+  });
 });
