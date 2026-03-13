@@ -32,8 +32,34 @@ async function waitForClaimAndAck(params: {
           .prepare(`SELECT txn_id, status FROM queue_txns ORDER BY created_at DESC LIMIT 1`)
           .get() as { readonly txn_id?: string; readonly status?: string } | undefined;
         const op = db
-          .prepare(`SELECT op_id, status, attempt_count FROM queue_ops ORDER BY created_at DESC LIMIT 1`)
-          .get() as { readonly op_id?: string; readonly status?: string; readonly attempt_count?: number } | undefined;
+          .prepare(`SELECT op_id, status, attempt_id, locked_by, attempt_count FROM queue_ops ORDER BY created_at DESC LIMIT 1`)
+          .get() as
+          | {
+              readonly op_id?: string;
+              readonly status?: string;
+              readonly attempt_id?: string | null;
+              readonly locked_by?: string | null;
+              readonly attempt_count?: number;
+            }
+          | undefined;
+
+        if (txn?.status === 'succeeded' && op?.status === 'succeeded') {
+          return;
+        }
+
+        if (op?.status === 'in_flight' && op.op_id && op.attempt_id && op.locked_by) {
+          const ack = ackSuccess(db as any, {
+            opId: String(op.op_id),
+            attemptId: String(op.attempt_id),
+            lockedBy: String(op.locked_by),
+            result: { ok: true },
+          });
+          if (ack.ok) return;
+
+          lastObservation = `ack_existing_failed:${JSON.stringify(ack)}`;
+          await sleep(50);
+          continue;
+        }
 
         const claimed = claimNextOp(db as any, params.lockedBy, 30_000);
         if (!claimed) {
@@ -42,6 +68,8 @@ async function waitForClaimAndAck(params: {
             txn_status: txn?.status ?? null,
             op_id: op?.op_id ?? null,
             op_status: op?.status ?? null,
+            op_attempt_id: op?.attempt_id ?? null,
+            op_locked_by: op?.locked_by ?? null,
             op_attempt_count: op?.attempt_count ?? null,
           });
           await sleep(50);
