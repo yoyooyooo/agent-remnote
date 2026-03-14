@@ -228,7 +228,8 @@ export async function createSingleRemWithMarkdownAndFixRefs(
   markdown: string,
   parentId: string,
 ): Promise<any | undefined> {
-  const { markdown: patchedMd, refs } = replaceIdReferencesWithPlaceholders(markdown);
+  const normalizedMarkdown = normalizeSingleItemMarkdown(markdown);
+  const { markdown: patchedMd, refs } = replaceIdReferencesWithPlaceholders(normalizedMarkdown);
   const rem = await plugin.rem.createSingleRemWithMarkdown(patchedMd, parentId);
   if (!rem) return undefined;
   if (refs.length === 0) return rem;
@@ -255,7 +256,8 @@ export async function createTreeWithMarkdownAndFixRefs(
   markdown: string,
   parentId: string,
 ): Promise<any[]> {
-  const { markdown: patchedMd, refs } = replaceIdReferencesWithPlaceholders(markdown);
+  const normalizedMarkdown = normalizeSingleItemMarkdown(markdown);
+  const { markdown: patchedMd, refs } = replaceIdReferencesWithPlaceholders(normalizedMarkdown);
   const rems = await plugin.rem.createTreeWithMarkdown(patchedMd, parentId);
   if (!Array.isArray(rems) || rems.length === 0) return rems;
   const exists = refs.length > 0 ? await computeExistingRemIds(plugin, refs) : null;
@@ -669,4 +671,8 @@ function maybeUnlistSingleItem(text: string): string {
   if (m1) return m1[1];
   if (m2) return m2[1];
   return text;
+}
+
+function normalizeSingleItemMarkdown(text: string): string {
+  return maybeUnlistSingleItem(normalizeUnicodeSpaces(text));
 }
