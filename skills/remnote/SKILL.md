@@ -168,6 +168,11 @@ agent-remnote --json daily write --text "..."
 
 - 用户只是说“写到今天日记里”，优先 `daily write`。
 - 用户要写到今天日记里的某个具体小节或具体 Rem 下面，先拿当天条目 Rem ID，再用 `rem children ...`。
+- 如果内容是“调研报告 / 会议纪要 / 总结 / 长段结构化笔记”，默认先整理成**单一顶层根节点**的 Markdown，再执行 `daily write --markdown`。
+- 如果 Markdown 本身已经表达了单一主线结构，不要再额外包一层容器式根节点。
+- 如果 Markdown 本身已经是单根结构，默认显式加 `--bulk never`，避免 CLI 的 auto bundling 再包一层。
+- 不要为了“看起来更安全”就默认再加一层 bundle；双层单根通常是噪音。
+- 只有用户明确要求导入容器，或输入本身没有自然单根、又必须整体包成一篇时，才考虑额外容器。
 
 ### 8. 多步依赖写入
 
