@@ -1,6 +1,17 @@
-import type { Alias, CompiledWritePlan, WritePlanStepV1, WritePlanV1 } from './model.js';
+import type {
+  Alias,
+  CompiledWritePlan,
+  WritePlanStepV1,
+  WritePlanV1,
+  WriteStructureAssertion,
+} from './model.js';
 
 const ALIAS_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const WRITE_STRUCTURE_ASSERTIONS = new Set<WriteStructureAssertion>([
+  'single-root',
+  'preserve-anchor',
+  'no-literal-bullet',
+]);
 
 type ActionSpec = {
   readonly opType: string;
@@ -234,6 +245,20 @@ const ACTIONS: Record<string, ActionSpec> = {
 
       const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
       Object.assign(payload, buildMarkdownPayloadFields(input));
+      if (typeof input.backup === 'string') payload.backup = input.backup;
+      if (Array.isArray(input.assertions)) {
+        const assertions = input.assertions as unknown[];
+        const valid = assertions.every(
+          (value): value is WriteStructureAssertion =>
+            typeof value === 'string' && WRITE_STRUCTURE_ASSERTIONS.has(value as WriteStructureAssertion),
+        );
+        if (!valid) {
+          throw new Error(
+            'rem.children.replace input.assertions must only include: single-root, preserve-anchor, no-literal-bullet',
+          );
+        }
+        payload.assertions = assertions;
+      }
 
       return { ops: [{ type: 'replace_children_with_markdown', payload }] };
     },

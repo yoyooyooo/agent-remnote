@@ -65,6 +65,7 @@ function isStructureOp(opType: string): boolean {
   return (
     opType === 'move_rem' ||
     opType === 'delete_rem' ||
+    opType === 'delete_backup_artifact' ||
     opType === 'replace_selection_with_markdown' ||
     opType === 'replace_children_with_markdown'
   );

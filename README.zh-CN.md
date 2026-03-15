@@ -37,6 +37,7 @@
 - 快速查找 TODO（只读）：`agent-remnote --json todo list --status unfinished --sort updatedAtDesc --limit 20`
 - 枚举内置 Powerup（只读）：`agent-remnote --json powerup list`
 - 解析 Powerup（只读）：`agent-remnote --json powerup resolve --powerup "Todo"`
+- 通过主写入面新增结构化数据：`agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - 把某个 Rem 标记为 Todo（安全写入）：`agent-remnote --json todo add --rem "<rem_id>" --wait`
 - 把信息集中到一个地方（安全写入）：`agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
 - 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
@@ -59,24 +60,33 @@ agent-remnote --help
 
 你需要插件来支持 **写入** 与 **Plugin RPC** 读取。
 
+当前不建议把安装路径建立在官方插件市场上。官方 RemNote 插件市场的提交流程还没审核通过前，优先使用下面这个内置的本地 HTTP serve 流程，并通过 RemNote 的 Developer plugin URL 加载。
+
 本地 URL 方式：
 
-1. 启动内置静态服务器：
+1. 启动内置的本地 HTTP 插件服务：
+
+```bash
+agent-remnote plugin start
+```
+
+这是面向普通用户的推荐路径。它会在后台启动插件服务，并返回可复用的本地 URL。
+
+可配合这些后台治理命令一起使用：
+
+```bash
+agent-remnote plugin status
+agent-remnote plugin logs --lines 50
+agent-remnote plugin stop
+```
+
+如果你要前台调试模式，再使用：
 
 ```bash
 agent-remnote plugin serve
 ```
 
-启动后会以接近 Vite 的格式输出 `Local:`。若需要排障，使用 `--debug` 可额外输出 `Dist:`。
-
-也支持后台生命周期命令：
-
-```bash
-agent-remnote plugin ensure
-agent-remnote plugin status
-agent-remnote plugin logs --lines 50
-agent-remnote plugin stop
-```
+`plugin serve` 会把服务绑定在当前终端，并输出接近 Vite 风格的 `Local:`。需要排障时可再加 `--debug` 额外输出 `Dist:`。
 
 2. 在 RemNote → Settings → Plugins → Developer 中填写 `http://127.0.0.1:8080` 作为插件地址。
 
@@ -280,6 +290,8 @@ agent-remnote --json queue wait --txn "<txn_id>"
 
 `rem children append/prepend/replace` 与 `daily write` 支持 **bundle 模式**：当输入很大（默认：≥80 行或 ≥5000 字符）时，会先创建一个“容器 Rem”，把导入内容写入容器子树；**容器 Rem 的文本即 bundle title**。
 
+对于 `daily write --markdown`，如果 auto 路径的输入本身已经是单一顶层根节点的大纲，CLI 默认保留原结构，不再额外包一层 bundle。只有显式强制或传入 `--bundle-title` 才会加容器。
+
 - 禁用 bundling：`--bulk never`
 - 强制 bundling：`--bulk always`
 - 自定义容器：`--bundle-title ...`
@@ -325,6 +337,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
 | 替换某个 Rem 的直接子级            | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
+| 就地扩写当前选中的 Rem             | `agent-remnote --json rem children replace --selection --markdown @./note.md --assert preserve-anchor --assert single-root`                       |
 | 清空某个 Rem 的直接子级            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
@@ -334,14 +347,16 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 更新 Rem 文本                      | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
 | 给 Rem 加 Tag                      | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
 | 给 Rem 移除 Tag                    | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
-| Powerup schema（Tag + properties） | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
-| Powerup apply（打 Tag + 设值）     | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
+| Powerup schema（只读检查）         | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
 | Todo：标记完成                     | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
 | Table：创建表                      | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table：新增一行                    | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
-| 删除 Rem                           | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
+| 删除 Rem                           | `agent-remnote --json rem delete --rem "<rem_id>" [--max-delete-subtree-nodes 100]`                                                              |
 | 结构化多步写入                    | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | raw ops 入队（advanced）           | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
+| 列出 backup artifact               | `agent-remnote --json backup list`                                                                                                                |
+| dry-run 清理 orphan backup         | `agent-remnote --json backup cleanup`                                                                                                             |
+| 定向 dry-run 清理指定 backup       | `agent-remnote --json backup cleanup --backup-rem-id "<backup_rem_id>" [--max-delete-subtree-nodes 100]`                                        |
 | 等待完成                           | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
 | 队列统计                           | `agent-remnote --json queue stats`                                                                                                                |
 | 队列统计（含冲突摘要）             | `agent-remnote --json queue stats --include-conflicts`                                                                                            |
@@ -349,6 +364,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 查看日志                           | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
 多数写入命令也支持 `--wait --timeout-ms <ms> --poll-ms <ms>`，用于一次调用闭环确认 txn 终态。
+
+`rem delete` 的 CLI 形式没有变化，但插件侧现在默认走前端本地 `safeDeleteSubtree` 安全删除策略：小子树直接整棵删除，超阈值的大树会先切成多个阈值内的小子树再删。要试探不同阈值时，可以按次传 `--max-delete-subtree-nodes <n>`，不需要重新 reload 插件。
 
 ## 可选：tmux statusline（右下角 RN 段）
 

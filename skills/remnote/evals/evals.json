@@ -15,13 +15,15 @@
     },
     {
       "id": 2,
-      "prompt": "把下面这段研究笔记写到今天的 Daily Note 里，直接追加就行，不用确认落库：\\n- Claude Code\\n  - skill trigger 要更激进\\n  - 默认不要 wait",
-      "expected_output": "Choose `daily write --markdown -` directly, no wait, no Daily Rem lookup unless needed.",
+      "prompt": "把下面这段研究笔记写到今天的 Daily Note 里，直接追加就行，不用确认落库：\\n- Claude Code 研究结论\\n  - skill trigger 要更激进\\n  - 默认不要 wait",
+      "expected_output": "Choose `daily write --markdown -` directly for the Daily Note, keep the content as a single-root outline, and avoid extra bundling when the Markdown already has one top-level root.",
       "files": [],
       "expectations": [
         "Uses `daily write --markdown` as the primary command",
         "Does not resolve the daily rem id unless the prompt requires a specific child target",
-        "Does not add `--wait` by default"
+        "Does not add `--wait` by default",
+        "Preserves the single-root outline shape",
+        "Avoids an unnecessary extra bundle/container root"
       ]
     },
     {
@@ -132,6 +134,39 @@
         "Uses `apply --payload` with `kind:\"actions\"`",
         "Uses aliasing for the created node",
         "Uses `--wait` or equivalent explicit completion confirmation because the prompt requires it"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "我现在选中了 RemNote 里一个标题节点，想继续往下分层展开讲讲。目标是保留这个标题本身，只把它下面的内容重写成更清楚的大纲，不要在页面根下新增并列节点。",
+      "expected_output": "Treat this as an expand-existing-Rem task: prefer a lightweight structure read if needed, then rewrite the selected rem's children instead of writing a new Daily Note root.",
+      "files": [],
+      "expectations": [
+        "Treats the task as expansion of an existing rem",
+        "Prefers `rem children replace` over `daily write`",
+        "Does not create a new sibling root at the page level"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "把这份调研总结写到今天日记里，要求由浅入深、单一主线、后面还能继续往下展开：\\n- Web 抓取策略总结\\n  - 登录态\\n  - 节奏控制\\n  - 错误恢复",
+      "expected_output": "Recognize this as report-style outline material, preserve the single-root structure, and explicitly avoid extra bundling.",
+      "files": [],
+      "expectations": [
+        "Recognizes the content as report-style outline material",
+        "Keeps a single top-level root",
+        "Avoids extra bundle/container wrapping when the Markdown already has one root"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "把这段连续论证原样记到今天的日记里：\\n我们已经知道 A，所以自然会问 B。假设 C 成立，就可以推出 D，接着再说明 E。先不要为了规整去强行拆成大纲。",
+      "expected_output": "Recognize that this prose is not naturally outline-shaped and keep normal writing instead of forcing a single-root outline rewrite.",
+      "files": [],
+      "expectations": [
+        "Does not force outline-first rewriting for prose that is not naturally outline-shaped",
+        "Keeps normal writing acceptable for the content type",
+        "Does not claim that all Daily Note content must become a single-root outline"
       ]
     }
   ]

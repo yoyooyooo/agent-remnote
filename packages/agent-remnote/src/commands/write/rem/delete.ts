@@ -1,6 +1,7 @@
 import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
+import * as Option from 'effect/Option';
 
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
@@ -10,10 +11,18 @@ import { waitForTxn } from '../../_waitTxn.js';
 
 import { writeCommonOptions } from '../_shared.js';
 
+function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
+  return Option.isSome(opt) ? opt.value : undefined;
+}
+
 export const writeRemDeleteCommand = Command.make(
   'delete',
   {
     rem: Options.text('rem'),
+    maxDeleteSubtreeNodes: Options.integer('max-delete-subtree-nodes').pipe(
+      Options.optional,
+      Options.map(optionToUndefined),
+    ),
 
     notify: writeCommonOptions.notify,
     ensureDaemon: writeCommonOptions.ensureDaemon,
@@ -27,8 +36,30 @@ export const writeRemDeleteCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({
+    rem,
+    maxDeleteSubtreeNodes,
+    notify,
+    ensureDaemon,
+    wait,
+    timeoutMs,
+    pollMs,
+    dryRun,
+    priority,
+    clientId,
+    idempotencyKey,
+    meta,
+  }) =>
     Effect.gen(function* () {
+      if (maxDeleteSubtreeNodes !== undefined && maxDeleteSubtreeNodes <= 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--max-delete-subtree-nodes must be a positive integer',
+            exitCode: 2,
+          }),
+        );
+      }
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({
@@ -51,7 +82,17 @@ export const writeRemDeleteCommand = Command.make(
       const payloadSvc = yield* Payload;
 
       const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'delete_rem', payload: { remId: rem } }, payloadSvc.normalizeKeys),
+        try: () =>
+          normalizeOp(
+            {
+              type: 'delete_rem',
+              payload: {
+                remId: rem,
+                ...(maxDeleteSubtreeNodes !== undefined ? { maxDeleteSubtreeNodes } : {}),
+              },
+            },
+            payloadSvc.normalizeKeys,
+          ),
         catch: (e) =>
           isCliError(e)
             ? e

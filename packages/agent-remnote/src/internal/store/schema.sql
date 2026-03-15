@@ -122,3 +122,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_bindings_current
 
 CREATE INDEX IF NOT EXISTS idx_workspace_bindings_updated_at
   ON workspace_bindings(updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS backup_artifacts (
+  source_op_id      TEXT PRIMARY KEY,
+  source_txn        TEXT NOT NULL,
+  source_op_type    TEXT NOT NULL CHECK (source_op_type IN ('replace_children_with_markdown','replace_selection_with_markdown')),
+  backup_kind       TEXT NOT NULL CHECK (backup_kind IN ('children_replace','selection_replace')),
+  cleanup_policy    TEXT NOT NULL CHECK (cleanup_policy IN ('auto','visible')),
+  cleanup_state     TEXT NOT NULL CHECK (cleanup_state IN ('pending','orphan','retained','cleaned')),
+  backup_rem_id     TEXT,
+  source_parent_id  TEXT,
+  source_anchor_id  TEXT,
+  result_json       TEXT NOT NULL DEFAULT '{}',
+  created_at        INTEGER NOT NULL,
+  updated_at        INTEGER NOT NULL,
+  cleaned_at        INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_backup_artifacts_state
+  ON backup_artifacts(cleanup_state, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_backup_artifacts_kind
+  ON backup_artifacts(backup_kind, updated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_backup_artifacts_backup_rem_id
+  ON backup_artifacts(backup_rem_id)
+  WHERE backup_rem_id IS NOT NULL;

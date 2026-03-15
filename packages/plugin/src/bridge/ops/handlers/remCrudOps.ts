@@ -1,8 +1,53 @@
 import type { ReactRNPlugin } from '@remnote/plugin-sdk';
 
+import { safeDeleteSubtree } from '../../remnote/safeDeleteSubtree';
 import { toRichText } from '../../remnote/richText';
 
 import type { OpDispatch } from '../types';
+
+function readMaxDeleteSubtreeNodes(payload: any): number | undefined {
+  const raw = payload?.max_delete_subtree_nodes;
+  const value = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return Math.floor(value);
+}
+
+async function executeDeleteWithSafeSubtree(
+  plugin: ReactRNPlugin,
+  op: OpDispatch,
+  params: {
+    readonly errorContext: 'rem deletion' | 'backup deletion';
+    readonly includeRemIdInSuccess: boolean;
+  },
+): Promise<any> {
+  const { rem_id } = op.payload || {};
+  const remId = typeof rem_id === 'string' ? rem_id.trim() : '';
+  if (!remId) return { ok: false, fatal: true, error: 'Missing rem_id' };
+  const maxDeleteSubtreeNodes = readMaxDeleteSubtreeNodes(op.payload);
+
+  const result = await safeDeleteSubtree(plugin, remId, {
+    maxDeleteSubtreeNodes: maxDeleteSubtreeNodes ?? 100,
+  });
+
+  if (!result.deleted) {
+    return {
+      ok: false,
+      fatal: true,
+      error: `Failed to verify ${params.errorContext}; Rem still exists: ${result.failedRemId ?? remId}`,
+      rem_id: remId,
+    };
+  }
+
+  return {
+    ok: true,
+    ...(params.includeRemIdInSuccess ? { rem_id: remId } : {}),
+    deleted: true,
+    existed: result.existed,
+    delete_mode: result.mode,
+    node_count: result.nodeCount,
+    batch_count: result.batchCount,
+  };
+}
 
 export async function executeCreateRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { parent_id, text, tags, is_document, client_temp_id, position } = op.payload || {};
@@ -85,9 +130,15 @@ export async function executeMoveRem(plugin: ReactRNPlugin, op: OpDispatch): Pro
 }
 
 export async function executeDeleteRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
-  const { rem_id } = op.payload || {};
-  const rem = await plugin.rem.findOne(rem_id);
-  if (!rem) return { ok: true };
-  await rem.remove();
-  return { ok: true };
+  return executeDeleteWithSafeSubtree(plugin, op, {
+    errorContext: 'rem deletion',
+    includeRemIdInSuccess: false,
+  });
+}
+
+export async function executeDeleteBackupArtifact(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
+  return executeDeleteWithSafeSubtree(plugin, op, {
+    errorContext: 'backup deletion',
+    includeRemIdInSuccess: true,
+  });
 }

@@ -8,6 +8,7 @@ import { doctorCommand } from './doctor.js';
 import { daemonCommand } from './daemon/index.js';
 import { dailyCommand } from './daily/index.js';
 import { dbCommand } from './db/index.js';
+import { backupCommand } from './backup/index.js';
 import { opsCommand } from './ops/index.js';
 import { applyCommand } from './apply.js';
 import { apiCommand } from './api/index.js';
@@ -137,6 +138,7 @@ export const rootCommand = Command.make('agent-remnote', {
     queryCommand,
     remCommand,
     dailyCommand,
+    backupCommand,
     todoCommand,
     topicCommand,
     powerupCommand,

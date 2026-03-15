@@ -6,7 +6,7 @@ import { promises as fs } from 'node:fs';
 import { runCli } from '../helpers/runCli.js';
 
 describe('cli contract: write replace markdown --dry-run --json', () => {
-  it('reads selection from ws state file and prints a replace_selection_with_markdown op', async () => {
+  it('reads selection from ws state file and prints a replace_selection_with_markdown op from @file input-spec', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'remnote-cli-test-'));
     const statePath = path.join(tmpDir, 'ws.bridge.state.json');
     const mdPath = path.join(tmpDir, 'new.md');
@@ -48,7 +48,7 @@ describe('cli contract: write replace markdown --dry-run --json', () => {
         'replace',
         'markdown',
         '--selection',
-        '--file',
+        '--markdown',
         '@' + mdPath,
         '--state-file',
         statePath,
@@ -72,5 +72,55 @@ describe('cli contract: write replace markdown --dry-run --json', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('reads markdown from stdin via --markdown -', async () => {
+    const res = await runCli(
+      ['--json', 'replace', 'markdown', '--id', 'B', '--markdown', '-', '--dry-run'],
+      {
+        stdin: '- hello\n  - world\n',
+        timeoutMs: 15_000,
+      },
+    );
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.data.dry_run).toBe(true);
+    expect(parsed.data.op.type).toBe('replace_selection_with_markdown');
+    expect(parsed.data.op.payload.markdown).toBe('- hello\n  - world');
+    expect(parsed.data.op.payload.target.mode).toBe('explicit');
+    expect(parsed.data.op.payload.target.rem_ids).toEqual(['B']);
+  });
+
+  it('describes replace markdown as an advanced local-only command in help output', async () => {
+    const res = await runCli(['replace', 'markdown', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+    expect(res.stdout).toContain('advanced/local-only');
+  });
+
+  it('fails fast in remote mode because replace markdown is local-only', async () => {
+    const res = await runCli([
+      '--json',
+      '--api-base-url',
+      'http://127.0.0.1:9',
+      'replace',
+      'markdown',
+      '--selection',
+      '--markdown',
+      '- hello',
+    ]);
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error?.message ?? '')).toContain('local-only');
+    expect(String(parsed.error?.message ?? '')).toContain('apiBaseUrl');
   });
 });
