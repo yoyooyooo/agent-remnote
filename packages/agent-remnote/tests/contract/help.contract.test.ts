@@ -30,6 +30,7 @@ describe('cli contract: --help', () => {
     expect(out).toContain('table');
     expect(out).toContain('tag');
     expect(out).toContain('portal');
+    expect(out).toContain('backup');
     expect(out).toContain('replace');
     expect(out).toContain('db');
     expect(out).not.toMatch(/\n\s*-\s+read\b/);
@@ -48,7 +49,8 @@ describe('cli contract: --help', () => {
     expect(out).toContain('create');
     expect(out).toMatch(/\n\s*-\s+children\b/);
     expect(out).toContain('move');
-    expect(out).toContain('text');
+    expect(out).toContain('set-text');
+    expect(out).not.toMatch(/\n\s*-\s+text\b/);
     expect(out).toContain('tag');
     expect(out).toContain('delete');
   });

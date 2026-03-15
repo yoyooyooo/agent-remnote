@@ -6,7 +6,8 @@ import * as Option from 'effect/Option';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../_applyEnvelope.js';
 import { readMarkdownTextFromInputSpec, writeFailure, writeSuccess } from '../_shared.js';
 import { executeWriteApplyUseCase } from '../../lib/hostApiUseCases.js';
-import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
+import { isSingleRootOutlineMarkdown, looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
+import { decideOutlineWriteShape } from '../../kernel/write-plan/index.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError, isCliError } from '../../services/Errors.js';
 import { HostApiClient } from '../../services/HostApiClient.js';
@@ -201,9 +202,16 @@ export const dailyWriteCommand = Command.make(
       const content = markdownValue ?? textValue ?? '';
       const lines = content.split('\n').length;
       const chars = content.length;
+      const writeShape = decideOutlineWriteShape({ markdown: markdownValue });
       const shouldBundle =
         bulkMode === 'always' ||
-        (bulkMode === 'auto' && (hasBundleTitle || lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS));
+        (bulkMode === 'auto' &&
+          (hasBundleTitle ||
+            ((lines >= BULK_THRESHOLD_LINES || chars >= BULK_THRESHOLD_CHARS) &&
+              !(markdownValue !== undefined &&
+                !hasBundleTitle &&
+                writeShape.shape === 'single_root_outline' &&
+                isSingleRootOutlineMarkdown(markdownValue)))));
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
       const body: Record<string, unknown> = {

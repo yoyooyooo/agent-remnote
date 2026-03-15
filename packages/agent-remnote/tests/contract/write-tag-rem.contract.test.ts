@@ -131,4 +131,27 @@ describe('cli contract: write tag/rem', () => {
     expect(env.data.ops[0].type).toBe('delete_rem');
     expect(env.data.ops[0].payload.rem_id).toBe('r1');
   });
+
+  it('write rem delete --max-delete-subtree-nodes --dry-run --json emits delete_rem op with dynamic subtree threshold', async () => {
+    const res = await runCli([
+      '--json',
+      'rem',
+      'delete',
+      '--rem',
+      'r1',
+      '--max-delete-subtree-nodes',
+      '77',
+      '--dry-run',
+    ]);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const env = parseJsonLine(res.stdout);
+    expect(env.ok).toBe(true);
+    expect(env.data?.dry_run).toBe(true);
+    expect(env.data.ops[0].type).toBe('delete_rem');
+    expect(env.data.ops[0].payload.rem_id).toBe('r1');
+    expect(env.data.ops[0].payload.max_delete_subtree_nodes).toBe(77);
+  });
 });

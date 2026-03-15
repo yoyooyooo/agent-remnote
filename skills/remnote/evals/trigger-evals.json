@@ -36,6 +36,18 @@
     "should_trigger": true
   },
   {
+    "query": "我选中了 RemNote 里的一条标题，想继续往下展开讲讲，整理成由浅入深的大纲，但不要在页面根下新增并列节点。",
+    "should_trigger": true
+  },
+  {
+    "query": "把这份调研总结写到今天日记里，要求单一主线、后面还能继续往下展开。",
+    "should_trigger": true
+  },
+  {
+    "query": "这段论证文字先原样记到今天日记里，不要为了规整强行拆成大纲。",
+    "should_trigger": true
+  },
+  {
     "query": "给我一个最稳的 RemNote 引用写法，我已经有目标 RID 了，后面会把它塞进结构化写入命令里。",
     "should_trigger": true
   },

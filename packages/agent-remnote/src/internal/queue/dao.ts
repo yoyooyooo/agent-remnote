@@ -33,7 +33,8 @@ export type OpType =
   | 'add_source'
   | 'remove_source'
   | 'set_todo_status'
-  | 'delete_rem';
+  | 'delete_rem'
+  | 'delete_backup_artifact';
 
 export type EnqueueOpInput = {
   type: OpType;

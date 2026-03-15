@@ -37,6 +37,7 @@ This repo is optimized for the “agent calls CLI” workflow, not for humans cl
 - Find TODOs quickly (read-only): `agent-remnote --json todo list --status unfinished --sort updatedAtDesc --limit 20`
 - List built-in powerups (read-only): `agent-remnote --json powerup list`
 - Resolve a powerup (read-only): `agent-remnote --json powerup resolve --powerup "Todo"`
+- Add structured data through the primary table surface: `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - Mark a Rem as Todo (safe write): `agent-remnote --json todo add --rem "<rem_id>" --wait`
 - Dump everything into one place (safe write): `agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
 - Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
@@ -280,6 +281,8 @@ When writing large content, injecting hundreds of Rems directly under an existin
 
 `rem children append/prepend/replace` and `daily write` support a **bundle mode**: large inputs (default: ≥80 lines or ≥5000 chars) are wrapped into a single “container Rem”, and the container Rem text is the bundle title.
 
+For `daily write --markdown`, the auto path keeps a large single-root outline as-is and skips the extra bundle unless you force it or provide `--bundle-title`.
+
 - Disable bundling: `--bulk never`
 - Force bundling: `--bulk always`
 - Customize the container: `--bundle-title ...`
@@ -325,6 +328,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Append Markdown to a Rem's children      | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
 | Replace a Rem's direct children          | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
+| Expand the current selected Rem in place | `agent-remnote --json rem children replace --selection --markdown @./note.md --assert preserve-anchor --assert single-root`                       |
 | Clear a Rem's direct children            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
@@ -334,14 +338,16 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Update Rem text                          | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
 | Tag a Rem                                | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
 | Un-tag a Rem                             | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
-| Powerup schema (Tag + properties)        | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
-| Powerup apply (tag + set values)         | `agent-remnote --json powerup apply --rem "<rem_id>" --powerup "Todo" --values '[{\"propertyName\":\"Status\",\"value\":\"Unfinished\"}]' --wait` |
+| Powerup schema (read-only inspection)    | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
 | Todo: mark done                          | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
 | Table: create a table                    | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table: add a row                         | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
-| Delete a Rem                             | `agent-remnote --json rem delete --rem "<rem_id>"`                                                                                                |
+| Delete a Rem                             | `agent-remnote --json rem delete --rem "<rem_id>" [--max-delete-subtree-nodes 100]`                                                              |
 | Structured multi-step write              | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | Raw ops enqueue (advanced)               | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
+| List backup artifacts                    | `agent-remnote --json backup list`                                                                                                                |
+| Dry-run orphan backup cleanup            | `agent-remnote --json backup cleanup`                                                                                                             |
+| Dry-run exact backup cleanup             | `agent-remnote --json backup cleanup --backup-rem-id "<backup_rem_id>" [--max-delete-subtree-nodes 100]`                                        |
 | Wait for completion                      | `agent-remnote --json queue wait --txn "<txn_id>"`                                                                                                |
 | Queue stats                              | `agent-remnote --json queue stats`                                                                                                                |
 | Queue stats (+ conflict summary)         | `agent-remnote --json queue stats --include-conflicts`                                                                                            |
@@ -349,6 +355,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Debug logs                               | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
 Most write commands also support `--wait --timeout-ms <ms> --poll-ms <ms>` to close the loop in a single call.
+
+`rem delete` keeps the same CLI surface, but the plugin now defaults to a frontend-local `safeDeleteSubtree` strategy: small subtrees are deleted directly, while large trees are partitioned into threshold-bounded rooted subtrees before deletion. Use `--max-delete-subtree-nodes <n>` when you want to probe a different threshold without reloading the plugin.
 
 ## Optional: tmux statusline (RN segment)
 
