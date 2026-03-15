@@ -60,6 +60,24 @@ export const backupCleanupCommand = Command.make(
           }),
         );
       }
+      if (olderThanHours !== undefined && olderThanHours < 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--older-than-hours must be a non-negative integer',
+            exitCode: 2,
+          }),
+        );
+      }
+      if (limit < 1) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--limit must be >= 1',
+            exitCode: 2,
+          }),
+        );
+      }
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({

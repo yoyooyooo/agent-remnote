@@ -48,6 +48,7 @@ describe('cli contract: write daily bulk bundling', () => {
 
     const parsed = parseJsonLine(res.stdout);
     expect(parsed.ok).toBe(true);
+    expect(parsed.data.ops).toHaveLength(1);
 
     const op = parsed.data.ops[0];
     expect(op.type).toBe('daily_note_write');

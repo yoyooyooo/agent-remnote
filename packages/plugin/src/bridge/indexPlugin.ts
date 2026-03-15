@@ -66,7 +66,9 @@ export async function onDeactivate(_: ReactRNPlugin) {
   try {
     unregisterUiContextForwarder(_);
   } catch {}
-  resetRuntimeState();
+  try {
+    resetRuntimeState();
+  } catch {}
   try {
     const G: any = globalThis as any;
     delete G.__REMNOTE_BRIDGE_REGISTERED__;

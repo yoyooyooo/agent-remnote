@@ -33,6 +33,15 @@ export const backupListCommand = Command.make(
           }),
         );
       }
+      if (limit < 1) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--limit must be >= 1',
+            exitCode: 2,
+          }),
+        );
+      }
       yield* failInRemoteMode({
         command: 'backup list',
         reason: 'backup governance currently reads the local store registry directly',

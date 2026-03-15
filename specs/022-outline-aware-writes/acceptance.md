@@ -152,6 +152,7 @@ Spec：`specs/022-outline-aware-writes/spec.md`
 ```bash
 npm run typecheck --workspace agent-remnote
 npm test --workspace agent-remnote
+npm run build --workspace @remnote/plugin
 npm run typecheck --workspace @remnote/plugin
 npm test --workspace @remnote/plugin
 ```

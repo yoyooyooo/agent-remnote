@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 async function loadModule() {
+  const prevSelf = globalThis.self;
   globalThis.self = globalThis;
-  return await import('../src/bridge/powerups.ts');
+  try {
+    return await import('../src/bridge/powerups.ts');
+  } finally {
+    if (typeof prevSelf === 'undefined') delete globalThis.self;
+    else globalThis.self = prevSelf;
+  }
 }
 
 describe('agent-remnote backup powerup', () => {

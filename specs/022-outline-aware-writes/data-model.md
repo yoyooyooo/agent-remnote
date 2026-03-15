@@ -41,7 +41,7 @@
 | --- | --- |
 | `single-root` | 最终结果只有一个顶层根节点 |
 | `preserve-anchor` | 现有 anchor Rem 未被替换掉 |
-| `no-literal-bullet` | 本应为普通文本的单条列表项没有残留字面 `- ` |
+| `no-literal-bullet` | 本应为普通文本的单条列表项没有残留字面 "- " |
 
 说明：
 

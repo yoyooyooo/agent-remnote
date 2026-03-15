@@ -2,7 +2,6 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
-import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { tryParseRemnoteLink } from '../../../lib/remnote.js';
@@ -60,8 +59,6 @@ export const writeRemSetTextCommand = Command.make(
         );
       }
 
-      const _cfg = yield* AppConfig;
-      void _cfg;
       yield* failInRemoteMode({
         command: 'rem set-text',
         reason: 'this command enqueues writes to the local queue/store without a HostApiClient branch',

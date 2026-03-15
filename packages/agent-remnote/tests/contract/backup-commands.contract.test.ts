@@ -445,4 +445,141 @@ describe('cli contract: backup commands', () => {
     expect(parsed.ok).toBe(false);
     expect(String(parsed.error?.message ?? '')).toContain('--older-than-hours');
   });
+
+  it('list rejects non-positive limit', async () => {
+    const res = await runCli(['--json', 'backup', 'list', '--limit', '0'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error?.message ?? '')).toContain('--limit');
+  });
+
+  it('cleanup rejects negative older-than-hours', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-backup-'));
+    const storeDb = path.join(tmpDir, 'store.sqlite');
+
+    try {
+      const db = openStoreDb(storeDb);
+      try {
+        db.prepare(
+          `INSERT INTO backup_artifacts(
+             source_op_id, source_txn, source_op_type, backup_kind, cleanup_policy, cleanup_state,
+             backup_rem_id, source_parent_id, source_anchor_id, result_json, created_at, updated_at, cleaned_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          'op-invalid-hours',
+          'txn-invalid-hours',
+          'replace_children_with_markdown',
+          'children_replace',
+          'auto',
+          'pending',
+          'backup-rem-invalid-hours',
+          'parent-1',
+          'anchor-1',
+          JSON.stringify({ backup_rem_id: 'backup-rem-invalid-hours' }),
+          1,
+          1,
+          null,
+        );
+      } finally {
+        db.close();
+      }
+
+      const res = await runCli(
+        [
+          '--json',
+          '--store-db',
+          storeDb,
+          'backup',
+          'cleanup',
+          '--backup-rem-id',
+          'backup-rem-invalid-hours',
+          '--older-than-hours',
+          '-1',
+          '--apply',
+          '--no-notify',
+          '--no-ensure-daemon',
+        ],
+        {
+          env: { REMNOTE_TMUX_REFRESH: '0' },
+          timeoutMs: 15_000,
+        },
+      );
+
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toBe('');
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(false);
+      expect(String(parsed.error?.message ?? '')).toContain('--older-than-hours');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('cleanup rejects non-positive limit', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-backup-'));
+    const storeDb = path.join(tmpDir, 'store.sqlite');
+
+    try {
+      const db = openStoreDb(storeDb);
+      try {
+        db.prepare(
+          `INSERT INTO backup_artifacts(
+             source_op_id, source_txn, source_op_type, backup_kind, cleanup_policy, cleanup_state,
+             backup_rem_id, source_parent_id, source_anchor_id, result_json, created_at, updated_at, cleaned_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          'op-invalid-limit',
+          'txn-invalid-limit',
+          'replace_children_with_markdown',
+          'children_replace',
+          'auto',
+          'pending',
+          'backup-rem-invalid-limit',
+          'parent-1',
+          'anchor-1',
+          JSON.stringify({ backup_rem_id: 'backup-rem-invalid-limit' }),
+          1,
+          1,
+          null,
+        );
+      } finally {
+        db.close();
+      }
+
+      const res = await runCli(
+        [
+          '--json',
+          '--store-db',
+          storeDb,
+          'backup',
+          'cleanup',
+          '--backup-rem-id',
+          'backup-rem-invalid-limit',
+          '--limit',
+          '0',
+          '--apply',
+          '--no-notify',
+          '--no-ensure-daemon',
+        ],
+        {
+          env: { REMNOTE_TMUX_REFRESH: '0' },
+          timeoutMs: 15_000,
+        },
+      );
+
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toBe('');
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(false);
+      expect(String(parsed.error?.message ?? '')).toContain('--limit');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

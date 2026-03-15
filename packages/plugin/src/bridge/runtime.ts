@@ -133,6 +133,9 @@ function clearAckRuntimeState() {
     try {
       clearTimeout(waiter.timer);
     } catch {}
+    try {
+      waiter.resolve(null);
+    } catch {}
   }
   ackWaiters.clear();
   pendingAcks.clear();
