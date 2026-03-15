@@ -1,4 +1,5 @@
 import type { WsConnId } from '../kernel/ws-bridge/index.js';
+import { upsertBackupArtifact } from '../internal/public.js';
 
 import {
   type AckResult,
@@ -55,6 +56,14 @@ export function handleOpAckMessage(params: {
   }
 
   const lockedBy = params.connId;
+  try {
+    syncBackupArtifactFromAck(params.db, {
+      now: params.now,
+      opId,
+      status,
+      result: params.msg?.result ?? null,
+    });
+  } catch {}
 
   const ackRes = (() => {
     try {
@@ -243,4 +252,78 @@ export function handleOpAckMessage(params: {
   });
 
   return { actions, touchAckTimestamp: true, invalidateStatusLineReason: 'op_acked' };
+}
+
+function syncBackupArtifactFromAck(
+  db: WsBridgeCoreDb,
+  params: {
+    readonly now: number;
+    readonly opId: string;
+    readonly status: string;
+    readonly result: any;
+  },
+): void {
+  const opRow = db.prepare(`SELECT txn_id, type, payload_json FROM queue_ops WHERE op_id=?`).get(params.opId) as any;
+  const opType = typeof opRow?.type === 'string' ? opRow.type : '';
+  if (opType !== 'replace_children_with_markdown' && opType !== 'replace_selection_with_markdown') return;
+
+  let payload: any = {};
+  try {
+    payload = JSON.parse(String(opRow?.payload_json ?? '{}'));
+  } catch {}
+
+  const backupPolicy = typeof payload?.backup === 'string' && payload.backup.trim() === 'visible' ? 'visible' : 'auto';
+  const backupKind = opType === 'replace_children_with_markdown' ? 'children_replace' : 'selection_replace';
+  const backupRemId =
+    typeof params.result?.backup_rem_id === 'string' && params.result.backup_rem_id.trim()
+      ? params.result.backup_rem_id.trim()
+      : null;
+
+  const cleanupState =
+    params.status === 'success'
+      ? backupPolicy === 'visible' && backupRemId
+        ? 'retained'
+        : backupRemId
+          ? params.result?.backup_hidden === true || params.result?.backup_cleanup_state === 'pending'
+            ? 'pending'
+            : 'orphan'
+          : 'cleaned'
+      : backupRemId
+        ? backupPolicy === 'visible'
+          ? 'retained'
+          : params.status === 'retry'
+            ? 'pending'
+            : 'orphan'
+        : null;
+
+  if (!cleanupState) return;
+
+  upsertBackupArtifact(db, {
+    sourceOpId: params.opId,
+    sourceTxn: typeof opRow?.txn_id === 'string' ? opRow.txn_id : '',
+    sourceOpType: opType,
+    backupKind,
+    cleanupPolicy: backupPolicy,
+    cleanupState,
+    backupRemId,
+    sourceParentId:
+      typeof params.result?.parent_id === 'string'
+        ? params.result.parent_id
+        : typeof payload?.parent_id === 'string'
+          ? payload.parent_id
+          : null,
+    sourceAnchorId:
+      opType === 'replace_children_with_markdown'
+        ? typeof payload?.parent_id === 'string'
+          ? payload.parent_id
+          : null
+        : Array.isArray(params.result?.selection_rem_ids)
+          ? String(params.result.selection_rem_ids[0] ?? '')
+          : Array.isArray(payload?.target?.rem_ids)
+            ? String(payload.target.rem_ids[0] ?? '')
+            : null,
+    result: params.result ?? {},
+    now: params.now,
+    cleanedAt: cleanupState === 'cleaned' ? params.now : null,
+  });
 }

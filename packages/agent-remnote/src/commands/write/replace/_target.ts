@@ -30,7 +30,7 @@ export function resolveReplaceTarget(params: {
     const _cfg = yield* AppConfig;
     yield* failInRemoteMode({
       command: 'replace target resolution',
-      reason: 'replace commands still depend on local selection/ref resolution semantics',
+      reason: 'replace markdown is an advanced/local-only block replace path that still depends on local selection/ref resolution semantics',
     });
     const refs = yield* RefResolver;
 

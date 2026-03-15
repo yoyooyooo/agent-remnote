@@ -234,6 +234,8 @@ const ACTIONS: Record<string, ActionSpec> = {
 
       const payload: Record<string, unknown> = { parent_id: rem_id, markdown };
       Object.assign(payload, buildMarkdownPayloadFields(input));
+      if (typeof input.backup === 'string') payload.backup = input.backup;
+      if (Array.isArray(input.assertions)) payload.assertions = input.assertions;
 
       return { ops: [{ type: 'replace_children_with_markdown', payload }] };
     },

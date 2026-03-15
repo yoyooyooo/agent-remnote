@@ -7,6 +7,7 @@ import {
   getDateFormatting,
   type BetterSqliteInstance,
 } from '../adapters/core.js';
+import { listBackupArtifacts, openStoreDb } from '../internal/public.js';
 import { loadBridgeSelectionSnapshot, requireOkRemSelection } from '../commands/read/selection/_shared.js';
 import { loadBridgeUiContextSnapshot, requireOkUiContext } from '../commands/read/uiContext/_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../commands/_applyEnvelope.js';
@@ -166,7 +167,20 @@ export function executeReadOutlineUseCase(params: {
       );
     }
 
-    return yield* Effect.tryPromise({
+    const activeBackupRemIds = yield* Effect.sync(() => {
+      const db = openStoreDb(cfg.storeDb);
+      try {
+        return new Set(
+          listBackupArtifacts(db, { includeCleaned: false, limit: 1000 })
+            .map((item) => String(item.backup_rem_id ?? '').trim())
+            .filter(Boolean),
+        );
+      } finally {
+        db.close();
+      }
+    }).pipe(Effect.catchAll(() => Effect.succeed(new Set<string>())));
+
+    const result = yield* Effect.tryPromise({
       try: async () =>
         await executeOutlineRemSubtree({
           id: resolvedId,
@@ -174,16 +188,88 @@ export function executeReadOutlineUseCase(params: {
           maxDepth: params.depth as any,
           startOffset: params.offset as any,
           maxNodes: params.nodes as any,
-          format: params.format === 'json' ? 'json' : 'markdown',
+          format: 'json',
           excludeProperties: params.excludeProperties === true,
           includeEmpty: params.includeEmpty === true,
           expandReferences: params.expandReferences === false ? false : undefined,
           maxReferenceDepth: params.maxReferenceDepth as any,
-          detail: params.detail === true,
+          detail: true,
         } as any),
       catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
     });
+
+    if (activeBackupRemIds.size === 0) {
+      if (params.format === 'json') return result;
+      const tree = Array.isArray((result as any).tree) ? (result as any).tree : [];
+      return {
+        ...(result as any),
+        markdown: outlineNodesToMarkdown(tree),
+        ...(params.detail === true ? {} : { tree: simplifyOutlineTree(tree) }),
+      };
+    }
+
+    const tree = Array.isArray((result as any).tree) ? (result as any).tree : [];
+    const filteredTree = filterOutlineTreeByHiddenBackupSubtrees(tree, activeBackupRemIds, resolvedId);
+
+    const filtered = {
+      ...(result as any),
+      nodeCount: filteredTree.length,
+      totalNodeCount: filteredTree.length,
+      hasMore: false,
+      nextOffset: null,
+      markdown: outlineNodesToMarkdown(filteredTree),
+      tree: params.detail === true ? filteredTree : simplifyOutlineTree(filteredTree),
+    };
+
+    if (params.format === 'json') return filtered;
+    return filtered;
   });
+}
+
+function filterOutlineTreeByHiddenBackupSubtrees(
+  tree: readonly any[],
+  hiddenIds: ReadonlySet<string>,
+  rootId: string,
+): readonly any[] {
+  const out: any[] = [];
+  let skipDepth: number | null = null;
+
+  for (const node of tree) {
+    const depth = Number(node?.depth ?? 0);
+    if (skipDepth !== null) {
+      if (depth > skipDepth) continue;
+      skipDepth = null;
+    }
+
+    const id = typeof node?.id === 'string' ? node.id : '';
+    if (id && id !== rootId && hiddenIds.has(id)) {
+      skipDepth = depth;
+      continue;
+    }
+
+    out.push(node);
+  }
+
+  return out;
+}
+
+function outlineNodesToMarkdown(nodes: readonly any[]): string {
+  return nodes
+    .map((node) => {
+      const depth = Number(node?.depth ?? 0);
+      const text = typeof node?.text === 'string' && node.text.trim() ? node.text : '(empty)';
+      return `${'  '.repeat(Math.max(0, depth))}- ${text}`;
+    })
+    .join('\n');
+}
+
+function simplifyOutlineTree(nodes: readonly any[]) {
+  return nodes.map((node) => ({
+    id: node.id,
+    depth: node.depth,
+    text: node.text,
+    references: Array.isArray(node.references) ? node.references : [],
+  }));
 }
 
 export function executeDailyRemIdUseCase(params: {
