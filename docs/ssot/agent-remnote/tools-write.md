@@ -12,26 +12,37 @@
 - Deep link：`remnote://w/<workspaceId>/<remId>` / `https://www.remnote.com/w/<workspaceId>/<remId>`；CLI 对所有 “RemId” 参数只提取 `<remId>`。
 
 ## 命令一览
-- `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。
-- `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
-- `agent-remnote daily rem-id`：解析 Daily Note 条目 Rem ID（用于把结构化内容精准写到当天条目下，而不是容器页）。
-- `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`；`rem text` 为 `set-text` 兼容别名）。
-- `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
-- `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
-- `agent-remnote table create`：创建 Table（对应 `create_table`；避免调用方手写 ops）。
-- `agent-remnote table record add/update/delete`：Table 视角的记录写入/修改/删除（对应 `table_add_row`/`update_text`/`set_cell_*`/`delete_rem`）。
-- `agent-remnote table property add/set-type`：Table 列定义管理。当前只支持 plain property create；`--type`/`--options` 与 `set-type` 会稳定返回 `WRITE_UNAVAILABLE`（宿主未暴露 property-type mutation endpoint）。
-- `agent-remnote table option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。命令会先读取本地 RemNote DB，确认目标 property 的 `ft` 已是 `single_select` 或 `multi_select`。
-- `agent-remnote powerup apply/remove/...`：Powerup(Tag) 视角的封装命令（常见场景：给 Rem 打 Powerup Tag 并设置 properties；内部仍生成标准 ops 入队）。
-- `agent-remnote powerup property add/set-type`：当前只支持 plain property create；`--type`/`--options` 与 `set-type` 会稳定返回 `WRITE_UNAVAILABLE`（宿主未暴露 property-type mutation endpoint）。
-- `agent-remnote powerup option add/remove`：select/multi_select 选项管理（对应 `add_option`/`remove_option`）。命令会先读取本地 RemNote DB，确认目标 property 的 `ft` 已是 `single_select` 或 `multi_select`。
-- `agent-remnote replace markdown/literal`：替换目标 Rem（`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids）。
-- `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
-- `agent-remnote queue stats`：查看队列统计（pending/in_flight/dead/ready_txns；可选 `--include-conflicts` 追加冲突摘要）。
-- `agent-remnote queue conflicts`：输出 pending 冲突面报告（用于消费前风险判断与排障）。
-- `agent-remnote queue inspect`：查看指定事务/操作详情。
-- `agent-remnote queue wait`：阻塞等待事务进入终态（succeeded/failed/aborted），用于 write-first 闭环验证。
-- `agent-remnote daemon sync`（或脚本 `ws-trigger-sync.ts`）：通过 WS 通知插件开始同步。
+- Agent-primary primitives
+  - `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
+  - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。其中 `rem children replace` 是默认的 canonical structure-rewrite path，用于保留 anchor Rem 并整体重写其 direct children。
+  - `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
+  - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。其中 `rem delete` 在插件侧默认走 `safeDeleteSubtree`，会优先直接删除“节点数不超过阈值”的整棵小子树；超过阈值时，再拆成多个阈值内的小子树做前端本地安全删除，以规避宿主的大树删除确认。CLI 可按次通过 `--max-delete-subtree-nodes <n>` 覆盖前端默认阈值。
+  - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
+  - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
+- `agent-remnote backup list/cleanup`：backup artifact 的治理入口。`list` 只读列出 Store DB registry；`cleanup` 默认 dry-run，只有显式 `--apply` 才入队删除。
+  - `backup cleanup` 额外支持 `--backup-rem-id <rem_id>`，用于精确清理单个 backup artifact，避免在多个 retained/orphan backup 共存时误删“最新一条”之外的对象。
+  - `backup cleanup` 额外支持 `--max-delete-subtree-nodes <n>`，用于按次覆盖前端安全删除阈值，便于持续试探宿主可接受的单次子树删除上限。
+- Structured-data primary write surface
+  - `agent-remnote table create`
+  - `agent-remnote table record add/update/delete`
+  - `agent-remnote table property add/set-type`
+  - `agent-remnote table option add/remove`
+- Advanced / local-only
+  - `agent-remnote replace markdown/literal`：advanced/local-only 的替换入口。`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids。它不属于默认 Agent-first rewrite path，也不应与 `rem children replace` 作为并列主路径推广。
+- Auxiliary read surfaces
+  - `agent-remnote daily rem-id`
+  - `agent-remnote powerup list/resolve/schema`
+  - `agent-remnote table show`
+- Compatibility / non-primary write surfaces
+  - `agent-remnote powerup apply/remove/...`
+  - `agent-remnote powerup property add/set-type`
+  - `agent-remnote powerup option add/remove`
+- Ops / lifecycle
+  - `agent-remnote queue stats`：查看队列统计（pending/in_flight/dead/ready_txns；可选 `--include-conflicts` 追加冲突摘要）。
+  - `agent-remnote queue conflicts`：输出 pending 冲突面报告（用于消费前风险判断与排障）。
+  - `agent-remnote queue inspect`：查看指定事务/操作详情。
+  - `agent-remnote queue wait`：阻塞等待事务进入终态（succeeded/failed/aborted），用于 write-first 闭环验证。
+  - `agent-remnote daemon sync`（或脚本 `ws-trigger-sync.ts`）：通过 WS 通知插件开始同步。
 
 ## Agent 工作流（write-first）
 
@@ -55,6 +66,7 @@
 - `actions` 适用于 agent 友好的结构化写入；`ops` 适用于 advanced/debug。
 - 标准类型（部分示例）
   - rem 基础：`create_rem`/`create_portal`/`create_single_rem_with_markdown`/`create_tree_with_markdown`/`replace_selection_with_markdown`/`create_link_rem`/`update_text`/`move_rem`/`delete_rem`
+    - 其中 `replace_selection_with_markdown` 主要服务 advanced/local-only 的块级替换语义；默认业务重写路径优先用 `rem.children.replace` action。
   - 日常笔记：`daily_note_write`
   - 标签/属性：`add_tag`/`remove_tag`/`set_attribute`
   - 表/属性：`create_table`/`add_property`/`set_property_type`/`set_table_filter`/`add_option`/`remove_option`
@@ -95,23 +107,33 @@
       - 用途：避免把大量导入内容“直接插入到现有页面根下”。当 `bundle` 存在时，插件会先创建一个“容器 Rem”，并把 Markdown 导入到该容器之下；**容器 Rem 的文本即 bundle title**（若缺字段则自动降级）。
       - 语义：`position`（如提供）用于定位“容器 Rem”的插入位置；容器内部的导入不再二次应用 `position`。
       - 回执：result 会包含 `bundle.rem_id`（容器 Rem），并把顶层 `created_ids` 收敛为 `[bundle.rem_id]` 以便上游快速定位/回滚。
-  - `replace_children_with_markdown`（替换某个 Rem 的 direct children）
+  - `replace_children_with_markdown`（替换某个 Rem 的 direct children；canonical expand-in-place / section rewrite primitive）
     - `parent_id`（必填）：目标 Rem id
     - `markdown`（必填，可为空字符串）：新 children 内容；空字符串表示清空 direct children
+    - `backup`（可选）：`none` / `visible`
+      - `none`：默认值；成功路径不保留可见 backup Rem
+      - `visible`：显式保留 backup Rem，供 `backup list/cleanup` 治理
+      - 大子树场景下，runtime 允许把 `none` 降级为“隐藏 backup + registry.pending”，以规避前端删除确认阻断；此时它不应继续出现在默认可见结果里，并应由后续 cleanup 收尾
+    - `assertions`（可选）：固定集合，第一版仅允许
+      - `single-root`
+      - `preserve-anchor`
+      - `no-literal-bullet`
   - `daily_note_write`（写入 Daily Note；由插件侧定位当天 daily doc）
     - `markdown` / `text`：二选一（内容）
     - `date` / `offset_days`：二选一（目标日期）
     - `prepend`（可选）：true 则插入到 daily doc 顶部
     - `bundle`（可选，同上）：当内容很大时建议启用；写入会先创建容器 Rem（容器文本为 bundle title），再把内容导入到容器下。
+      - 例外：若 `daily write --markdown` 的 auto 路径输入本身已经是单一顶层根节点的大纲，CLI 默认不再自动叠加 bundle。
     - `--text` 仅用于纯文本；若输入看起来像结构化 Markdown，CLI 必须 fail-fast 并提示改用 `--markdown`
     - `--force-text` 允许显式保留字面 Markdown 文本
-  - `replace_selection_with_markdown`（推荐替代“create + delete”的多 op 方案）
+  - `replace_selection_with_markdown`（advanced/local-only 的块级替换 primitive；推荐替代“create + delete”的多 op 方案）
     - `markdown`：新内容
     - `target.mode`：`expected`（默认，更安全）/ `current` / `explicit`
     - `target.remIds`：`expected`/`explicit` 必填；`expected` 用于执行时校验 selection 未变化，`explicit` 直接按 remIds 执行（不依赖 UI selection）
     - `requireSameParent`/`requireContiguous`：默认 true；用于保证“原地替换”语义明确
     - 替换语义（SSoT 裁决：可补偿步骤）
       - 目标：在**同一位置**把一段 Rem（可能 1 个或多个）替换为新的 Markdown 树，同时确保失败不丢数据。
+      - 定位：这是 selection/block-range rewrite，不是默认的 anchor-preserving children rewrite 路径。
       - 原则：**move 优先、delete 最后**。在新内容稳定就位前，禁止对旧内容做不可逆删除；任何中间状态必须可通过 move 回滚或保留备份。
       - 推荐执行流程（插件侧单 op 内部实现）
         1. 读取目标 Rems 的 `parentId` 与最小 `position`

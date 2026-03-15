@@ -238,7 +238,8 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
       return keys;
     }
 
-    case 'delete_rem': {
+    case 'delete_rem':
+    case 'delete_backup_artifact': {
       const remId = normalizeId(payload.rem_id);
       addRem(remId);
       const parentId = remId ? await findParentId(plugin, remId) : undefined;

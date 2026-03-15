@@ -8,6 +8,7 @@ import {
   parseMarkdownBlocks,
 } from '../../remnote/markdown';
 import { toRichText } from '../../remnote/richText';
+import { AGENT_REMNOTE_BACKUP_POWERUP } from '../../powerups';
 
 import type { OpDispatch } from '../types';
 
@@ -25,6 +26,127 @@ function getParentIdOfRem(rem: any): string {
   const parentId = parent?._id;
   if (typeof parentId === 'string') return parentId.trim();
   return '';
+}
+
+function readRemPlainText(rem: any): string {
+  const text = rem?.text;
+  if (typeof text === 'string') return normalizeText(text);
+  if (Array.isArray(text) && text.every((item: unknown) => typeof item === 'string')) {
+    return normalizeText(text.join(''));
+  }
+  return '';
+}
+
+const BACKUP_TITLE_PREFIXES = [
+  'agent-remnote: children replace backup (auto)',
+  'agent-remnote: replace backup (auto)',
+] as const;
+const DEFER_DELETE_SUBTREE_NODE_THRESHOLD = 50;
+
+async function isBackupArtifactRem(rem: any): Promise<boolean> {
+  if (!rem) return false;
+  try {
+    if (typeof rem.hasPowerup === 'function' && (await rem.hasPowerup(AGENT_REMNOTE_BACKUP_POWERUP.code)) === true) {
+      return true;
+    }
+  } catch {}
+
+  const text = readRemPlainText(rem);
+  return BACKUP_TITLE_PREFIXES.some((prefix) => text === prefix || text.startsWith(prefix));
+}
+
+async function partitionBackupArtifactChildren(
+  plugin: ReactRNPlugin,
+  childIds: readonly string[],
+): Promise<{ readonly contentChildIds: readonly string[]; readonly backupChildIds: readonly string[] }> {
+  const contentChildIds: string[] = [];
+  const backupChildIds: string[] = [];
+
+  for (const id of childIds) {
+    try {
+      const rem: any = await plugin.rem.findOne(id);
+      if (await isBackupArtifactRem(rem)) backupChildIds.push(id);
+      else contentChildIds.push(id);
+    } catch {
+      contentChildIds.push(id);
+    }
+  }
+
+  return { contentChildIds, backupChildIds };
+}
+
+async function countRemTreeNodes(
+  plugin: ReactRNPlugin,
+  rootIds: readonly string[],
+  limit: number,
+): Promise<number> {
+  const queue = [...rootIds];
+  let count = 0;
+
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (!id) continue;
+    count += 1;
+    if (count > limit) return count;
+
+    try {
+      const rem: any = await plugin.rem.findOne(id);
+      const children = getOrderedChildIds(rem);
+      for (const childId of children) queue.push(childId);
+    } catch {}
+  }
+
+  return count;
+}
+
+async function maybeHideBackupRem(params: {
+  readonly rem: any;
+  readonly portalId?: string | undefined;
+}): Promise<boolean> {
+  try {
+    if (typeof params.rem?.setHiddenExplicitlyIncludedState === 'function') {
+      await params.rem.setHiddenExplicitlyIncludedState('hidden', params.portalId);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+async function applyBackupPowerupMetadata(params: {
+  readonly rem: any;
+  readonly backupKind: 'children_replace' | 'selection_replace';
+  readonly cleanupPolicy: 'auto' | 'visible';
+  readonly cleanupState: 'pending' | 'orphan' | 'retained' | 'cleaned';
+  readonly op: OpDispatch;
+  readonly sourceParentId: string;
+  readonly sourceAnchorId: string;
+}): Promise<void> {
+  const rem = params.rem;
+  if (!rem) return;
+
+  try {
+    if (typeof rem.addPowerup === 'function') {
+      await rem.addPowerup(AGENT_REMNOTE_BACKUP_POWERUP.code);
+    }
+  } catch {}
+
+  const setSlot = async (slotCode: string, value: string) => {
+    try {
+      if (typeof rem.setPowerupProperty === 'function') {
+        await rem.setPowerupProperty(AGENT_REMNOTE_BACKUP_POWERUP.code, slotCode, [value]);
+      }
+    } catch {}
+  };
+
+  const createdAt = new Date().toISOString();
+  await setSlot('backup_kind', params.backupKind);
+  await setSlot('cleanup_policy', params.cleanupPolicy);
+  await setSlot('cleanup_state', params.cleanupState);
+  await setSlot('source_txn', params.op.txn_id);
+  await setSlot('source_op', params.op.op_id);
+  await setSlot('source_parent', params.sourceParentId);
+  await setSlot('source_anchor', params.sourceAnchorId);
+  await setSlot('created_at', createdAt);
 }
 
 function getOrderedChildIds(rem: any): string[] {
@@ -325,6 +447,13 @@ export async function executeCreateTreeWithMarkdown(plugin: ReactRNPlugin, op: O
         effectiveParentId,
         typeof indent_size === 'number' ? indent_size : 2,
       );
+      const createdIds: string[] = Array.isArray(created)
+        ? created.filter((value: any) => value?._id).map((value: any) => String(value._id))
+        : [];
+      if (createdIds.length > 0) {
+        const rootIds = await computeRootRemIdsForMove(plugin, created, createdIds, effectiveParentId);
+        result.created_ids = rootIds.length > 0 ? rootIds : createdIds;
+      }
       if (Array.isArray(created) && Array.isArray(client_temp_ids)) {
         const id_map = [] as any[];
         for (let i = 0; i < Math.min(created.length, client_temp_ids.length); i += 1) {
@@ -393,6 +522,7 @@ export async function executeCreateTreeWithMarkdown(plugin: ReactRNPlugin, op: O
 
 export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   const { markdown, target, require_same_parent, require_contiguous, portal_id } = op.payload || {};
+  const backupPolicy: 'none' = 'none';
   const md = String(markdown ?? '');
   if (!md.trim()) return { ok: false, fatal: true, error: 'Missing markdown' };
 
@@ -564,6 +694,15 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     const backup = await plugin.rem.createSingleRemWithMarkdown('agent-remnote: replace backup (auto)', parentId);
     if (!backup?._id) throw new Error('createSingleRemWithMarkdown returned null');
     backupRemId = String(backup._id);
+    await applyBackupPowerupMetadata({
+      rem: backup,
+      backupKind: 'selection_replace',
+      cleanupPolicy: 'auto',
+      cleanupState: 'pending',
+      op,
+      sourceParentId: parentId,
+      sourceAnchorId: orderedOldIds[0] ?? '',
+    });
     // Best-effort: move backup container to end to minimize disruption if cleanup fails.
     try {
       if (portalId) await plugin.rem.moveRems([backupRemId], parentId, 1_000_000_000, portalId);
@@ -597,7 +736,12 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
         if (br) await br.remove();
       } catch {}
     }
-    return { ok: false, fatal: true, error: `Failed to move old content to backup: ${String(e?.message || e)}` };
+    return {
+      ok: false,
+      fatal: true,
+      error: `Failed to move old content to backup: ${String(e?.message || e)}`,
+      backup_policy: backupPolicy,
+    };
   }
 
   let backupDeleted = false;
@@ -646,6 +790,7 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
       error: 'Failed to delete replace backup container; rolled back to original content',
       rolled_back: true,
       backup_rem_id: backupRemId,
+      backup_policy: backupPolicy,
     };
   }
 
@@ -660,6 +805,7 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     deleted_rem_ids: orderedOldIds,
     backup_deleted: backupDeleted,
     backup_rem_id: backupRemId,
+    backup_policy: backupPolicy,
   };
 }
 
@@ -673,17 +819,28 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
     prepared,
     staged,
     bundle,
+    backup,
+    assertions,
   } = op.payload || {};
   const parentId = normalizeId(parent_id);
   if (!parentId) return { ok: false, fatal: true, error: 'Missing parent_id' };
+  const backupPolicy = typeof backup === 'string' && backup.trim() === 'visible' ? 'visible' : 'none';
+  const assertionList = Array.isArray(assertions)
+    ? assertions.filter((item: unknown) => typeof item === 'string').map((item: string) => item.trim()).filter(Boolean)
+    : [];
+  const assertSingleRoot = assertionList.includes('single-root');
+  const assertNoLiteralBullet = assertionList.includes('no-literal-bullet');
 
   const parentRem: any = await plugin.rem.findOne(parentId);
   if (!parentRem) return { ok: false, fatal: true, error: `Rem not found: ${parentId}` };
 
-  const oldChildIds = getOrderedChildIds(parentRem);
-  const oldChildIdSet = new Set(oldChildIds);
+  const allOldChildIds = getOrderedChildIds(parentRem);
+  const { contentChildIds, backupChildIds } = await partitionBackupArtifactChildren(plugin, allOldChildIds);
+  const oldChildIds = [...contentChildIds];
+  const oldChildIdSet = new Set(allOldChildIds);
   const md = String(markdown ?? '');
   let createdIds: string[] = [];
+  let createdRootIds: string[] = [];
 
   const rollbackCreated = async () => {
     for (const id of createdIds) {
@@ -719,6 +876,37 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
         createdIds = getOrderedChildIds(latestParent).filter((id) => !oldChildIdSet.has(id));
       } catch {}
     }
+    try {
+      const latestParent: any = await plugin.rem.findOne(parentId);
+      createdRootIds = getOrderedChildIds(latestParent).filter((id) => !oldChildIdSet.has(id));
+    } catch {}
+  }
+
+  if (md.trim()) {
+    if (assertSingleRoot && createdRootIds.length !== 1) {
+      await rollbackCreated();
+      return {
+        ok: false,
+        fatal: true,
+        error: `Assertion failed: single-root (created_roots=${createdRootIds.length})`,
+        assertion: 'single-root',
+      };
+    }
+    if (assertNoLiteralBullet && createdRootIds.length === 1) {
+      try {
+        const createdRem: any = await plugin.rem.findOne(createdRootIds[0]);
+        const plainText = readRemPlainText(createdRem);
+        if (/^\s*(?:[-*+]|\d+\.)\s+/.test(plainText)) {
+          await rollbackCreated();
+          return {
+            ok: false,
+            fatal: true,
+            error: 'Assertion failed: no-literal-bullet',
+            assertion: 'no-literal-bullet',
+          };
+        }
+      } catch {}
+    }
   }
 
   if (oldChildIds.length === 0) {
@@ -727,8 +915,10 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
       parent_id: parentId,
       created_ids: createdIds,
       deleted_rem_ids: [],
+      ignored_backup_rem_ids: backupChildIds,
       backup_deleted: true,
       backup_rem_id: null,
+      backup_policy: backupPolicy,
     };
   }
 
@@ -737,6 +927,15 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
     const backup = await plugin.rem.createSingleRemWithMarkdown('agent-remnote: children replace backup (auto)', parentId);
     if (!backup?._id) throw new Error('createSingleRemWithMarkdown returned null');
     backupRemId = String(backup._id);
+    await applyBackupPowerupMetadata({
+      rem: backup,
+      backupKind: 'children_replace',
+      cleanupPolicy: backupPolicy === 'visible' ? 'visible' : 'auto',
+      cleanupState: backupPolicy === 'visible' ? 'retained' : 'pending',
+      op,
+      sourceParentId: parentId,
+      sourceAnchorId: parentId,
+    });
     try {
       await plugin.rem.moveRems([backupRemId], parentId, 1_000_000_000);
     } catch {}
@@ -777,10 +976,43 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
       fatal: true,
       error: `Failed to move old children to backup: ${String(e?.message || e)}`,
       backup_rem_id: backupRemId,
+      backup_policy: backupPolicy,
+    };
+  }
+
+  if (backupPolicy === 'visible') {
+    return {
+      ok: true,
+      parent_id: parentId,
+      created_ids: createdIds,
+      deleted_rem_ids: oldChildIds,
+      ignored_backup_rem_ids: backupChildIds,
+      backup_deleted: false,
+      backup_rem_id: backupRemId,
+      backup_policy: backupPolicy,
     };
   }
 
   let backupDeleted = false;
+  if (backupRemId && backupPolicy === 'none') {
+    const nodeCount = await countRemTreeNodes(plugin, [backupRemId], DEFER_DELETE_SUBTREE_NODE_THRESHOLD);
+    if (nodeCount > DEFER_DELETE_SUBTREE_NODE_THRESHOLD) {
+      const backupRem: any = await plugin.rem.findOne(backupRemId);
+      const hidden = await maybeHideBackupRem({ rem: backupRem });
+      return {
+        ok: true,
+        parent_id: parentId,
+        created_ids: createdIds,
+        deleted_rem_ids: oldChildIds,
+        ignored_backup_rem_ids: backupChildIds,
+        backup_deleted: false,
+        backup_rem_id: backupRemId,
+        backup_policy: backupPolicy,
+        backup_hidden: hidden,
+        backup_cleanup_state: 'pending',
+      };
+    }
+  }
   if (backupRemId) {
     try {
       const backupRem: any = await plugin.rem.findOne(backupRemId);
@@ -821,6 +1053,7 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
       error: 'Failed to delete children replace backup; rolled back to original content',
       rolled_back: true,
       backup_rem_id: backupRemId,
+      backup_policy: backupPolicy,
     };
   }
 
@@ -829,7 +1062,9 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
     parent_id: parentId,
     created_ids: createdIds,
     deleted_rem_ids: oldChildIds,
+    ignored_backup_rem_ids: backupChildIds,
     backup_deleted: backupDeleted,
     backup_rem_id: backupRemId,
+    backup_policy: backupPolicy,
   };
 }

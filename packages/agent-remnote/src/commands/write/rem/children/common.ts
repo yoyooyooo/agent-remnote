@@ -2,12 +2,13 @@ import * as Effect from 'effect/Effect';
 
 import { tryParseRemnoteLink } from '../../../../lib/remnote.js';
 import { trimBoundaryBlankLines } from '../../../../lib/text.js';
-import { executeWriteApplyUseCase } from '../../../../lib/hostApiUseCases.js';
+import { collectSelectionCurrentUseCase, executeWriteApplyUseCase } from '../../../../lib/hostApiUseCases.js';
 import { AppConfig } from '../../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../../services/Errors.js';
 import { FileInput } from '../../../../services/FileInput.js';
 import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
+import { Queue } from '../../../../services/Queue.js';
 import type { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
 import { readMarkdownTextFromInputSpec } from '../../../_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../../../_applyEnvelope.js';
@@ -52,6 +53,7 @@ export function buildActionEnvelope(params: {
   readonly action: string;
   readonly remId: string;
   readonly markdown?: string | undefined;
+  readonly input?: Record<string, unknown> | undefined;
   readonly priority?: number | undefined;
   readonly clientId?: string | undefined;
   readonly idempotencyKey?: string | undefined;
@@ -62,16 +64,19 @@ export function buildActionEnvelope(params: {
   return Effect.gen(function* () {
     const payloadSvc = yield* Payload;
     const metaValue = params.metaSpec ? yield* payloadSvc.readJson(params.metaSpec) : undefined;
+    const input =
+      params.input ??
+      ({
+        rem_id: params.remId,
+        ...(params.markdown !== undefined ? { markdown: params.markdown } : {}),
+      } satisfies Record<string, unknown>);
     return {
       version: 1,
       kind: 'actions',
       actions: [
         {
           action: params.action,
-          input: {
-            rem_id: params.remId,
-            ...(params.markdown !== undefined ? { markdown: params.markdown } : {}),
-          },
+          input,
         },
       ],
       ...(params.priority !== undefined ? { priority: params.priority } : {}),
@@ -80,6 +85,46 @@ export function buildActionEnvelope(params: {
       ...(metaValue !== undefined ? { meta: metaValue } : {}),
       notify: params.notify,
       ensure_daemon: params.ensureDaemon,
+    };
+  });
+}
+
+export function resolveCurrentSelectionRemId(params: {
+  readonly stateFile?: string | undefined;
+  readonly staleMs?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | any> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const hostApi = yield* HostApiClient;
+    const data = cfg.apiBaseUrl
+      ? yield* hostApi.selectionCurrent({ baseUrl: cfg.apiBaseUrl, stateFile: params.stateFile, staleMs: params.staleMs })
+      : yield* collectSelectionCurrentUseCase({ stateFile: params.stateFile, staleMs: params.staleMs });
+
+    const totalCountRaw = Number(data?.total_count ?? 0);
+    const totalCount = Number.isFinite(totalCountRaw) && totalCountRaw >= 0 ? Math.floor(totalCountRaw) : 0;
+    const truncated = data?.truncated === true;
+    const currentId =
+      typeof data?.current?.id === 'string'
+        ? data.current.id.trim()
+        : Array.isArray(data?.ids)
+          ? String(data.ids[0] ?? '').trim()
+          : '';
+
+    if (truncated || totalCount !== 1 || !currentId) {
+      return yield* Effect.fail(
+        new CliError({
+          code: 'INVALID_ARGS',
+          message: 'Current selection must resolve to exactly one selected Rem',
+          exitCode: 2,
+          details: { total_count: totalCount, truncated, current_id: currentId || null, selection: data },
+        }),
+      );
+    }
+
+    return {
+      source: 'selection' as const,
+      rem_id: currentId,
+      selection: data,
     };
   });
 }
@@ -152,4 +197,58 @@ export function submitActionEnvelope(params: {
       pollMs: params.pollMs,
     });
   });
+}
+
+export function loadTxnDetail(params: {
+  readonly txnId: string;
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | Queue> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const hostApi = yield* HostApiClient;
+    const queue = yield* Queue;
+    return cfg.apiBaseUrl
+      ? yield* hostApi.queueTxn({ baseUrl: cfg.apiBaseUrl, txnId: params.txnId })
+      : yield* queue.inspect({ dbPath: cfg.storeDb, txnId: params.txnId });
+  });
+}
+
+function parseResultJson(raw: any): any {
+  const resultJson = raw?.result_json;
+  if (typeof resultJson === 'string' && resultJson.trim()) {
+    try {
+      return JSON.parse(resultJson);
+    } catch {}
+  }
+  return null;
+}
+
+export function extractReplaceBackupSummary(txnDetail: any):
+  | {
+      readonly policy: string;
+      readonly deleted: boolean;
+      readonly rem_id: string | null;
+      readonly hidden?: boolean | undefined;
+      readonly cleanup_state?: string | undefined;
+    }
+  | undefined {
+  const ops = Array.isArray(txnDetail?.ops) ? txnDetail.ops : [];
+  const replaceOp = ops.find((op: any) =>
+    ['replace_children_with_markdown', 'replace_selection_with_markdown'].includes(String(op?.type ?? '').trim()),
+  );
+  if (!replaceOp) return undefined;
+
+  const result = parseResultJson(replaceOp.result);
+  if (!result || typeof result !== 'object') return undefined;
+
+  return {
+    policy:
+      typeof result.backup_policy === 'string' && result.backup_policy.trim() ? result.backup_policy.trim() : 'none',
+    deleted: result.backup_deleted !== false,
+    rem_id:
+      typeof result.backup_rem_id === 'string' && result.backup_rem_id.trim() ? result.backup_rem_id.trim() : null,
+    ...(result.backup_hidden === true ? { hidden: true } : {}),
+    ...(typeof result.backup_cleanup_state === 'string' && result.backup_cleanup_state.trim()
+      ? { cleanup_state: result.backup_cleanup_state.trim() }
+      : {}),
+  };
 }

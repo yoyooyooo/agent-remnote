@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileWritePlanV1, parseWritePlanV1 } from '../../src/kernel/write-plan/index.js';
+import { compileWritePlanV1, decideOutlineWriteShape, parseWritePlanV1 } from '../../src/kernel/write-plan/index.js';
 
 describe('write plan kernel: parse/compile', () => {
   it('compiles a simple plan and injects client_temp_id for aliased create ops', () => {
@@ -84,5 +84,78 @@ describe('write plan kernel: parse/compile', () => {
     });
 
     expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/does not support/i);
+  });
+
+  it('passes backup policy and fixed assertions through rem.children.replace', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'rem.children.replace',
+          input: {
+            rem_id: 'parent-1',
+            markdown: '- Report',
+            backup: 'visible',
+            assertions: ['single-root', 'preserve-anchor'],
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toHaveLength(1);
+    expect(compiled.ops[0]!.type).toBe('replace_children_with_markdown');
+    expect(compiled.ops[0]!.payload.backup).toBe('visible');
+    expect(compiled.ops[0]!.payload.assertions).toEqual(['single-root', 'preserve-anchor']);
+  });
+
+  it('rejects invalid assertions in rem.children.replace at compile time', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'rem.children.replace',
+          input: {
+            rem_id: 'parent-1',
+            markdown: '- Report',
+            assertions: ['single-root', 'not-real'],
+          },
+        },
+      ],
+    });
+
+    expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/input\.assertions/i);
+  });
+
+  it('classifies single-root markdown as outline-suitable', () => {
+    expect(decideOutlineWriteShape({ markdown: '- Report\n  - detail' })).toEqual({
+      shape: 'single_root_outline',
+      outline_suitable: true,
+      top_level_roots: 1,
+    });
+  });
+
+  it('classifies preserve-anchor writes as expand_in_place', () => {
+    expect(decideOutlineWriteShape({ markdown: '- Report', preserveAnchor: true })).toEqual({
+      shape: 'expand_in_place',
+      outline_suitable: true,
+      top_level_roots: 0,
+    });
+  });
+
+  it('classifies prose-like content as normal writing', () => {
+    expect(decideOutlineWriteShape({ markdown: 'This is a paragraph.\nIt should stay normal.' })).toEqual({
+      shape: 'normal',
+      outline_suitable: false,
+      top_level_roots: 0,
+    });
+  });
+
+  it('does not misclassify uniformly indented multi-root markdown as single-root', () => {
+    expect(decideOutlineWriteShape({ markdown: '  - Root A\n  - Root B' })).toEqual({
+      shape: 'normal',
+      outline_suitable: false,
+      top_level_roots: 2,
+    });
   });
 });

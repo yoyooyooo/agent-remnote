@@ -36,6 +36,11 @@ describe('conflict keys: deriveConflictKeys', () => {
     expect(keys).toEqual(['global:daily_note_write']);
   });
 
+  it('delete_backup_artifact falls back to global:structure_unknown when rem_id is missing', () => {
+    const keys = deriveConflictKeys('delete_backup_artifact', {});
+    expect(keys).toEqual(['global:structure_unknown']);
+  });
+
   it('falls back to global:unknown when no identifiers exist', () => {
     const keys = deriveConflictKeys('update_text', { text: 'x' });
     expect(keys).toEqual(['global:unknown']);

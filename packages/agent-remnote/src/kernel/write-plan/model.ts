@@ -1,5 +1,8 @@
 export type Alias = string;
 
+export type WriteStructureAssertion = 'single-root' | 'preserve-anchor' | 'no-literal-bullet';
+export type OutlineWriteShape = 'normal' | 'single_root_outline' | 'expand_in_place';
+
 export type WritePlanV1 = {
   readonly version: 1;
   readonly steps: readonly WritePlanStepV1[];

@@ -122,6 +122,69 @@ const ACK_RETRY_MAX_DELAY_MS = 5000;
 const leaseExtendRejections = new Map<string, { readonly reason: string; readonly at: number }>();
 const leaseExtendListenerInstalled = new WeakSet<WebSocket>();
 
+function clearAckRuntimeState() {
+  if (ackFlushTimer) {
+    try {
+      clearTimeout(ackFlushTimer);
+    } catch {}
+    ackFlushTimer = null;
+  }
+  for (const waiter of ackWaiters.values()) {
+    try {
+      clearTimeout(waiter.timer);
+    } catch {}
+    try {
+      waiter.resolve(null);
+    } catch {}
+  }
+  ackWaiters.clear();
+  pendingAcks.clear();
+  leaseExtendRejections.clear();
+}
+
+export function resetRuntimeState() {
+  try {
+    stopControlChannel();
+  } catch {}
+  try {
+    closeWorkerWs();
+  } catch {}
+  if (syncWatchdogTimer) {
+    try {
+      clearTimeout(syncWatchdogTimer);
+    } catch {}
+    syncWatchdogTimer = null;
+  }
+  if (syncPollTimer) {
+    try {
+      clearTimeout(syncPollTimer);
+    } catch {}
+    syncPollTimer = null;
+  }
+  syncing = false;
+  activeSyncRunId = 0;
+  syncWatchdogTrippedUntil = 0;
+  clearAckRuntimeState();
+}
+
+export function __setRuntimeStateForTests(params: {
+  readonly syncing?: boolean;
+  readonly activeSyncRunId?: number;
+  readonly syncWatchdogTrippedUntil?: number;
+}) {
+  if (typeof params.syncing === 'boolean') syncing = params.syncing;
+  if (typeof params.activeSyncRunId === 'number') activeSyncRunId = params.activeSyncRunId;
+  if (typeof params.syncWatchdogTrippedUntil === 'number') syncWatchdogTrippedUntil = params.syncWatchdogTrippedUntil;
+}
+
+export function __getRuntimeStateForTests() {
+  return {
+    syncing,
+    activeSyncRunId,
+    syncWatchdogTrippedUntil,
+  };
+}
+
 function ackKey(opId: string, attemptId: string): string {
   return `${opId}:${attemptId}`;
 }
@@ -1018,7 +1081,15 @@ export function startControlChannel(plugin: ReactRNPlugin, url: string, clientIn
       const autoSync = await plugin.settings.getSetting<boolean>(BRIDGE_SETTING_IDS.autoSyncOnConnect);
       if (autoSync) {
         // Use silent mode for automatic sync.
-        await runSyncLoop(plugin, url, clientInstanceId, { silent: true });
+        try {
+          await runSyncLoop(plugin, url, clientInstanceId, { silent: true });
+        } catch (e: any) {
+          try {
+            console.warn('[agent-remnote][control] auto-sync on connect failed', {
+              message: String(e?.message || e || 'unknown error'),
+            });
+          } catch {}
+        }
       }
     } catch {}
   };
@@ -1029,7 +1100,15 @@ export function startControlChannel(plugin: ReactRNPlugin, url: string, clientIn
       const msg = JSON.parse(String(ev.data));
       if (msg?.type === 'StartSync') {
         // StartSync is a server-side trigger (notify/kick). Default to silent drain to avoid UI spam.
-        await runSyncLoop(plugin, url, clientInstanceId, { silent: true });
+        try {
+          await runSyncLoop(plugin, url, clientInstanceId, { silent: true });
+        } catch (e: any) {
+          try {
+            console.warn('[agent-remnote][control] StartSync failed', {
+              message: String(e?.message || e || 'unknown error'),
+            });
+          } catch {}
+        }
         return;
       }
       if (msg?.type === 'SearchRequest') {
@@ -1330,13 +1409,14 @@ export async function runSyncLoop(
     }
     if (!opts?.silent) await plugin.app.toast('Sync finished (or no work)');
   } finally {
+    const isCurrentRun = activeSyncRunId === runId;
+    if (!isCurrentRun) return;
+
     syncing = false;
-    if (activeSyncRunId === runId) {
-      activeSyncRunId = 0;
-      if (syncWatchdogTimer) {
-        clearTimeout(syncWatchdogTimer);
-        syncWatchdogTimer = null;
-      }
+    activeSyncRunId = 0;
+    if (syncWatchdogTimer) {
+      clearTimeout(syncWatchdogTimer);
+      syncWatchdogTimer = null;
     }
     // If control channel is connected and auto-sync is enabled, schedule a light poll
     // to drain any follow-up ops that arrive shortly after.
