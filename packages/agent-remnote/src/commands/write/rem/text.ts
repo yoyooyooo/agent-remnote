@@ -2,11 +2,13 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
+import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { tryParseRemnoteLink } from '../../../lib/remnote.js';
 import { trimBoundaryBlankLines } from '../../../lib/text.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 
@@ -57,6 +59,13 @@ export const writeRemSetTextCommand = Command.make(
           }),
         );
       }
+
+      const _cfg = yield* AppConfig;
+      void _cfg;
+      yield* failInRemoteMode({
+        command: 'rem set-text',
+        reason: 'this command enqueues writes to the local queue/store without a HostApiClient branch',
+      });
 
       const payloadSvc = yield* Payload;
 

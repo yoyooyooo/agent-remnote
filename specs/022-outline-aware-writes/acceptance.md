@@ -5,6 +5,8 @@ Spec：`specs/022-outline-aware-writes/spec.md`
 
 ## 验收状态
 
+原始真实集成证据已留在私有记录中，公开验收文档统一使用脱敏占位符。
+
 - 当前状态：PASS
 - 已完成代码实现：
   - `daily write` 单根 Markdown auto 路径不再默认 bundle
@@ -32,13 +34,13 @@ Spec：`specs/022-outline-aware-writes/spec.md`
   - `backup cleanup`
   - `backup cleanup --apply --no-notify --no-ensure-daemon`
 - 已完成真实集成验证：
-  - 测试页：`remnote://w/60810ee78b0e5400347f6a8c/uGynv9uHkCGC8U5Lx`
-  - 当前选中 Rem：`PtUQTTSHnFN4lAZsD`（`风控应对共性`）
+  - 测试页：`<PRIVATE_WORKSPACE_LINK>`
+  - 当前主测试 Rem：`<PRIMARY_TEST_REM_ID>`（`<PRIMARY_TEST_REM_TITLE>`）
   - 真实 `--selection` 成功路径：
     - `rem children replace --selection --assert preserve-anchor --assert single-root --wait`
     - 结果：命中当前 selection，anchor 保留，页面根下未新增并列根，返回 `backup.policy=none` 且 `backup.deleted=true`
   - 真实失败断言路径：
-    - `rem children replace --rem PtUQTTSHnFN4lAZsD --markdown '- bad root A\\n- bad root B' --assert single-root --wait`
+    - `rem children replace --rem <PRIMARY_TEST_REM_ID> --markdown '- bad root A\\n- bad root B' --assert single-root --wait`
     - 结果：事务失败，`queue inspect` 中底层错误为 `Assertion failed: single-root (created_roots=2)`，现有结构未被污染
   - 真实 visible backup 路径：
     - `rem children replace --selection --backup visible --wait`
@@ -50,27 +52,27 @@ Spec：`specs/022-outline-aware-writes/spec.md`
     - `backup cleanup --backup-rem-id <id>` 已补齐
     - 结果：多个 retained backup 共存时，可精确命中指定 backup，不再依赖 `--limit 1` 猜测“最新一条”
   - 真实显式 `remId` 小树验证：
-    - 在 `PtUQTTSHnFN4lAZsD` 下创建临时测试根 `jyVNRG0BoPakcXKuJ`
+    - 在 `<PRIMARY_TEST_REM_ID>` 下创建临时测试根 `<TEMP_SMALL_TREE_REM_ID>`
     - 跑通 `single-root` 成功、`single-root` 失败不落库、`visible backup -> registry -> cleanup apply`
     - 测试结束后已删除该测试根
   - 真实大子树 `backup=none` 路径验证：
-    - 2026-03-15 在 `PtUQTTSHnFN4lAZsD` 下创建 fresh 测试根 `syd9N6KNWWznmZFWu`，标题 `cleanup-real-122808`
+    - 2026-03-15 在 `<PRIMARY_TEST_REM_ID>` 下创建 fresh 测试根 `<TEMP_HIDDEN_BACKUP_REM_ID_1>`，标题 `cleanup-real-122808`
     - 先写入 70 分支大子树，再执行默认 `backup=none` 的 `rem children replace --wait`
-    - 结果：返回 `backup.policy=none`、`backup.deleted=false`、`backup.hidden=true`、`backup.cleanup_state=pending`，并生成 `backup_rem_id=Jk7AQQTs1zWeiYSVq`
-    - `rem inspect --id Jk7AQQTs1zWeiYSVq` 可确认 hidden backup 实体确实存在
-    - `rem outline --id syd9N6KNWWznmZFWu` 只显示最终小树，不显示 hidden backup 子树
-    - 对该 backup 执行 `backup cleanup --backup-rem-id Jk7AQQTs1zWeiYSVq --apply --wait`
+    - 结果：返回 `backup.policy=none`、`backup.deleted=false`、`backup.hidden=true`、`backup.cleanup_state=pending`，并生成 `backup_rem_id=<BACKUP_REM_ID_1>`
+    - `rem inspect --id <BACKUP_REM_ID_1>` 可确认 hidden backup 实体确实存在
+    - `rem outline --id <TEMP_HIDDEN_BACKUP_REM_ID_1>` 只显示最终小树，不显示 hidden backup 子树
+    - 对该 backup 执行 `backup cleanup --backup-rem-id <BACKUP_REM_ID_1> --apply --wait`
     - 首轮结果：CLI 返回 `TXN_FAILED`，并在真实页面暴露出宿主的大树删除确认弹窗
     - 继续排查后确认根因有两层：
       - 宿主删除存在异步落库窗口，立刻复核会过早失败
       - 当 hidden backup 仍带整棵子树时，直接删根会触发宿主的大树二次确认
-    - 修复后再次 reload 最新插件，并先用历史 pending 样本 `dI1DMSfofX8k9ZpeZ` 做收口
-    - 结果：`backup cleanup --backup-rem-id dI1DMSfofX8k9ZpeZ --apply --wait` 成功，旧 registry 尾项被收成 `cleaned`
-    - 随后在 `PtUQTTSHnFN4lAZsD` 下创建第二个 fresh 测试根 `8JlpHfVfK7l8a2Qm0`，标题 `cleanup-real-final-131151`
-    - 同样先写入 70 分支大子树，再覆盖成小树，生成 hidden backup `mY5lsAsNdfFpx3vph`
-    - `rem inspect --id mY5lsAsNdfFpx3vph` 可读到 hidden backup 实体，`rem outline --id 8JlpHfVfK7l8a2Qm0` 仍不显示 backup 子树
-    - 对该 backup 第一次执行 `backup cleanup --backup-rem-id mY5lsAsNdfFpx3vph --apply --wait`
-    - 最终结果：CLI 直接成功，`rem inspect --id mY5lsAsNdfFpx3vph` 返回 not found，`backup list --state pending` 为空，Store DB `backup_artifacts.cleanup_state=cleaned`
+    - 修复后再次 reload 最新插件，并先用历史 pending 样本 `<BACKUP_REM_ID_2>` 做收口
+    - 结果：`backup cleanup --backup-rem-id <BACKUP_REM_ID_2> --apply --wait` 成功，旧 registry 尾项被收成 `cleaned`
+    - 随后在 `<PRIMARY_TEST_REM_ID>` 下创建第二个 fresh 测试根 `<TEMP_HIDDEN_BACKUP_REM_ID_3>`，标题 `cleanup-real-final-131151`
+    - 同样先写入 70 分支大子树，再覆盖成小树，生成 hidden backup `<BACKUP_REM_ID_3>`
+    - `rem inspect --id <BACKUP_REM_ID_3>` 可读到 hidden backup 实体，`rem outline --id <TEMP_HIDDEN_BACKUP_REM_ID_3>` 仍不显示 backup 子树
+    - 对该 backup 第一次执行 `backup cleanup --backup-rem-id <BACKUP_REM_ID_3> --apply --wait`
+    - 最终结果：CLI 直接成功，`rem inspect --id <BACKUP_REM_ID_3>` 返回 not found，`backup list --state pending` 为空，Store DB `backup_artifacts.cleanup_state=cleaned`
     - 这轮真实页验证确认最终修正成立，hidden backup cleanup 已能绕开宿主的大树确认门并在首次执行中完成
 
 ## 待验收覆盖矩阵

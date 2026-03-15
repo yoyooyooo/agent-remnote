@@ -370,4 +370,79 @@ describe('cli contract: backup commands', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('cleanup rejects non-positive max-delete-subtree-nodes', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-backup-'));
+    const storeDb = path.join(tmpDir, 'store.sqlite');
+
+    try {
+      const db = openStoreDb(storeDb);
+      try {
+        db.prepare(
+          `INSERT INTO backup_artifacts(
+             source_op_id, source_txn, source_op_type, backup_kind, cleanup_policy, cleanup_state,
+             backup_rem_id, source_parent_id, source_anchor_id, result_json, created_at, updated_at, cleaned_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          'op-invalid',
+          'txn-invalid',
+          'replace_children_with_markdown',
+          'children_replace',
+          'auto',
+          'pending',
+          'backup-rem-invalid',
+          'parent-1',
+          'anchor-1',
+          JSON.stringify({ backup_rem_id: 'backup-rem-invalid' }),
+          1,
+          1,
+          null,
+        );
+      } finally {
+        db.close();
+      }
+
+      const res = await runCli(
+        [
+          '--json',
+          '--store-db',
+          storeDb,
+          'backup',
+          'cleanup',
+          '--backup-rem-id',
+          'backup-rem-invalid',
+          '--max-delete-subtree-nodes',
+          '0',
+          '--apply',
+          '--no-notify',
+          '--no-ensure-daemon',
+        ],
+        {
+          env: { REMNOTE_TMUX_REFRESH: '0' },
+          timeoutMs: 15_000,
+        },
+      );
+
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toBe('');
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(false);
+      expect(String(parsed.error?.message ?? '')).toContain('--max-delete-subtree-nodes');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('list rejects negative older-than-hours', async () => {
+    const res = await runCli(['--json', 'backup', 'list', '--older-than-hours', '-1'], {
+      env: { REMNOTE_TMUX_REFRESH: '0' },
+      timeoutMs: 15_000,
+    });
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error?.message ?? '')).toContain('--older-than-hours');
+  });
 });

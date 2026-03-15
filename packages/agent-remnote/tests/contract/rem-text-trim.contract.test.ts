@@ -32,4 +32,21 @@ describe('cli contract: rem set-text trims boundary blank lines', () => {
     expect(parsed.ok).toBe(false);
     expect(String(parsed.error?.message ?? '')).toContain('Invalid subcommand for rem');
   });
+
+  it('fails fast in remote mode because rem set-text is local-only', async () => {
+    const res = await runCli(
+      ['--json', '--api-base-url', 'http://127.0.0.1:9', 'rem', 'set-text', '--rem', 'REM_ID', '--text', 'hello'],
+      {
+        timeoutMs: 15_000,
+      },
+    );
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error?.message ?? '')).toContain('apiBaseUrl');
+    expect(String(parsed.error?.message ?? '')).toContain('rem set-text');
+  });
 });

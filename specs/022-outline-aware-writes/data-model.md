@@ -279,8 +279,8 @@ orphan 不是单看 PowerUp 标签得出的，而是 registry + Rem 状态联合
 
 | 参数 | 说明 |
 | --- | --- |
-| `--state orphan|pending|retained|all` | 默认 `orphan` |
-| `--kind children_replace|selection_replace|all` | 默认 `all` |
+| `--state orphan\|pending\|retained\|all` | 默认 `orphan` |
+| `--kind children_replace\|selection_replace\|all` | 默认 `all` |
 | `--older-than <duration>` | 最小年龄 |
 | `--limit <n>` | 输出条数 |
 | `--json` | 机器可读输出 |
@@ -294,7 +294,7 @@ orphan 不是单看 PowerUp 标签得出的，而是 registry + Rem 状态联合
 | 参数 | 说明 |
 | --- | --- |
 | `--state orphan` | 默认值 |
-| `--kind children_replace|selection_replace|all` | 可选 |
+| `--kind children_replace\|selection_replace\|all` | 可选 |
 | `--older-than <duration>` | 可选 |
 | `--apply` | 真正执行删除 |
 | `--json` | 机器可读输出 |

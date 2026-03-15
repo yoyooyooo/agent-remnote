@@ -51,6 +51,15 @@ export const writeRemDeleteCommand = Command.make(
     meta,
   }) =>
     Effect.gen(function* () {
+      if (maxDeleteSubtreeNodes !== undefined && maxDeleteSubtreeNodes <= 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--max-delete-subtree-nodes must be a positive integer',
+            exitCode: 2,
+          }),
+        );
+      }
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({

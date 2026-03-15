@@ -6,6 +6,7 @@ import * as Option from 'effect/Option';
 import type { BackupKind, CleanupState } from '../../internal/public.js';
 import { listBackupArtifacts, openStoreDb } from '../../internal/public.js';
 import { AppConfig } from '../../services/AppConfig.js';
+import { CliError } from '../../services/Errors.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { failInRemoteMode } from '../_remoteMode.js';
 
@@ -23,6 +24,15 @@ export const backupListCommand = Command.make(
   },
   ({ state, kind, olderThanHours, limit }) =>
     Effect.gen(function* () {
+      if (olderThanHours !== undefined && olderThanHours < 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: '--older-than-hours must be a non-negative integer',
+            exitCode: 2,
+          }),
+        );
+      }
       yield* failInRemoteMode({
         command: 'backup list',
         reason: 'backup governance currently reads the local store registry directly',
