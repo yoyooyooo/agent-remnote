@@ -9,8 +9,10 @@ import { Payload } from '../../../services/Payload.js';
 import { waitForTxn } from '../../_waitTxn.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { resolveReplaceTarget } from './_target.js';
 import { trimBoundaryBlankLines } from '../../../lib/text.js';
+import { extractReplaceBackupSummary, loadTxnDetail } from '../rem/children/common.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -111,6 +113,10 @@ export const replaceMarkdownCommand = Command.make(
     meta,
   }) =>
     Effect.gen(function* () {
+      yield* failInRemoteMode({
+        command: 'replace markdown',
+        reason: 'replace markdown is an advanced/local-only block replace command that still depends on local selection/ref resolution semantics',
+      });
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({
@@ -246,9 +252,16 @@ export const replaceMarkdownCommand = Command.make(
 
       const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
       const out = waited ? ({ ...data, ...waited } as any) : data;
+      const backup =
+        waited?.status === 'succeeded'
+          ? yield* loadTxnDetail({ txnId: data.txn_id }).pipe(
+              Effect.map((detail) => extractReplaceBackupSummary(detail)),
+              Effect.catchAll(() => Effect.succeed(undefined)),
+            )
+          : undefined;
 
       yield* writeSuccess({
-        data: { ...(out as any), target: resolvedTarget },
+        data: backup ? { ...(out as any), target: resolvedTarget, backup } : { ...(out as any), target: resolvedTarget },
         ids: [data.txn_id, ...data.op_ids],
         md: [
           `- txn_id: ${data.txn_id}`,
@@ -256,7 +269,19 @@ export const replaceMarkdownCommand = Command.make(
           `- notified: ${data.notified}`,
           `- sent: ${data.sent ?? ''}`,
           ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          ...(backup
+            ? [
+                `- backup_policy: ${backup.policy}`,
+                `- backup_deleted: ${backup.deleted ? 'true' : 'false'}`,
+                ...(backup.hidden ? ['- backup_hidden: true'] : []),
+                ...(backup.cleanup_state ? [`- backup_cleanup_state: ${backup.cleanup_state}`] : []),
+              ]
+            : []),
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
+).pipe(
+  Command.withDescription(
+    'advanced/local-only block replace command; canonical anchor-preserving rewrites should prefer rem children replace',
+  ),
 );

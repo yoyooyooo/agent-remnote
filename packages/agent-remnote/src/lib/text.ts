@@ -38,9 +38,53 @@ export function dropBlankLinesOutsideFences(input: string): string {
 }
 
 const STRUCTURED_MARKDOWN_LINE_RE = /^\s{0,3}(?:#{1,6}\s+\S|[-*+]\s+\S|\d+\.\s+\S|```|~~~)/m;
+const ROOT_HEADING_RE = /^#{1,6}\s+\S/;
+const ROOT_LIST_ITEM_RE = /^(?:[-*+]|\d+\.)\s+\S/;
 
 export function looksLikeStructuredMarkdown(input: string): boolean {
   const normalized = input.replace(/\r\n?/g, '\n').trim();
   if (!normalized) return false;
   return STRUCTURED_MARKDOWN_LINE_RE.test(normalized);
+}
+
+export function countTopLevelMarkdownRoots(input: string): number {
+  const normalized = trimBoundaryBlankLines(input.replace(/\r\n?/g, '\n'));
+  if (!normalized) return 0;
+
+  const lines = normalized.split('\n');
+  const commonIndent =
+    lines
+      .filter((line) => line.trim().length > 0)
+      .reduce<number | null>((min, line) => {
+        const indent = line.match(/^[ \t]*/)?.[0].length ?? 0;
+        return min === null ? indent : Math.min(min, indent);
+      }, null) ?? 0;
+  let inFence = false;
+  let count = 0;
+
+  for (const rawLine of lines) {
+    const line = rawLine.slice(commonIndent);
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^[ \t]/.test(line)) continue;
+    if (ROOT_HEADING_RE.test(trimmed)) {
+      count += 1;
+      continue;
+    }
+    if (ROOT_LIST_ITEM_RE.test(trimmed)) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+export function isSingleRootOutlineMarkdown(input: string): boolean {
+  return countTopLevelMarkdownRoots(input) === 1;
 }

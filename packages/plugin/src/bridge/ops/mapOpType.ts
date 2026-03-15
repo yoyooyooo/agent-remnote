@@ -12,6 +12,7 @@ export function mapOpType(input: string): string {
     'rem.updateText': 'update_text',
     'rem.move': 'move_rem',
     'rem.delete': 'delete_rem',
+    'backup.deleteArtifact': 'delete_backup_artifact',
     // Portals
     'portal.create': 'create_portal',
     // Tags / attributes

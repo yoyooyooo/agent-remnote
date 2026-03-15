@@ -13,6 +13,7 @@ import {
 import {
   executeCreateLinkRem,
   executeCreateRem,
+  executeDeleteBackupArtifact,
   executeDeleteRem,
   executeMoveRem,
   executeUpdateText,
@@ -155,6 +156,9 @@ export async function executeOp(plugin: ReactRNPlugin, op: OpDispatch): Promise<
         break;
       case 'delete_rem':
         result = await executeDeleteRem(plugin, op);
+        break;
+      case 'delete_backup_artifact':
+        result = await executeDeleteBackupArtifact(plugin, op);
         break;
       default:
         // Unknown op_type => fatal error to avoid endless retry loops.

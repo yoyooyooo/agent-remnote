@@ -33,7 +33,8 @@ export type OpType =
   | 'add_source'
   | 'remove_source'
   | 'set_todo_status'
-  | 'delete_rem';
+  | 'delete_rem'
+  | 'delete_backup_artifact';
 
 export type EnqueueOpInput = {
   type: OpType;
@@ -899,11 +900,11 @@ function computeConflictClusterRisk(params: {
   readonly opTypes: ReadonlySet<string>;
   readonly opCount: number;
 }): { readonly risk: ConflictClusterRisk; readonly note?: string } {
-  const hasDelete = params.opTypes.has('delete_rem');
+  const hasDelete = params.opTypes.has('delete_rem') || params.opTypes.has('delete_backup_artifact');
   if (hasDelete && params.opCount > 0) {
     return {
       risk: 'high',
-      note: 'delete_rem mixed with other ops; execution order matters and may require manual review',
+      note: 'destructive delete op mixed with other ops; execution order matters and may require manual review',
     };
   }
 

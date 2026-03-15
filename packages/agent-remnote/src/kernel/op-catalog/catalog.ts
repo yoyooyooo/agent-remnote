@@ -63,8 +63,15 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
   delete_rem: {
     op_type: 'delete_rem',
     aliases: ['rem.delete'],
-    payload: { required: ['rem_id'], optional: [] },
+    payload: { required: ['rem_id'], optional: ['max_delete_subtree_nodes'] },
     description: 'Delete a Rem.',
+    id_fields: ['rem_id'],
+  },
+
+  delete_backup_artifact: {
+    op_type: 'delete_backup_artifact',
+    payload: { required: ['rem_id'], optional: ['max_delete_subtree_nodes'] },
+    description: 'Delete a backup artifact and verify the Rem is actually gone.',
     id_fields: ['rem_id'],
   },
 
@@ -102,7 +109,7 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     op_type: 'replace_children_with_markdown',
     payload: {
       required: ['parent_id', 'markdown'],
-      optional: ['indent_mode', 'indent_size', 'parse_mode', 'prepared', 'staged', 'bundle'],
+      optional: ['indent_mode', 'indent_size', 'parse_mode', 'prepared', 'staged', 'bundle', 'backup', 'assertions'],
     },
     description: 'Replace the direct children of a Rem with Markdown.',
     id_fields: ['parent_id'],

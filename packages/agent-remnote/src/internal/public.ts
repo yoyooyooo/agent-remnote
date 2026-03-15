@@ -1,7 +1,16 @@
 export { startWebSocketBridge } from './ws-bridge/index.js';
 
 export type { StoreDB } from './store/index.js';
-export { StoreSchemaError, defaultLegacyQueuePath, defaultStorePath, openStoreDb } from './store/index.js';
+export {
+  StoreSchemaError,
+  defaultLegacyQueuePath,
+  defaultStorePath,
+  listBackupArtifacts,
+  openStoreDb,
+  updateBackupArtifactsCleanupState,
+  upsertBackupArtifact,
+} from './store/index.js';
+export type { BackupArtifactRow, BackupKind, CleanupPolicy, CleanupState } from './store/index.js';
 
 export { QueueSchemaError, openQueueDb } from './queue/index.js';
 export { enqueueTxn, getTxnIdByOpId, queueConflicts, queueStats } from './queue/index.js';

@@ -73,4 +73,33 @@ describe('cli contract: write replace markdown --dry-run --json', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('describes replace markdown as an advanced local-only command in help output', async () => {
+    const res = await runCli(['replace', 'markdown', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+    expect(res.stdout).toContain('advanced/local-only');
+  });
+
+  it('fails fast in remote mode because replace markdown is local-only', async () => {
+    const res = await runCli([
+      '--json',
+      '--api-base-url',
+      'http://127.0.0.1:9',
+      'replace',
+      'markdown',
+      '--selection',
+      '--markdown',
+      '- hello',
+    ]);
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error?.message ?? '')).toContain('local-only');
+    expect(String(parsed.error?.message ?? '')).toContain('apiBaseUrl');
+  });
 });
