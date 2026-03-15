@@ -1,5 +1,16 @@
 # agent-remnote
 
+## 1.2.0
+
+### Minor Changes
+
+- 13949c6: Implement outline-aware writes and backup governance for RemNote operations.
+
+  - add `backup list` and `backup cleanup`, including precise cleanup by backup rem id
+  - add `rem children replace --selection`, `--backup`, and `--assert`
+  - avoid extra bundling for single-root daily markdown writes
+  - route large subtree deletes through frontend-safe deletion with dynamic `--max-delete-subtree-nodes`
+
 ## 1.1.0
 
 ### Minor Changes
