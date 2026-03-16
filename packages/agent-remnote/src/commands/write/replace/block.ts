@@ -282,6 +282,6 @@ export const replaceMarkdownCommand = Command.make(
     }).pipe(Effect.catchAll(writeFailure)),
 ).pipe(
   Command.withDescription(
-    'advanced/local-only block replace command; canonical anchor-preserving rewrites should prefer rem children replace',
+    'advanced/local-only block replace command; canonical replace workflows should prefer rem replace',
   ),
 );

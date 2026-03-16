@@ -46,6 +46,7 @@ describe('cli contract: --help', () => {
     expect(res.stderr).toBe('');
 
     const out = stripAnsi(res.stdout);
+    expect(out).toContain('replace');
     expect(out).toContain('create');
     expect(out).toMatch(/\n\s*-\s+children\b/);
     expect(out).toContain('move');

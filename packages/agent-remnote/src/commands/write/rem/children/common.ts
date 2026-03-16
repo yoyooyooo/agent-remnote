@@ -94,6 +94,31 @@ export function resolveCurrentSelectionRemId(params: {
   readonly staleMs?: number | undefined;
 }): Effect.Effect<any, CliError, AppConfig | HostApiClient | any> {
   return Effect.gen(function* () {
+    const resolved = yield* resolveCurrentSelectionRemIds(params);
+    if (resolved.rem_ids.length !== 1) {
+      return yield* Effect.fail(
+        new CliError({
+          code: 'INVALID_ARGS',
+          message: 'Current selection must resolve to exactly one selected Rem',
+          exitCode: 2,
+          details: { total_count: resolved.rem_ids.length, selection: resolved.selection },
+        }),
+      );
+    }
+
+    return {
+      source: 'selection' as const,
+      rem_id: resolved.rem_ids[0]!,
+      selection: resolved.selection,
+    };
+  });
+}
+
+export function resolveCurrentSelectionRemIds(params: {
+  readonly stateFile?: string | undefined;
+  readonly staleMs?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | any> {
+  return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const hostApi = yield* HostApiClient;
     const data = cfg.apiBaseUrl
@@ -103,27 +128,29 @@ export function resolveCurrentSelectionRemId(params: {
     const totalCountRaw = Number(data?.total_count ?? 0);
     const totalCount = Number.isFinite(totalCountRaw) && totalCountRaw >= 0 ? Math.floor(totalCountRaw) : 0;
     const truncated = data?.truncated === true;
-    const currentId =
-      typeof data?.current?.id === 'string'
-        ? data.current.id.trim()
-        : Array.isArray(data?.ids)
-          ? String(data.ids[0] ?? '').trim()
-          : '';
+    const ids = Array.isArray(data?.ids)
+      ? data.ids
+          .filter((value: unknown): value is string => typeof value === 'string')
+          .map((value: string) => value.trim())
+          .filter((value: string) => value.length > 0)
+      : typeof data?.current?.id === 'string' && data.current.id.trim()
+        ? [data.current.id.trim()]
+        : [];
 
-    if (truncated || totalCount !== 1 || !currentId) {
+    if (truncated || totalCount < 1 || ids.length === 0 || ids.length !== totalCount) {
       return yield* Effect.fail(
         new CliError({
           code: 'INVALID_ARGS',
-          message: 'Current selection must resolve to exactly one selected Rem',
+          message: 'Current selection must resolve to one or more selected Rems',
           exitCode: 2,
-          details: { total_count: totalCount, truncated, current_id: currentId || null, selection: data },
+          details: { total_count: totalCount, truncated, ids, selection: data },
         }),
       );
     }
 
     return {
       source: 'selection' as const,
-      rem_id: currentId,
+      rem_ids: ids,
       selection: data,
     };
   });

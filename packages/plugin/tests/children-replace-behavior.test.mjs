@@ -244,6 +244,60 @@ describe('children replace runtime behavior', () => {
     expect(parent.children).not.toContain('old-2');
   });
 
+  it('fails selection replace when single-root assertion is requested and markdown creates multiple roots', async () => {
+    const { plugin, rems } = createPluginFixture();
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-assert-1',
+      txn_id: 'txn-sel-assert-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '- Root A\n- Root B',
+        assertions: ['single-root'],
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('single-root');
+
+    const parent = rems.get('parent-1');
+    expect(parent.children).toEqual(['old-1', 'old-2']);
+  });
+
+  it('allows empty markdown for selection replace and removes the selected block', async () => {
+    const { plugin, rems } = createPluginFixture();
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-empty-1',
+      txn_id: 'txn-sel-empty-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '',
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.backup_policy).toBe('none');
+    expect(result.backup_deleted).toBe(true);
+    expect(result.backup_rem_id).toBeNull();
+
+    const parent = rems.get('parent-1');
+    expect(parent.children).toEqual([]);
+  });
+
   it('does not nest a preexisting backup into the next visible backup', async () => {
     const { plugin, rems } = createPluginFixture();
     globalThis.self = globalThis;

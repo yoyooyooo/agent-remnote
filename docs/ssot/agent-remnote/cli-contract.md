@@ -77,6 +77,20 @@ export type JsonEnvelope =
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
 - raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口同样统一到 `apply` 的 `kind=actions`）
 
+### `rem replace`
+
+- canonical replace family under `rem`
+- target selector：
+  - repeated `--rem`
+  - `--selection`
+- replace surface：
+  - `--surface children`
+  - `--surface self`
+- `--selection` 只作为 target selector，不进入 canonical command noun
+- 旧 surface 定位：
+  - `rem children replace`：compatibility wrapper
+  - `replace markdown`：advanced/local-only block replace
+
 ### `plugin serve`
 
 - `plugin serve`：启动本地静态文件服务器，服务 RemNote 插件构建产物

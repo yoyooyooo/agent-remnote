@@ -336,8 +336,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 解析指定日期 Daily Note 条目 ID    | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
 | 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
-| 替换某个 Rem 的直接子级            | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
-| 就地扩写当前选中的 Rem             | `agent-remnote --json rem children replace --selection --markdown @./note.md --assert preserve-anchor --assert single-root`                       |
+| 替换某个 Rem 的直接子级            | `agent-remnote --json rem replace --rem "page:..." --surface children --markdown @./note.md`                                                      |
+| 就地替换当前选中的并列 Rem         | `agent-remnote --json rem replace --selection --surface self --markdown @./note.md`                                                                |
 | 清空某个 Rem 的直接子级            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
