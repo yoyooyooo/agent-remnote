@@ -80,6 +80,7 @@ describe('cli contract: write replace markdown --dry-run --json', () => {
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');
     expect(res.stdout).toContain('advanced/local-only');
+    expect(res.stdout).toContain('rem replace');
   });
 
   it('fails fast in remote mode because replace markdown is local-only', async () => {

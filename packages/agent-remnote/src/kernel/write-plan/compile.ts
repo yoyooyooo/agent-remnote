@@ -278,6 +278,65 @@ const ACTIONS: Record<string, ActionSpec> = {
     },
   },
 
+  'rem.replace': {
+    opType: 'replace_children_with_markdown',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_ids[]'],
+    compile: ({ input }) => {
+      const surface = input.surface;
+      const markdown = input.markdown;
+      const rem_ids = Array.isArray(input.rem_ids)
+        ? input.rem_ids.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        : [];
+
+      if (surface !== 'children' && surface !== 'self') {
+        throw new Error("rem.replace requires input.surface to be 'children' or 'self'");
+      }
+      if (typeof markdown !== 'string') {
+        throw new Error('rem.replace requires input.markdown');
+      }
+      if (rem_ids.length === 0) {
+        throw new Error('rem.replace requires input.rem_ids[]');
+      }
+      const assertions = Array.isArray(input.assertions) ? (input.assertions as unknown[]) : [];
+      const validAssertions = assertions.every(
+        (value): value is WriteStructureAssertion =>
+          typeof value === 'string' && WRITE_STRUCTURE_ASSERTIONS.has(value as WriteStructureAssertion),
+      );
+      if (!validAssertions) {
+        throw new Error(
+          'rem.replace input.assertions must only include: single-root, preserve-anchor, no-literal-bullet',
+        );
+      }
+
+      if (surface === 'children') {
+        if (rem_ids.length !== 1) {
+          throw new Error('rem.replace input.surface=children requires exactly one target');
+        }
+        const payload: Record<string, unknown> = { parent_id: rem_ids[0], markdown };
+        if (assertions.length > 0) payload.assertions = assertions;
+        return {
+          ops: [{ type: 'replace_children_with_markdown', payload }],
+        };
+      }
+
+      return {
+        ops: [
+          {
+            type: 'replace_selection_with_markdown',
+            payload: {
+              markdown,
+              target: { mode: 'explicit', rem_ids },
+              require_same_parent: true,
+              require_contiguous: true,
+              ...(assertions.length > 0 ? { assertions } : {}),
+            },
+          },
+        ],
+      };
+    },
+  },
+
   rem: {
     // Namespace placeholder to provide a better error message for common typos.
     opType: '',

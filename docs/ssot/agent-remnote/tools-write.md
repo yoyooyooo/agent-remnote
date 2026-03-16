@@ -14,7 +14,8 @@
 ## 命令一览
 - Agent-primary primitives
   - `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
-  - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。其中 `rem children replace` 是默认的 canonical structure-rewrite path，用于保留 anchor Rem 并整体重写其 direct children。
+  - `agent-remnote rem replace`：canonical replace family。target selector 负责表达“替换谁”，`--surface children|self` 负责表达“替换哪一层”。
+  - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。其中 `rem children replace` 保留为 compatibility wrapper；canonical path 优先用 `rem replace --surface children`。
   - `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
   - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。其中 `rem delete` 在插件侧默认走 `safeDeleteSubtree`，会优先直接删除“节点数不超过阈值”的整棵小子树；超过阈值时，再拆成多个阈值内的小子树做前端本地安全删除，以规避宿主的大树删除确认。CLI 可按次通过 `--max-delete-subtree-nodes <n>` 覆盖前端默认阈值。
   - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
@@ -28,7 +29,7 @@
   - `agent-remnote table property add/set-type`
   - `agent-remnote table option add/remove`
 - Advanced / local-only
-  - `agent-remnote replace markdown/literal`：advanced/local-only 的替换入口。`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids。它不属于默认 Agent-first rewrite path，也不应与 `rem children replace` 作为并列主路径推广。
+  - `agent-remnote replace markdown/literal`：advanced/local-only 的替换入口。`markdown` 用于块级 Markdown 替换，`literal` 用于纯文本查找替换；需要选择/引用/显式 ids。它不属于默认 Agent-first rewrite path，也不应与 `rem replace` 作为并列主路径推广。
 - Auxiliary read surfaces
   - `agent-remnote daily rem-id`
   - `agent-remnote powerup list/resolve/schema`
@@ -118,6 +119,14 @@
       - `single-root`
       - `preserve-anchor`
       - `no-literal-bullet`
+  - `rem.replace`（canonical action wrapper）
+    - `surface`（必填）：`children` / `self`
+    - `rem_ids`（必填）：目标 Rem 集合
+    - `markdown`（必填）：替换内容
+    - `assertions`（可选）：结构断言；其中 `preserve-anchor` 仅适用于 `surface:"children"`
+    - 语义：
+      - `surface:"children"`：编译到 `replace_children_with_markdown`
+      - `surface:"self"`：编译到 `replace_selection_with_markdown(target.mode="explicit")`
   - `daily_note_write`（写入 Daily Note；由插件侧定位当天 daily doc）
     - `markdown` / `text`：二选一（内容）
     - `date` / `offset_days`：二选一（目标日期）
@@ -126,7 +135,7 @@
       - 例外：若 `daily write --markdown` 的 auto 路径输入本身已经是单一顶层根节点的大纲，CLI 默认不再自动叠加 bundle。
     - `--text` 仅用于纯文本；若输入看起来像结构化 Markdown，CLI 必须 fail-fast 并提示改用 `--markdown`
     - `--force-text` 允许显式保留字面 Markdown 文本
-  - `replace_selection_with_markdown`（advanced/local-only 的块级替换 primitive；推荐替代“create + delete”的多 op 方案）
+  - `replace_selection_with_markdown`（advanced/local-only 的块级替换 primitive；canonical `rem replace --surface self` 会把显式 target set 编译到这里）
     - `markdown`：新内容
     - `target.mode`：`expected`（默认，更安全）/ `current` / `explicit`
     - `target.remIds`：`expected`/`explicit` 必填；`expected` 用于执行时校验 selection 未变化，`explicit` 直接按 remIds 执行（不依赖 UI selection）

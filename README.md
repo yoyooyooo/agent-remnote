@@ -336,8 +336,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Resolve a specific Daily Note Rem ID     | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
 | Append Markdown to a Rem's children      | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
 | Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
-| Replace a Rem's direct children          | `agent-remnote --json rem children replace --rem "page:..." --markdown @./note.md`                                                                |
-| Expand the current selected Rem in place | `agent-remnote --json rem children replace --selection --markdown @./note.md --assert preserve-anchor --assert single-root`                       |
+| Replace a Rem's direct children          | `agent-remnote --json rem replace --rem "page:..." --surface children --markdown @./note.md`                                                      |
+| Replace selected sibling Rems in place   | `agent-remnote --json rem replace --selection --surface self --markdown @./note.md`                                                                |
 | Clear a Rem's direct children            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |

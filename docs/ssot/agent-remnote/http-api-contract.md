@@ -52,6 +52,7 @@
   - recommended for selection-only flows: `plugin selection current --compact`
 - `queue wait`
 - `apply`
+- `rem replace`
 - `rem children append`
 - `rem children prepend`
 - `rem children replace`
@@ -173,6 +174,7 @@
 - `plugin selection snapshot/roots/current/outline`
 - `queue wait`
 - `apply`
+- `rem replace`
 - `rem children append`
 - `rem children prepend`
 - `rem children replace`
