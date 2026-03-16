@@ -521,13 +521,18 @@ export async function executeCreateTreeWithMarkdown(plugin: ReactRNPlugin, op: O
 }
 
 export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
-  const { markdown, target, require_same_parent, require_contiguous, portal_id } = op.payload || {};
+  const { markdown, target, require_same_parent, require_contiguous, portal_id, assertions } = op.payload || {};
   const backupPolicy: 'none' = 'none';
   const md = String(markdown ?? '');
-  if (!md.trim()) return { ok: false, fatal: true, error: 'Missing markdown' };
+  const hasMarkdown = md.trim().length > 0;
 
   const requireSameParent = require_same_parent !== false;
   const requireContiguous = require_contiguous !== false;
+  const assertionList = Array.isArray(assertions)
+    ? assertions.filter((item: unknown) => typeof item === 'string').map((item: string) => item.trim()).filter(Boolean)
+    : [];
+  const assertSingleRoot = assertionList.includes('single-root');
+  const assertNoLiteralBullet = assertionList.includes('no-literal-bullet');
 
   const rawMode = typeof target?.mode === 'string' ? target.mode : '';
   const targetMode = rawMode === 'current' ? 'current' : rawMode === 'explicit' ? 'explicit' : 'expected';
@@ -654,15 +659,21 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     }
   }
 
-  const created = await createTreeWithMarkdownAndFixRefs(plugin, md, parentId);
   const createdIds: string[] = [];
-  if (Array.isArray(created)) {
-    for (const r of created) {
-      if (r?._id) createdIds.push(r._id);
+  let createdRootIds: string[] = [];
+  let created: unknown = undefined;
+  if (hasMarkdown) {
+    created = await createTreeWithMarkdownAndFixRefs(plugin, md, parentId);
+    if (Array.isArray(created)) {
+      for (const r of created) {
+        if (r?._id) createdIds.push(r._id);
+      }
     }
+    if (createdIds.length === 0)
+      return { ok: false, fatal: true, error: 'createTreeWithMarkdown returned no created Rems' };
+    createdRootIds = await computeRootRemIdsForMove(plugin, created, createdIds, parentId, portalId);
+    if (createdRootIds.length === 0) return { ok: false, fatal: true, error: 'Failed to determine root Rems for moveRems' };
   }
-  if (createdIds.length === 0)
-    return { ok: false, fatal: true, error: 'createTreeWithMarkdown returned no created Rems' };
 
   const rollbackCreated = async () => {
     for (const id of createdIds) {
@@ -673,19 +684,42 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     }
   };
 
-  try {
-    if (portalId) {
-      const rootIds = await computeRootRemIdsForMove(plugin, created, createdIds, parentId, portalId);
-      if (rootIds.length === 0) return { ok: false, fatal: true, error: 'Failed to determine root Rems for moveRems' };
-      await plugin.rem.moveRems(rootIds, parentId, position, portalId);
-    } else {
-      const rootIds = await computeRootRemIdsForMove(plugin, created, createdIds, parentId);
-      if (rootIds.length === 0) return { ok: false, fatal: true, error: 'Failed to determine root Rems for moveRems' };
-      await plugin.rem.moveRems(rootIds, parentId, position);
-    }
-  } catch (e: any) {
+  if (hasMarkdown && assertSingleRoot && createdRootIds.length !== 1) {
     await rollbackCreated();
-    return { ok: false, fatal: true, error: `Failed to move new content: ${String(e?.message || e)}` };
+    return {
+      ok: false,
+      fatal: true,
+      error: `Assertion failed: single-root (created_roots=${createdRootIds.length})`,
+      assertion: 'single-root',
+    };
+  }
+  if (hasMarkdown && assertNoLiteralBullet && createdRootIds.length === 1) {
+    try {
+      const createdRem: any = await plugin.rem.findOne(createdRootIds[0]);
+      const plainText = readRemPlainText(createdRem);
+      if (/^\s*(?:[-*+]|\d+\.)\s+/.test(plainText)) {
+        await rollbackCreated();
+        return {
+          ok: false,
+          fatal: true,
+          error: 'Assertion failed: no-literal-bullet',
+          assertion: 'no-literal-bullet',
+        };
+      }
+    } catch {}
+  }
+
+  if (hasMarkdown) {
+    try {
+      if (portalId) {
+        await plugin.rem.moveRems(createdRootIds, parentId, position, portalId);
+      } else {
+        await plugin.rem.moveRems(createdRootIds, parentId, position);
+      }
+    } catch (e: any) {
+      await rollbackCreated();
+      return { ok: false, fatal: true, error: `Failed to move new content: ${String(e?.message || e)}` };
+    }
   }
 
   // Move old content into a temporary backup container first (reversible), then delete last.

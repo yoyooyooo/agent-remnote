@@ -99,7 +99,7 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     op_type: 'replace_selection_with_markdown',
     payload: {
       required: ['markdown'],
-      optional: ['target', 'require_same_parent', 'require_contiguous', 'portal_id'],
+      optional: ['target', 'require_same_parent', 'require_contiguous', 'portal_id', 'assertions'],
     },
     description: 'Replace a selection of Rems with Markdown.',
     id_fields: ['target.rem_ids[]', 'portal_id'],
