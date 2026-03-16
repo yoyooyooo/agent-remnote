@@ -298,6 +298,38 @@ describe('children replace runtime behavior', () => {
     expect(parent.children).toEqual([]);
   });
 
+  it('fails closed when selection replace cannot evaluate no-literal-bullet', async () => {
+    const { plugin, rems } = createPluginFixture();
+    const originalFindOne = plugin.rem.findOne;
+    plugin.rem.findOne = async (id) => {
+      if (id === 'rem-1') throw new Error('lookup failed');
+      return originalFindOne.call(plugin.rem, id);
+    };
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-assert-lookup-1',
+      txn_id: 'txn-sel-assert-lookup-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '- New Root',
+        assertions: ['no-literal-bullet'],
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('no-literal-bullet');
+    const parent = rems.get('parent-1');
+    expect(parent.children).toContain('old-1');
+    expect(parent.children).toContain('old-2');
+  });
+
   it('does not nest a preexisting backup into the next visible backup', async () => {
     const { plugin, rems } = createPluginFixture();
     globalThis.self = globalThis;
@@ -336,6 +368,32 @@ describe('children replace runtime behavior', () => {
     expect(newBackup.children).not.toContain(first.backup_rem_id);
     expect(second.ignored_backup_rem_ids).toContain(first.backup_rem_id);
     expect(oldBackup.parent).toBe('parent-1');
+  });
+
+  it('fails closed when children replace cannot evaluate no-literal-bullet', async () => {
+    const { plugin, rems } = createPluginFixture();
+    const originalFindOne = plugin.rem.findOne;
+    plugin.rem.findOne = async (id) => {
+      if (id === 'rem-1') throw new Error('lookup failed');
+      return originalFindOne.call(plugin.rem, id);
+    };
+    globalThis.self = globalThis;
+    const { executeReplaceChildrenWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceChildrenWithMarkdown(plugin, {
+      payload: {
+        parent_id: 'parent-1',
+        markdown: '- New Root',
+        assertions: ['no-literal-bullet'],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('no-literal-bullet');
+    const parent = rems.get('parent-1');
+    expect(parent.children).toContain('old-1');
+    expect(parent.children).toContain('old-2');
   });
 
   it('defers deletion for large backup=none subtrees and hides the backup rem', async () => {

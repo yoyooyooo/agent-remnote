@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
+import { createServer } from 'node:http';
 
 import { runCli } from '../helpers/runCli.js';
 
@@ -210,5 +211,66 @@ describe('cli contract: rem replace', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.data.ops[0].type).toBe('replace_selection_with_markdown');
     expect(parsed.data.ops[0].payload.assertions).toEqual(['single-root']);
+  });
+
+  it('falls back to current.id when remote selection payload ids is empty', async () => {
+    const requests: Array<{ method?: string; url?: string }> = [];
+    const server = createServer((req, res) => {
+      requests.push({ method: req.method, url: req.url });
+      if (req.method === 'GET' && req.url === '/v1/plugin/selection/current') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            data: {
+              selection_kind: 'rem',
+              total_count: 1,
+              truncated: false,
+              ids: [],
+              current: { id: 'REMOTE-CURRENT-1', title: 'Current Rem' },
+              page: null,
+              focus: null,
+            },
+          }),
+        );
+        return;
+      }
+
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: { code: 'NOT_FOUND', message: 'Not found' } }));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+
+    try {
+      const res = await runCli([
+        '--json',
+        '--api-base-url',
+        `http://127.0.0.1:${port}`,
+        'rem',
+        'replace',
+        '--selection',
+        '--surface',
+        'self',
+        '--markdown',
+        '- Root',
+        '--dry-run',
+      ]);
+
+      expect(res.exitCode).toBe(0);
+      expect(res.stderr).toBe('');
+
+      const parsed = parseJsonLine(res.stdout);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.data.target).toEqual({
+        source: 'selection',
+        rem_ids: ['REMOTE-CURRENT-1'],
+      });
+      expect(requests.some((request) => request.url === '/v1/plugin/selection/current')).toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
   });
 });

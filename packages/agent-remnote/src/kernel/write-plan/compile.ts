@@ -308,6 +308,9 @@ const ACTIONS: Record<string, ActionSpec> = {
           'rem.replace input.assertions must only include: single-root, preserve-anchor, no-literal-bullet',
         );
       }
+      if (surface === 'self' && assertions.includes('preserve-anchor')) {
+        throw new Error('rem.replace input.surface=self does not support input.assertions preserve-anchor');
+      }
 
       if (surface === 'children') {
         if (rem_ids.length !== 1) {

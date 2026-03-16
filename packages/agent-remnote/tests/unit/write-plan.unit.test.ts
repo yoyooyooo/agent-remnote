@@ -127,6 +127,25 @@ describe('write plan kernel: parse/compile', () => {
     expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/input\.assertions/i);
   });
 
+  it('rejects preserve-anchor for rem.replace surface=self during compilation', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'rem.replace',
+          input: {
+            surface: 'self',
+            rem_ids: ['r1', 'r2'],
+            markdown: '- Root',
+            assertions: ['preserve-anchor'],
+          },
+        },
+      ],
+    });
+
+    expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/preserve-anchor/i);
+  });
+
   it('classifies single-root markdown as outline-suitable', () => {
     expect(decideOutlineWriteShape({ markdown: '- Report\n  - detail' })).toEqual({
       shape: 'single_root_outline',

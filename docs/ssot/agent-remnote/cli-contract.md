@@ -79,17 +79,17 @@ export type JsonEnvelope =
 
 ### `rem replace`
 
-- canonical replace family under `rem`
-- target selector：
-  - repeated `--rem`
+- `rem` 下的规范化替换命令族
+- 目标选择器：
+  - 可重复的 `--rem`
   - `--selection`
 - replace surface：
   - `--surface children`
   - `--surface self`
-- `--selection` 只作为 target selector，不进入 canonical command noun
+- `--selection` 只作为目标选择器，不进入规范化命令名
 - 旧 surface 定位：
-  - `rem children replace`：compatibility wrapper
-  - `replace markdown`：advanced/local-only block replace
+  - `rem children replace`：兼容性包装器
+  - `replace markdown`：高级 / 仅本地的块替换
 
 ### `plugin serve`
 
