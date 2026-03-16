@@ -9,7 +9,8 @@ import { FileInput } from '../../../../services/FileInput.js';
 import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
 import { Queue } from '../../../../services/Queue.js';
-import type { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
+import { RemDb } from '../../../../services/RemDb.js';
+import { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
 import { readMarkdownTextFromInputSpec } from '../../../_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../../../_applyEnvelope.js';
 import { RefResolver } from '../../../../services/RefResolver.js';
@@ -48,6 +49,18 @@ export function ensureWaitArgs(params: {
     }
   });
 }
+
+export type ResolvedSelectionRemIds = {
+  readonly source: 'selection';
+  readonly rem_ids: readonly string[];
+  readonly selection: unknown;
+};
+
+export type ResolvedSelectionRemId = {
+  readonly source: 'selection';
+  readonly rem_id: string;
+  readonly selection: unknown;
+};
 
 export function buildActionEnvelope(params: {
   readonly action: string;
@@ -92,7 +105,7 @@ export function buildActionEnvelope(params: {
 export function resolveCurrentSelectionRemId(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | HostApiClient | any> {
+}): Effect.Effect<ResolvedSelectionRemId, CliError, AppConfig | HostApiClient | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     const resolved = yield* resolveCurrentSelectionRemIds(params);
     if (resolved.rem_ids.length !== 1) {
@@ -117,7 +130,7 @@ export function resolveCurrentSelectionRemId(params: {
 export function resolveCurrentSelectionRemIds(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | HostApiClient | any> {
+}): Effect.Effect<ResolvedSelectionRemIds, CliError, AppConfig | HostApiClient | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const hostApi = yield* HostApiClient;
@@ -128,14 +141,14 @@ export function resolveCurrentSelectionRemIds(params: {
     const totalCountRaw = Number(data?.total_count ?? 0);
     const totalCount = Number.isFinite(totalCountRaw) && totalCountRaw >= 0 ? Math.floor(totalCountRaw) : 0;
     const truncated = data?.truncated === true;
-    const ids = Array.isArray(data?.ids)
+    const listedIds = Array.isArray(data?.ids)
       ? data.ids
           .filter((value: unknown): value is string => typeof value === 'string')
           .map((value: string) => value.trim())
           .filter((value: string) => value.length > 0)
-      : typeof data?.current?.id === 'string' && data.current.id.trim()
-        ? [data.current.id.trim()]
-        : [];
+      : [];
+    const currentId = typeof data?.current?.id === 'string' && data.current.id.trim() ? data.current.id.trim() : '';
+    const ids = listedIds.length > 0 ? listedIds : currentId ? [currentId] : [];
 
     if (truncated || totalCount < 1 || ids.length === 0 || ids.length !== totalCount) {
       return yield* Effect.fail(

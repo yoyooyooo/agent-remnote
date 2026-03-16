@@ -706,7 +706,15 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
           assertion: 'no-literal-bullet',
         };
       }
-    } catch {}
+    } catch {
+      await rollbackCreated();
+      return {
+        ok: false,
+        fatal: true,
+        error: 'Assertion failed: no-literal-bullet',
+        assertion: 'no-literal-bullet',
+      };
+    }
   }
 
   if (hasMarkdown) {
@@ -939,7 +947,15 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
             assertion: 'no-literal-bullet',
           };
         }
-      } catch {}
+      } catch {
+        await rollbackCreated();
+        return {
+          ok: false,
+          fatal: true,
+          error: 'Assertion failed: no-literal-bullet',
+          assertion: 'no-literal-bullet',
+        };
+      }
     }
   }
 
