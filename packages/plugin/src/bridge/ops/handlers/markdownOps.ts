@@ -716,6 +716,9 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
   if (hasMarkdown && assertNoLiteralBullet && createdRootIds.length === 1) {
     try {
       const createdRem: any = await plugin.rem.findOne(createdRootIds[0]);
+      if (!createdRem) {
+        throw new Error(`created Rem not found: ${createdRootIds[0]}`);
+      }
       const plainText = readRemPlainText(createdRem);
       if (/^\s*(?:[-*+]|\d+\.)\s+/.test(plainText)) {
         await rollbackCreated();
@@ -957,6 +960,9 @@ export async function executeReplaceChildrenWithMarkdown(plugin: ReactRNPlugin, 
     if (assertNoLiteralBullet && createdRootIds.length === 1) {
       try {
         const createdRem: any = await plugin.rem.findOne(createdRootIds[0]);
+        if (!createdRem) {
+          throw new Error(`created Rem not found: ${createdRootIds[0]}`);
+        }
         const plainText = readRemPlainText(createdRem);
         if (/^\s*(?:[-*+]|\d+\.)\s+/.test(plainText)) {
           await rollbackCreated();

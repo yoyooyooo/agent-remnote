@@ -354,6 +354,38 @@ describe('children replace runtime behavior', () => {
     expect(parent.children).toContain('old-2');
   });
 
+  it('fails closed when selection replace receives a missing created rem during no-literal-bullet evaluation', async () => {
+    const { plugin, rems } = createPluginFixture();
+    const originalFindOne = plugin.rem.findOne;
+    plugin.rem.findOne = async (id) => {
+      if (id === 'rem-1') return null;
+      return originalFindOne.call(plugin.rem, id);
+    };
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-assert-missing-1',
+      txn_id: 'txn-sel-assert-missing-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '- New Root',
+        assertions: ['no-literal-bullet'],
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('no-literal-bullet');
+    const parent = rems.get('parent-1');
+    expect(parent.children).toContain('old-1');
+    expect(parent.children).toContain('old-2');
+  });
+
   it('rolls back created rems when selection replace cannot determine root rem ids for move', async () => {
     const { plugin, rems, createRemRecord } = createPluginFixture();
     plugin.rem.createTreeWithMarkdown = async () => [createRemRecord({ id: 'created-off-parent', text: 'Created', parent: 'other-parent' })];
@@ -426,6 +458,32 @@ describe('children replace runtime behavior', () => {
     const originalFindOne = plugin.rem.findOne;
     plugin.rem.findOne = async (id) => {
       if (id === 'rem-1') throw new Error('lookup failed');
+      return originalFindOne.call(plugin.rem, id);
+    };
+    globalThis.self = globalThis;
+    const { executeReplaceChildrenWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceChildrenWithMarkdown(plugin, {
+      payload: {
+        parent_id: 'parent-1',
+        markdown: '- New Root',
+        assertions: ['no-literal-bullet'],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('no-literal-bullet');
+    const parent = rems.get('parent-1');
+    expect(parent.children).toContain('old-1');
+    expect(parent.children).toContain('old-2');
+  });
+
+  it('fails closed when children replace receives a missing created rem during no-literal-bullet evaluation', async () => {
+    const { plugin, rems } = createPluginFixture();
+    const originalFindOne = plugin.rem.findOne;
+    plugin.rem.findOne = async (id) => {
+      if (id === 'rem-1') return null;
       return originalFindOne.call(plugin.rem, id);
     };
     globalThis.self = globalThis;
