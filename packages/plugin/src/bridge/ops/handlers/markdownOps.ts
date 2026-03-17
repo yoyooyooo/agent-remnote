@@ -528,9 +528,27 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
 
   const requireSameParent = require_same_parent !== false;
   const requireContiguous = require_contiguous !== false;
-  const assertionList = Array.isArray(assertions)
-    ? assertions.filter((item: unknown) => typeof item === 'string').map((item: string) => item.trim()).filter(Boolean)
-    : [];
+  const rawAssertions = assertions === undefined ? [] : Array.isArray(assertions) ? assertions : null;
+  if (rawAssertions === null) {
+    return {
+      ok: false,
+      fatal: true,
+      error: 'replace_selection_with_markdown assertions must be an array of strings',
+    };
+  }
+  const assertionList = rawAssertions
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  const invalidAssertion = rawAssertions.some(
+    (item) => typeof item !== 'string' || !['single-root', 'no-literal-bullet'].includes(item.trim()),
+  );
+  if (invalidAssertion) {
+    return {
+      ok: false,
+      fatal: true,
+      error: 'replace_selection_with_markdown assertions must only include: single-root, no-literal-bullet',
+    };
+  }
   const assertSingleRoot = assertionList.includes('single-root');
   const assertNoLiteralBullet = assertionList.includes('no-literal-bullet');
 
@@ -662,6 +680,14 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
   const createdIds: string[] = [];
   let createdRootIds: string[] = [];
   let created: unknown = undefined;
+  const rollbackCreated = async () => {
+    for (const id of createdIds) {
+      try {
+        const rr = await plugin.rem.findOne(id);
+        if (rr) await rr.remove();
+      } catch {}
+    }
+  };
   if (hasMarkdown) {
     created = await createTreeWithMarkdownAndFixRefs(plugin, md, parentId);
     if (Array.isArray(created)) {
@@ -672,17 +698,11 @@ export async function executeReplaceSelectionWithMarkdown(plugin: ReactRNPlugin,
     if (createdIds.length === 0)
       return { ok: false, fatal: true, error: 'createTreeWithMarkdown returned no created Rems' };
     createdRootIds = await computeRootRemIdsForMove(plugin, created, createdIds, parentId, portalId);
-    if (createdRootIds.length === 0) return { ok: false, fatal: true, error: 'Failed to determine root Rems for moveRems' };
-  }
-
-  const rollbackCreated = async () => {
-    for (const id of createdIds) {
-      try {
-        const rr = await plugin.rem.findOne(id);
-        if (rr) await rr.remove();
-      } catch {}
+    if (createdRootIds.length === 0) {
+      await rollbackCreated();
+      return { ok: false, fatal: true, error: 'Failed to determine root Rems for moveRems' };
     }
-  };
+  }
 
   if (hasMarkdown && assertSingleRoot && createdRootIds.length !== 1) {
     await rollbackCreated();

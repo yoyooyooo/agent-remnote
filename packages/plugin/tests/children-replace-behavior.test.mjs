@@ -118,7 +118,7 @@ function createPluginFixture() {
   createRemRecord({ id: 'old-1', text: 'Old 1', parent: 'parent-1' });
   createRemRecord({ id: 'old-2', text: 'Old 2', parent: 'parent-1' });
 
-  return { plugin, rems, powerupCalls };
+  return { plugin, rems, powerupCalls, createRemRecord };
 }
 
 describe('children replace runtime behavior', () => {
@@ -298,6 +298,30 @@ describe('children replace runtime behavior', () => {
     expect(parent.children).toEqual([]);
   });
 
+  it('rejects unsupported assertions in raw selection replace payloads', async () => {
+    const { plugin } = createPluginFixture();
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-invalid-assert-1',
+      txn_id: 'txn-sel-invalid-assert-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '- New Root',
+        assertions: ['preserve-anchor'],
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('assertions');
+  });
+
   it('fails closed when selection replace cannot evaluate no-literal-bullet', async () => {
     const { plugin, rems } = createPluginFixture();
     const originalFindOne = plugin.rem.findOne;
@@ -328,6 +352,33 @@ describe('children replace runtime behavior', () => {
     const parent = rems.get('parent-1');
     expect(parent.children).toContain('old-1');
     expect(parent.children).toContain('old-2');
+  });
+
+  it('rolls back created rems when selection replace cannot determine root rem ids for move', async () => {
+    const { plugin, rems, createRemRecord } = createPluginFixture();
+    plugin.rem.createTreeWithMarkdown = async () => [createRemRecord({ id: 'created-off-parent', text: 'Created', parent: 'other-parent' })];
+    globalThis.self = globalThis;
+    const { executeReplaceSelectionWithMarkdown } = await import('../src/bridge/ops/handlers/markdownOps.ts');
+
+    const result = await executeReplaceSelectionWithMarkdown(plugin, {
+      op_id: 'op-sel-rootids-1',
+      txn_id: 'txn-sel-rootids-1',
+      op_type: 'replace_selection_with_markdown',
+      payload: {
+        markdown: '- New Root',
+        target: {
+          mode: 'explicit',
+          rem_ids: ['old-1', 'old-2'],
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.fatal).toBe(true);
+    expect(String(result.error)).toContain('Failed to determine root Rems for moveRems');
+    expect(rems.has('created-off-parent')).toBe(false);
+    const parent = rems.get('parent-1');
+    expect(parent.children).toEqual(['old-1', 'old-2']);
   });
 
   it('does not nest a preexisting backup into the next visible backup', async () => {

@@ -137,6 +137,10 @@
     - `--force-text` 允许显式保留字面 Markdown 文本
   - `replace_selection_with_markdown`（advanced/local-only 的块级替换 primitive；规范化的 `rem replace --surface self` 会把显式目标集编译到这里）
     - `markdown`：新内容
+    - `assertions`（可选）：当前仅允许
+      - `single-root`
+      - `no-literal-bullet`
+      - `preserve-anchor` 不适用于这条 primitive
     - `target.mode`：`expected`（默认，更安全）/ `current` / `explicit`
     - `target.remIds`：`expected`/`explicit` 必填；`expected` 用于执行时校验 selection 未变化，`explicit` 直接按 remIds 执行（不依赖 UI selection）
     - `requireSameParent`/`requireContiguous`：默认 true；用于保证“原地替换”语义明确
