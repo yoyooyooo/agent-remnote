@@ -253,7 +253,15 @@ function findOutlineTargetDescriptor(doc: Record<string, unknown> | null | undef
     }
   }
 
-  let referenceFallback: OutlineTargetDescriptor | null = null;
+  const referenceFallback = (() => {
+    if (!Array.isArray(value) || value.length !== 1) return null;
+    const only = value[0];
+    if (!only || typeof only !== 'object') return null;
+    const obj = only as Record<string, unknown>;
+    const tokenType = typeof obj.i === 'string' ? obj.i : '';
+    const targetId = typeof obj._id === 'string' ? obj._id.trim() : '';
+    return tokenType === 'q' && targetId ? ({ kind: 'reference', id: targetId } as const) : null;
+  })();
 
   const visit = (input: unknown): OutlineTargetDescriptor | null => {
     if (Array.isArray(input)) {
@@ -270,9 +278,6 @@ function findOutlineTargetDescriptor(doc: Record<string, unknown> | null | undef
       const targetId = typeof obj._id === 'string' ? obj._id.trim() : '';
       if (tokenType === 'p' && targetId) {
         return { kind: 'portal', id: targetId };
-      }
-      if (tokenType === 'q' && targetId && !referenceFallback) {
-        referenceFallback = { kind: 'reference', id: targetId };
       }
 
       for (const child of Object.values(obj)) {

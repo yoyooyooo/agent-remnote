@@ -24,7 +24,8 @@ async function withOutlineDb(fn: (dbPath: string) => Promise<void>): Promise<voi
         'PORTAL_REAL',
         JSON.stringify({ key: [], type: 6, pd: { TARGET: { d: true } }, parent: 'ROOT', f: '3' }),
       );
-      insert.run('PLAIN', JSON.stringify({ key: ['Plain Child'], parent: 'ROOT', f: '4' }));
+      insert.run('INLINE_REF', JSON.stringify({ key: ['See ', { i: 'q', _id: 'TARGET' }], parent: 'ROOT', f: '4' }));
+      insert.run('PLAIN', JSON.stringify({ key: ['Plain Child'], parent: 'ROOT', f: '5' }));
     } finally {
       db.close();
     }
@@ -54,6 +55,7 @@ describe('cli contract: rem outline typed portal nodes', () => {
       const portalOk = nodes.find((node) => node.id === 'PORTAL_OK');
       const portalMissing = nodes.find((node) => node.id === 'PORTAL_MISSING');
       const portalReal = nodes.find((node) => node.id === 'PORTAL_REAL');
+      const inlineRef = nodes.find((node) => node.id === 'INLINE_REF');
       const plain = nodes.find((node) => node.id === 'PLAIN');
 
       expect(portalOk?.kind).toBe('portal');
@@ -64,6 +66,9 @@ describe('cli contract: rem outline typed portal nodes', () => {
 
       expect(portalReal?.kind).toBe('portal');
       expect(portalReal?.target).toEqual({ id: 'TARGET', text: 'Target Title', resolved: true });
+
+      expect(inlineRef?.kind).toBe('rem');
+      expect(inlineRef?.target ?? null).toBe(null);
 
       expect(plain?.kind).toBe('rem');
       expect(plain?.target ?? null).toBe(null);
