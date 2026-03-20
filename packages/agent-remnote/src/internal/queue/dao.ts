@@ -175,10 +175,13 @@ export function enqueueTxn(
     meta?: any;
   },
 ) {
-  const txn_id = createTxn(db, options);
-  addOps(db, txn_id, ops);
-  commitTxn(db, txn_id);
-  return txn_id;
+  const trx = db.transaction(() => {
+    const txn_id = createTxn(db, options);
+    addOps(db, txn_id, ops);
+    commitTxn(db, txn_id);
+    return txn_id;
+  });
+  return trx();
 }
 
 export type AckResult =

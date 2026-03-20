@@ -25,21 +25,33 @@ async function waitForClaimAndAck(params: {
 }): Promise<void> {
   const startedAt = Date.now();
   let lastObservation = 'queue not initialized yet';
+  let observedTxnId = '';
 
   while (Date.now() - startedAt < params.timeoutMs) {
     try {
       const db = openQueueDb(params.storeDb);
       try {
-        const txn = db
-          .prepare(`SELECT txn_id, status FROM queue_txns ORDER BY created_at DESC LIMIT 1`)
-          .get() as { readonly txn_id?: string; readonly status?: string } | undefined;
-        const op = db
-          .prepare(
-            `SELECT op_id, status, attempt_id, locked_by, attempt_count, payload_json
-             FROM queue_ops
-             ORDER BY created_at DESC LIMIT 1`,
-          )
-          .get() as
+        const txn = (
+          observedTxnId
+            ? db.prepare(`SELECT txn_id, status FROM queue_txns WHERE txn_id = ?`).get(observedTxnId)
+            : db.prepare(`SELECT txn_id, status FROM queue_txns ORDER BY created_at DESC LIMIT 1`).get()
+        ) as { readonly txn_id?: string; readonly status?: string } | undefined;
+
+        if (typeof txn?.txn_id === 'string' && txn.txn_id.trim()) {
+          observedTxnId = txn.txn_id;
+        }
+
+        const op = (observedTxnId
+          ? db
+              .prepare(
+                `SELECT op_id, status, attempt_id, locked_by, attempt_count, payload_json
+                 FROM queue_ops
+                 WHERE txn_id = ?
+                 ORDER BY op_seq ASC
+                 LIMIT 1`,
+              )
+              .get(observedTxnId)
+          : undefined) as
           | {
               readonly op_id?: string;
               readonly status?: string;
@@ -97,7 +109,7 @@ async function waitForClaimAndAck(params: {
         const claimed = claimNextOp(db as any, params.lockedBy, 30_000);
         if (!claimed) {
           lastObservation = JSON.stringify({
-            txn_id: txn?.txn_id ?? null,
+            txn_id: observedTxnId || txn?.txn_id || null,
             txn_status: txn?.status ?? null,
             op_id: op?.op_id ?? null,
             op_status: op?.status ?? null,
