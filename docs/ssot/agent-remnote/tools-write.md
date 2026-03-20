@@ -51,6 +51,7 @@
 - 失败时返回稳定的 `error.code` + `hint`（英文），用于指导下一步修复（例如配置/队列 DB/引用解析/缺少 parent 等）。
 - 成功时返回 `txn_id/op_ids`，并附带 `nextActions`（英文命令）用于闭环验证（例如 `queue inspect` / `queue progress` / `daemon sync`）。
 - 需要“同一次调用闭环确认落库”时，优先使用写入命令自带的 `--wait/--timeout-ms/--poll-ms`；`queue wait` 仅作为诊断工具保留。
+- wait-mode 的机器主契约统一为 `id_map`。若 wrapper 额外返回 `rem_id` / `portal_rem_id` 等字段，它们只能视为从 `id_map` 派生出的 convenience sugar。
 - 对写入类命令，建议为每次“逻辑写入”提供稳定的 `--idempotency-key`（例如 URL / 文件 hash / 业务 key）。当 key 已存在时，CLI 会复用既有 txn（`deduped=true`），避免重复入队与重复写入。
 
 协议补充（与 `docs/ssot/agent-remnote/cli-contract.md` 对齐）：
@@ -65,6 +66,7 @@
   - `{"version":1,"kind":"ops","ops":[...]}`
 - 默认行为：入队后触发一次同步（notify=true，ensure-daemon=true）；可用 `--no-notify` / `--no-ensure-daemon` 关闭。
 - `actions` 适用于 agent 友好的结构化写入；`ops` 适用于 advanced/debug。
+- `portal.create` 是 canonical portal atomic action；`input.parent_id` 与 `input.target_rem_id` 都允许引用 earlier `@alias`。
 - 标准类型（部分示例）
   - rem 基础：`create_rem`/`create_portal`/`create_single_rem_with_markdown`/`create_tree_with_markdown`/`replace_selection_with_markdown`/`create_link_rem`/`update_text`/`move_rem`/`delete_rem`
     - 其中 `replace_selection_with_markdown` 主要服务 advanced/local-only 的块级替换语义；默认业务重写路径优先用 `rem.children.replace` action。

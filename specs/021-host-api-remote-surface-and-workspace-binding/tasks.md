@@ -49,4 +49,4 @@
 
 - [x] T028 先跑 unit：`workspace bindings`、`host api client`
 - [x] T029 再跑 contract：`api status`、`workspace resolution`、`api base path`
-- [ ] T030 最后做本机 smoke：验证已有 `kbId` 触发 binding、插件暂离线后 DB read 仍命中同一 workspace
+- [x] T030 最后做本机 smoke：验证已有 `kbId` 触发 binding、插件暂离线后 DB read 仍命中同一 workspace（见 `specs/021-host-api-remote-surface-and-workspace-binding/acceptance.md` 的 Smoke 摘要）

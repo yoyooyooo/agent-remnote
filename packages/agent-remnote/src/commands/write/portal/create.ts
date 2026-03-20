@@ -186,19 +186,21 @@ export const writePortalCreateCommand = Command.make(
       });
 
       const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
-
       const queue = yield* Queue;
       const created =
         waited && (waited as any).is_success === true
-          ? yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
-              Effect.map((inspected) => {
-                const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-                const match = idMap.find((r) => String(r?.client_temp_id ?? '') === portalClientTempId);
-                const remoteId = match?.remote_id ? String(match.remote_id) : '';
-                return remoteId ? { portal_rem_id: remoteId } : {};
-              }),
-              Effect.catchAll(() => Effect.succeed({})),
-            )
+          ? yield* Effect.gen(function* () {
+              let idMap = Array.isArray((waited as any)?.id_map) ? ((waited as any).id_map as any[]) : [];
+              if (idMap.length === 0) {
+                const inspected = yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
+                  Effect.catchAll(() => Effect.succeed({ id_map: [] } as any)),
+                );
+                idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
+              }
+              const match = idMap.find((r) => String(r?.client_temp_id ?? '') === portalClientTempId);
+              const remoteId = match?.remote_id ? String(match.remote_id) : '';
+              return remoteId ? { portal_rem_id: remoteId, id_map: idMap } : { id_map: idMap };
+            })
           : {};
 
       const out = waited

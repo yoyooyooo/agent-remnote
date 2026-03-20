@@ -44,8 +44,8 @@ npm test --workspace agent-remnote
 
 Result:
 
-- Test Files: `99 passed`
-- Tests: `224 passed`
+- Test Files: `126 passed`
+- Tests: `319 passed`
 
 ## Real DN Integration Smoke
 
@@ -118,7 +118,7 @@ Result: both returned `count: 0`.
 
 | ID | Result | Evidence |
 | --- | --- | --- |
-| FR-001 to FR-004 | PASS | `apply.ts`, apply envelope contract tests, full suite |
+| FR-001 to FR-004 | PASS | `apply.ts`, `tests/contract/apply-envelope.contract.test.ts`, `tests/contract/http-api-write-apply.contract.test.ts`, full suite |
 | FR-005 to FR-010 | PASS | `rem children/*`, `daily/write.ts`, direct CLI smoke, contract tests |
 | FR-011 to FR-015 | PASS | removed command wiring, help tests, grep over docs/code |
 | FR-016 to FR-020 | PASS | `runHttpApiRuntime.ts`, `HostApiClient.ts`, remote-mode smoke, HTTP contract tests |
@@ -129,7 +129,7 @@ Result: both returned `count: 0`.
 | --- | --- | --- |
 | SC-001 | PASS | root help no longer exposes `import` or `plan`; full contract suite |
 | SC-002 | PASS | `rem children` help + dry-run + real DN smoke |
-| SC-003 | PASS | `daily-write-trim.contract.test.ts`, `help.contract.test.ts` |
+| SC-003 | PASS | `daily-write-trim.contract.test.ts`, `markdown-input-spec.contract.test.ts`, `help.contract.test.ts` |
 | SC-004 | PASS | `write-plan.contract.test.ts`, `write-ops.contract.test.ts`, real `apply` smoke |
 | SC-005 | PASS | repo-wide grep + removed command routing + cleanup of old docs |
 | SC-006 | PASS | `http-api-contract.md`, `api-write-markdown.contract.test.ts`, real `POST /v1/write/apply` smoke |

@@ -23,6 +23,16 @@ export type BackupArtifactRow = {
   readonly cleaned_at: number | null;
 };
 
+export {
+  getTaskRunById,
+  insertEventRecord,
+  type TaskRunRow,
+  upsertTaskDefinition,
+  upsertTaskRun,
+  upsertTriggerRule,
+  type TaskRunStatus,
+} from './automationDao.js';
+
 function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }

@@ -63,7 +63,7 @@ export function writeSuccess(params: {
     if (config.quiet) return;
 
     if (config.format === 'ids') {
-      if (!params.ids || params.ids.length === 0) {
+      if (!params.ids) {
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
@@ -72,7 +72,7 @@ export function writeSuccess(params: {
           }),
         );
       }
-      yield* out.stdout(`${params.ids.join('\n')}\n`);
+      yield* out.stdout(params.ids.length > 0 ? `${params.ids.join('\n')}\n` : '');
       return;
     }
 

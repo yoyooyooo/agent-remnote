@@ -148,3 +148,69 @@ CREATE INDEX IF NOT EXISTS idx_backup_artifacts_kind
 CREATE UNIQUE INDEX IF NOT EXISTS uq_backup_artifacts_backup_rem_id
   ON backup_artifacts(backup_rem_id)
   WHERE backup_rem_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS task_defs (
+  task_id      TEXT PRIMARY KEY,
+  task_kind    TEXT NOT NULL,
+  config_json  TEXT NOT NULL DEFAULT '{}',
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trigger_rules (
+  trigger_id    TEXT PRIMARY KEY,
+  trigger_kind  TEXT NOT NULL,
+  task_id       TEXT NOT NULL,
+  enabled       INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  match_json    TEXT NOT NULL DEFAULT '{}',
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES task_defs(task_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_trigger_rules_task_id
+  ON trigger_rules(task_id);
+
+CREATE TABLE IF NOT EXISTS event_events (
+  event_id        TEXT PRIMARY KEY,
+  event_kind      TEXT NOT NULL,
+  source_rem_id   TEXT,
+  source_tag_id   TEXT,
+  dedupe_key      TEXT NOT NULL UNIQUE,
+  payload_json    TEXT NOT NULL DEFAULT '{}',
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_events_source_rem_id
+  ON event_events(source_rem_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS task_runs (
+  run_id          TEXT PRIMARY KEY,
+  task_id         TEXT NOT NULL,
+  trigger_id      TEXT,
+  event_id        TEXT,
+  target_rem_id   TEXT NOT NULL,
+  result_rem_id   TEXT,
+  queue_txn_id    TEXT,
+  status          TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','aborted')),
+  detail_json     TEXT NOT NULL DEFAULT '{}',
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  finished_at     INTEGER,
+  FOREIGN KEY (task_id) REFERENCES task_defs(task_id) ON DELETE RESTRICT,
+  FOREIGN KEY (trigger_id) REFERENCES trigger_rules(trigger_id) ON DELETE SET NULL,
+  FOREIGN KEY (event_id) REFERENCES event_events(event_id) ON DELETE SET NULL,
+  FOREIGN KEY (queue_txn_id) REFERENCES queue_txns(txn_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_task_id
+  ON task_runs(task_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_trigger_id
+  ON task_runs(trigger_id);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_event_id
+  ON task_runs(event_id);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_queue_txn_id
+  ON task_runs(queue_txn_id);

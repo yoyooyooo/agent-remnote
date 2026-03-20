@@ -1,7 +1,7 @@
 # Acceptance Evidence: 017-queue-db-generalize
 
-**Updated**: 2026-01-29  
-**Scope**: US1 + US2（`queue.sqlite` → `store.sqlite` 口径统一 + 内建迁移 + legacy 文件迁移 + 队列表 `queue_*` 命名空间）  
+**Updated**: 2026-03-19  
+**Scope**: US1 + US2 + US3（`queue.sqlite` → `store.sqlite` 口径统一 + 内建迁移 + legacy 文件迁移 + 队列表 `queue_*` 命名空间 + automation skeleton）  
 
 ## Automated evidence (recommended)
 
@@ -12,6 +12,9 @@
     - `store_migrations` audit + checksum drift fail-fast
     - migration lock waiting behavior (sqlite write lock)
     - legacy table names (`txns/ops/...`) → `queue_*` prefix migration + data preservation
+    - automation skeleton tables (`task_defs` / `trigger_rules` / `event_events` / `task_runs`)
+    - `dedupe_key` uniqueness
+    - `task_run ↔ queue_txn` linkage persistence
 
 ## Manual spot-check (optional, isolated via temp HOME)
 

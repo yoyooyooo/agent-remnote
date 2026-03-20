@@ -342,6 +342,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| 读取 typed outline 节点            | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
+| 查询归一化 recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
 | 创建 Rem                           | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
 | 移动 Rem                           | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
 | 更新 Rem 文本                      | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
@@ -363,7 +365,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 查看冲突面报告                     | `agent-remnote --json queue conflicts`                                                                                                            |
 | 查看日志                           | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
-多数写入命令也支持 `--wait --timeout-ms <ms> --poll-ms <ms>`，用于一次调用闭环确认 txn 终态。
+多数写入命令也支持 `--wait --timeout-ms <ms> --poll-ms <ms>`，用于一次调用闭环确认 txn 终态。进入 wait-mode 后，优先解析 `id_map`；`rem_id`、`portal_rem_id` 这类字段只是从同一映射派生出来的便捷字段。
 
 `rem delete` 的 CLI 形式没有变化，但插件侧现在默认走前端本地 `safeDeleteSubtree` 安全删除策略：小子树直接整棵删除，超阈值的大树会先切成多个阈值内的小子树再删。要试探不同阈值时，可以按次传 `--max-delete-subtree-nodes <n>`，不需要重新 reload 插件。
 

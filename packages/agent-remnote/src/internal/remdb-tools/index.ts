@@ -19,3 +19,12 @@ export { executeListTodos } from './listTodos.js';
 export { executeResolveRemReference } from './resolveRemReference.js';
 export { executeSearchQuery } from './executeSearchQuery.js';
 export { executeResolveRemPage } from './resolveRemPage.js';
+export {
+  executeSummarizeRecentActivity,
+  type RecentActivityAggregate,
+  type RecentActivityAggregateDimension,
+  type RecentActivityItem,
+  type RecentActivityKind,
+  type SummarizeRecentActivityInput,
+  type SummarizeRecentActivityResult,
+} from './summarizeRecentActivity.js';

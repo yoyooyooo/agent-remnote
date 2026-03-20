@@ -143,7 +143,10 @@ export const applyCommand = Command.make(
             });
           });
 
-      const out = compiled.kind === 'actions' ? { ...data, alias_map: compiled.aliasMap } : data;
+      const out =
+        compiled.kind === 'actions'
+          ? { ...data, alias_map: (data as any)?.alias_map ?? compiled.aliasMap }
+          : data;
 
       yield* writeSuccess({
         data: out,

@@ -17,8 +17,8 @@
 
 **Purpose**: Create the canonical implementation and test entry points for the new replace family.
 
-- [ ] T001 Create the canonical command module scaffold in `packages/agent-remnote/src/commands/write/rem/replace.ts`
-- [ ] T002 [P] Create the feature-specific contract test scaffold in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
+- [x] T001 Create the canonical command module scaffold in `packages/agent-remnote/src/commands/write/rem/replace.ts`
+- [x] T002 [P] Create the feature-specific contract test scaffold in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
 
 ---
 
@@ -28,9 +28,9 @@
 
 **⚠️ CRITICAL**: No user story work should start until this phase is complete.
 
-- [ ] T010 Add shared target-selector and surface-validation helpers in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/rem/children/common.ts`
-- [ ] T011 [P] Register the canonical `rem replace` entry under the public `rem` command in `packages/agent-remnote/src/commands/rem/index.ts`
-- [ ] T012 [P] Prepare legacy and advanced replace surfaces for demotion messaging in `packages/agent-remnote/src/commands/write/rem/children/replace.ts` and `packages/agent-remnote/src/commands/write/replace/block.ts`
+- [x] T010 Add shared target-selector and surface-validation helpers in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/rem/children/common.ts`
+- [x] T011 [P] Register the canonical `rem replace` entry under the public `rem` command in `packages/agent-remnote/src/commands/rem/index.ts`
+- [x] T012 [P] Prepare legacy and advanced replace surfaces for demotion messaging in `packages/agent-remnote/src/commands/write/rem/children/replace.ts` and `packages/agent-remnote/src/commands/write/replace/block.ts`
 
 **Checkpoint**: Canonical `rem replace` has a wired entry point and shared validation base.
 
@@ -42,11 +42,11 @@
 
 **Independent Test**: A caller can express both "replace this Rem's children" and "replace these Rems in place" through `rem replace`, and help output presents it as the primary path.
 
-- [ ] T020 [P] [US1] Add dry-run contract coverage for `rem replace --surface children` and `rem replace --surface self` in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
-- [ ] T021 [P] [US1] Add canonical help-surface assertions for `rem replace` in `packages/agent-remnote/tests/contract/help.contract.test.ts`
-- [ ] T022 [US1] Implement canonical `rem replace` command parsing and output handling in `packages/agent-remnote/src/commands/write/rem/replace.ts`
-- [ ] T023 [US1] Route `--surface children` and `--surface self` to the existing replace primitives in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/kernel/write-plan/compile.ts`
-- [ ] T024 [US1] Keep the top-level command tree aligned with the new canonical entry in `packages/agent-remnote/src/commands/rem/index.ts` and `packages/agent-remnote/src/commands/index.ts`
+- [x] T020 [P] [US1] Add dry-run contract coverage for `rem replace --surface children` and `rem replace --surface self` in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
+- [x] T021 [P] [US1] Add canonical help-surface assertions for `rem replace` in `packages/agent-remnote/tests/contract/help.contract.test.ts`
+- [x] T022 [US1] Implement canonical `rem replace` command parsing and output handling in `packages/agent-remnote/src/commands/write/rem/replace.ts`
+- [x] T023 [US1] Route `--surface children` and `--surface self` to the existing replace primitives in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/kernel/write-plan/compile.ts`
+- [x] T024 [US1] Keep the top-level command tree aligned with the new canonical entry in `packages/agent-remnote/src/commands/rem/index.ts` and `packages/agent-remnote/src/commands/index.ts`
 
 **Checkpoint**: `rem replace` is the primary documented and executable replace family.
 
@@ -58,11 +58,11 @@
 
 **Independent Test**: Repeated `--rem` and `--selection` both work as selectors for `rem replace`, and canonical docs no longer promote a selection-named replace command.
 
-- [ ] T030 [US2] Add contract coverage for repeated `--rem` targets and `--selection` target resolution in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
-- [ ] T031 [US2] Implement repeated `--rem` parsing, selector exclusivity, and resolved target-set normalization in `packages/agent-remnote/src/commands/write/rem/replace.ts`
-- [ ] T032 [US2] Reuse Host API-backed selection resolution for canonical replace in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/rem/children/common.ts`
-- [ ] T033 [US2] Update canonical write-surface docs to present target selection as parameters in `docs/ssot/agent-remnote/tools-write.md` and `docs/ssot/agent-remnote/cli-contract.md`
-- [ ] T034 [P] [US2] Update public docs and skill recipes for `rem replace` in `README.md`, `README.zh-CN.md`, `README.local.md`, and `~/.codex/skills/remnote/SKILL.md`
+- [x] T030 [US2] Add contract coverage for repeated `--rem` targets and `--selection` target resolution in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts`
+- [x] T031 [US2] Implement repeated `--rem` parsing, selector exclusivity, and resolved target-set normalization in `packages/agent-remnote/src/commands/write/rem/replace.ts`
+- [x] T032 [US2] Reuse Host API-backed selection resolution for canonical replace in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/rem/children/common.ts`
+- [x] T033 [US2] Update canonical write-surface docs to present target selection as parameters in `docs/ssot/agent-remnote/tools-write.md` and `docs/ssot/agent-remnote/cli-contract.md`
+- [x] T034 [P] [US2] Update public docs and skill recipes for `rem replace` in `README.md`, `README.zh-CN.md`, `README.local.md`, and `~/.codex/skills/remnote/SKILL.md`
 
 **Checkpoint**: Target selection is parameterized across CLI, docs, and skill guidance.
 
@@ -74,11 +74,11 @@
 
 **Independent Test**: Invalid combinations return stable CLI failures for target count, shared parent, contiguity, and assertion gating.
 
-- [ ] T040 [P] [US3] Add invalid-combination contract coverage in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts` and `packages/agent-remnote/tests/contract/invalid-options.contract.test.ts`
-- [ ] T041 [US3] Enforce `--surface children` single-target validation and `preserve-anchor` gating in `packages/agent-remnote/src/commands/write/rem/replace.ts`
-- [ ] T042 [US3] Enforce default same-parent and contiguous validation for `--surface self` in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/replace/_target.ts`
-- [ ] T043 [US3] Normalize stable fail-fast messages across canonical and legacy surfaces in `packages/agent-remnote/src/commands/write/rem/replace.ts`, `packages/agent-remnote/src/commands/write/rem/children/replace.ts`, and `packages/agent-remnote/src/commands/write/replace/block.ts`
-- [ ] T044 [US3] Update remote-mode and fail-fast contract wording in `docs/ssot/agent-remnote/http-api-contract.md` and `specs/023-rem-replace-surface/contracts/cli.md`
+- [x] T040 [P] [US3] Add invalid-combination contract coverage in `packages/agent-remnote/tests/contract/rem-replace.contract.test.ts` and `packages/agent-remnote/tests/contract/invalid-options.contract.test.ts`
+- [x] T041 [US3] Enforce `--surface children` single-target validation and `preserve-anchor` gating in `packages/agent-remnote/src/commands/write/rem/replace.ts`
+- [x] T042 [US3] Enforce default same-parent and contiguous validation for `--surface self` in `packages/agent-remnote/src/commands/write/rem/replace.ts` and `packages/agent-remnote/src/commands/write/replace/_target.ts`
+- [x] T043 [US3] Normalize stable fail-fast messages across canonical and legacy surfaces in `packages/agent-remnote/src/commands/write/rem/replace.ts`, `packages/agent-remnote/src/commands/write/rem/children/replace.ts`, and `packages/agent-remnote/src/commands/write/replace/block.ts`
+- [x] T044 [US3] Update remote-mode and fail-fast contract wording in `docs/ssot/agent-remnote/http-api-contract.md` and `specs/023-rem-replace-surface/contracts/cli.md`
 
 **Checkpoint**: Invalid combinations fail fast with one stable vocabulary across canonical and legacy paths.
 
@@ -88,10 +88,10 @@
 
 **Purpose**: Complete migration positioning, verification, and acceptance evidence.
 
-- [ ] T050 [P] Remove stale first-choice replace recipes from help and docs in `packages/agent-remnote/tests/contract/help.contract.test.ts` and `docs/ssot/agent-remnote/tools-write.md`
-- [ ] T051 [P] Update and extend manual verification steps in `specs/023-rem-replace-surface/quickstart.md`
-- [ ] T052 Create acceptance evidence notes in `specs/023-rem-replace-surface/acceptance.md`
-- [ ] T053 Run the relevant CLI contract suites and record the final pass set in `specs/023-rem-replace-surface/acceptance.md`
+- [x] T050 [P] Remove stale first-choice replace recipes from help and docs in `packages/agent-remnote/tests/contract/help.contract.test.ts` and `docs/ssot/agent-remnote/tools-write.md`
+- [x] T051 [P] Update and extend manual verification steps in `specs/023-rem-replace-surface/quickstart.md`
+- [x] T052 Create acceptance evidence notes in `specs/023-rem-replace-surface/acceptance.md`
+- [x] T053 Run the relevant CLI contract suites and record the final pass set in `specs/023-rem-replace-surface/acceptance.md`
 
 ---
 

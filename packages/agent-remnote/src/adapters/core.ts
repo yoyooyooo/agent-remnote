@@ -17,6 +17,7 @@ export {
   executeSearchQuery,
   executeSearchRemOverview,
   executeSummarizeDailyNotes,
+  executeSummarizeRecentActivity,
   executeSummarizeTopicActivity,
   formatDateWithPattern,
   getDateFormatting,

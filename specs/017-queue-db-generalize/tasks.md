@@ -59,10 +59,10 @@
 **Goal**: Store DB 内具备 event/trigger/task/task_run 的最小表与关联字段，为“tag 触发任务→写回子级 Rem”提供可追溯基座。  
 **Independent Test**: 可写入一条 event、命中 trigger 生成 task_run，并能关联到 queue txn（或 txn.meta_json 的 task_run_id）。
 
-- [ ] T024 [US3] 在 `packages/agent-remnote/src/internal/store/schema.sql` 增加 `event_* / trigger_* / task_*`（含 `task_runs`）骨架表
-- [ ] T025 [US3] 在 `packages/agent-remnote/src/internal/store/db.ts` 增加对应 migration step（只增表/索引，forward-only）
-- [ ] T026 [US3] 增加最小 DAO：新增 `packages/agent-remnote/src/internal/store/automationDao.ts`（仅包含 insert/query 的最小方法，不引入任务执行逻辑）
-- [ ] T027 [US3] 增加契约测试：`packages/agent-remnote/tests/contract/store-automation-skeleton.contract.test.ts`（验证表存在、dedupe_key 唯一性、task_run ↔ txn 关联字段可写可读）
+- [x] T024 [US3] 在 `packages/agent-remnote/src/internal/store/schema.sql` 增加 `event_* / trigger_* / task_*`（含 `task_runs`）骨架表
+- [x] T025 [US3] 在 `packages/agent-remnote/src/internal/store/db.ts` 增加对应 migration step（只增表/索引，forward-only）
+- [x] T026 [US3] 增加最小 DAO：新增 `packages/agent-remnote/src/internal/store/automationDao.ts`（仅包含 insert/query 的最小方法，不引入任务执行逻辑）
+- [x] T027 [US3] 增加契约测试：`packages/agent-remnote/tests/contract/store-automation-skeleton.contract.test.ts`（验证表存在、dedupe_key 唯一性、task_run ↔ txn 关联字段可写可读）
 
 ---
 

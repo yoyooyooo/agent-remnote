@@ -1,6 +1,6 @@
 ---
 name: remnote
-description: 'Use this skill for any RemNote-specific read/write or local plugin-loading task. Trigger it whenever the user mentions RemNote, Daily Note, 今日笔记, 当前 page/focus/selection, remId, 替换/清空/追加子级, queue/WS/plugin sync, sent=0, powerup/table/property changes, local Developer URL / plugin server (`plugin serve|ensure|status|logs|stop`), remote `apiBaseUrl` mode, or asks to 整理成大纲 / 展开讲讲 / 继续往下分层 / 单一主线写入 / 由浅入深组织内容, even if they only say “记到笔记里” or “查一下当前 page”. Prefer the shortest `agent-remnote` business command first, such as `plugin current --compact`, `rem children replace|clear|append|prepend`, `daily write`, `rem outline`, `daily rem-id`, or `plugin ensure`. Prefer outline-first writing when the content is naturally outline-shaped; keep normal writing when it is not. Only escalate to `apply --payload` for true dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
+description: 'Use this skill for any RemNote-specific read/write or local plugin-loading task. Trigger it whenever the user mentions RemNote, Daily Note, 今日笔记, 当前 page/focus/selection, remId, 替换/清空/追加子级, queue/WS/plugin sync, sent=0, powerup/table/property changes, local Developer URL / plugin server (`plugin serve|ensure|status|logs|stop`), remote `apiBaseUrl` mode, recent activity recap, or asks to 整理成大纲 / 展开讲讲 / 继续往下分层 / 单一主线写入 / 由浅入深组织内容, even if they only say “记到笔记里” or “查一下当前 page”. Prefer the shortest `agent-remnote` business command first, such as `plugin current --compact`, `rem replace`, `rem children replace|clear|append|prepend`, `daily write`, `rem outline`, `db recent`, `daily rem-id`, or `plugin ensure`. Prefer outline-first writing when the content is naturally outline-shaped; keep normal writing when it is not. Only escalate to `apply --payload` for true dependency chains, and only add wait/verify when the user explicitly asks or the next step depends on completion.'
 ---
 
 # RemNote
@@ -15,6 +15,12 @@ description: 'Use this skill for any RemNote-specific read/write or local plugin
 2. 默认只发起写入，不等待消费完成。
 3. 默认不做额外读取、不做事前 inspect、不做写后验证。
 4. 只有多步依赖或用户明确要求时，才进入 `apply`、`queue wait`、`rem outline` 这类更重路径。
+
+补充约束：
+
+- 进入 wait-mode 后，优先读 `id_map`，不要把 wrapper-specific `rem_id` / `portal_rem_id` 当成主机器契约。
+- 做 recap / 最近活动查询时，优先 `db recent --days ... --kind ... --aggregate ...`，不要为场景临时发明新 CLI 形状。
+- 做结构验证时，优先 `rem outline --format json`，读取 `tree[].kind` 与 `tree[].target`。
 
 命令面分层固定如下：
 

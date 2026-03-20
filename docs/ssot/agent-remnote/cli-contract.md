@@ -76,6 +76,7 @@ export type JsonEnvelope =
 - 其余 **只读** 能力优先直挂顶层实体子命令（例如 `search` / `query` / `db ...` / `powerup list/schema` / `todo list` / `rem outline`）
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
 - raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口同样统一到 `apply` 的 `kind=actions`）
+- `apply kind=actions` 的 atomic vocabulary 必须保持低熵；portal 写入的 canonical action 为 `portal.create`，通过参数与 `@alias` 组合，不再引入 workflow-specific command noun
 
 ### `rem replace`
 

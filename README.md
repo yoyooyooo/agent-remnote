@@ -342,6 +342,8 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
 | Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| Read typed outline nodes                 | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
+| Query normalized recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
 | Create a Rem                             | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
 | Move a Rem                               | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
 | Update Rem text                          | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
@@ -363,7 +365,7 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Conflict surface report                  | `agent-remnote --json queue conflicts`                                                                                                            |
 | Debug logs                               | `agent-remnote daemon logs --lines 200`                                                                                                           |
 
-Most write commands also support `--wait --timeout-ms <ms> --poll-ms <ms>` to close the loop in a single call.
+Most write commands also support `--wait --timeout-ms <ms> --poll-ms <ms>` to close the loop in a single call. In wait-mode receipts, parse `id_map` first; wrapper-specific ids such as `rem_id` or `portal_rem_id` are secondary sugar derived from the same mapping.
 
 `rem delete` keeps the same CLI surface, but the plugin now defaults to a frontend-local `safeDeleteSubtree` strategy: small subtrees are deleted directly, while large trees are partitioned into threshold-bounded rooted subtrees before deletion. Use `--max-delete-subtree-nodes <n>` when you want to probe a different threshold without reloading the plugin.
 

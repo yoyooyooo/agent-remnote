@@ -157,6 +157,7 @@
 
 - Host API canonical write route reuses the same enqueue pipeline as the CLI.
 - The route accepts the same apply envelope used by `agent-remnote apply --payload`.
+- Wait-mode write receipts follow the same machine contract as local CLI receipts: parse `id_map` first, then treat any wrapper-specific ids as derived sugar.
 - `ensureDaemon=true` means the request may invoke daemon lifecycle helpers before notifying the active worker.
 - The runtime must inject daemon runtime services used by enqueue helpers, including `DaemonFiles`, `Process`, and `SupervisorState`.
 - Missing daemon runtime services are considered a server bug and must not be silently ignored.

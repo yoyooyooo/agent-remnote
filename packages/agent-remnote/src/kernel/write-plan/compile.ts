@@ -278,6 +278,27 @@ const ACTIONS: Record<string, ActionSpec> = {
     },
   },
 
+  'portal.create': {
+    opType: 'create_portal',
+    supportsAs: false,
+    aliasRefAllowlist: ['parent_id', 'target_rem_id'],
+    compile: ({ input }) => {
+      const parent_id = input.parent_id;
+      const target_rem_id = input.target_rem_id;
+      if (typeof parent_id !== 'string' || !parent_id.trim()) {
+        throw new Error('portal.create requires input.parent_id');
+      }
+      if (typeof target_rem_id !== 'string' || !target_rem_id.trim()) {
+        throw new Error('portal.create requires input.target_rem_id');
+      }
+
+      const payload: Record<string, unknown> = { parent_id, target_rem_id };
+      if (typeof input.position === 'number') payload.position = input.position;
+
+      return { ops: [{ type: 'create_portal', payload }] };
+    },
+  },
+
   'rem.replace': {
     opType: 'replace_children_with_markdown',
     supportsAs: false,

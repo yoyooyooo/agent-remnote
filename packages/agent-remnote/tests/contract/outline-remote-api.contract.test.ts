@@ -21,6 +21,16 @@ async function startApiStub() {
             data: {
               id: 'page-1',
               nodeCount: 2,
+              tree: [
+                { id: 'page-1', depth: 0, kind: 'rem', text: 'Remote Outline', target: null },
+                {
+                  id: 'portal-1',
+                  depth: 1,
+                  kind: 'portal',
+                  text: 'Portal -> Target Title',
+                  target: { id: 'target-1', text: 'Target Title', resolved: true },
+                },
+              ],
               markdown: '# Remote Outline\n\n- child\n',
             },
           }),
@@ -64,6 +74,10 @@ describe('cli contract: rem outline remote api mode', () => {
       const parsed = JSON.parse(res.stdout.trim());
       expect(parsed.ok).toBe(true);
       expect(parsed.data.markdown).toContain('Remote Outline');
+      expect(parsed.data.tree[1]).toMatchObject({
+        kind: 'portal',
+        target: { id: 'target-1', text: 'Target Title', resolved: true },
+      });
       expect(api.requests).toHaveLength(1);
       expect(api.requests[0]?.url).toBe('/v1/read/outline');
       expect(api.requests[0]?.body).toMatchObject({ ref: 'daily:today', depth: 3 });

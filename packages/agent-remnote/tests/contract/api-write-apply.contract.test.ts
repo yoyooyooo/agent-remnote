@@ -110,6 +110,7 @@ describe('runtime contract: http api write apply', () => {
                   ops: [{ type: 'delete_rem', payload: { rem_id: 'dummy-rem' } }],
                   notify: true,
                   ensureDaemon: true,
+                  wait: true,
                 }),
               }),
             );
@@ -121,6 +122,8 @@ describe('runtime contract: http api write apply', () => {
             expect(json.data.op_ids).toEqual(['op-1']);
             expect(json.data.notified).toBe(true);
             expect(json.data.sent).toBe(1);
+            expect(Array.isArray(json.data.id_map)).toBe(true);
+            expect(json.data.id_map).toEqual([]);
             expect(healthChecks).toBeGreaterThanOrEqual(2);
             expect(states.length).toBeGreaterThan(0);
           }).pipe(
@@ -167,6 +170,12 @@ describe('runtime contract: http api write apply', () => {
             } as any),
             Effect.provideService(Queue, {
               enqueue: () => Effect.succeed({ txn_id: 'txn-1', op_ids: ['op-1'] }),
+              inspect: () =>
+                Effect.succeed({
+                  txn: { txn_id: 'txn-1', status: 'succeeded', updated_at: Date.now() },
+                  ops: [{ op_id: 'op-1', status: 'succeeded', attempts: 1 }],
+                  id_map: [],
+                }),
             } as any),
             Effect.provideService(Payload, {
               normalizeKeys: (value: unknown) => value,

@@ -30,6 +30,7 @@ async function startApiStub() {
               is_done: true,
               is_success: true,
               elapsed_ms: 12,
+              id_map: [],
             },
           }),
         );
@@ -75,6 +76,8 @@ describe('cli contract: queue wait remote api mode', () => {
       expect(parsed.ok).toBe(true);
       expect(parsed.data.txn_id).toBe('txn-123');
       expect(parsed.data.status).toBe('succeeded');
+      expect(Array.isArray(parsed.data.id_map)).toBe(true);
+      expect(parsed.data.id_map).toEqual([]);
 
       expect(api.requests).toHaveLength(1);
       expect(api.requests[0]?.method).toBe('POST');

@@ -12,12 +12,22 @@ import {
 
 type OutlineFormat = 'json' | 'markdown';
 
+type OutlineNodeKind = 'rem' | 'portal';
+
+type OutlineTarget = {
+  id: string;
+  text: string | null;
+  resolved: boolean;
+};
+
 type OutlineNode = {
   id: string;
   depth: number;
+  kind: OutlineNodeKind;
   sortKey: string | null;
   parentId: string | null;
   text: string;
+  target: OutlineTarget | null;
   references: string[];
   rawKey: unknown;
 };
@@ -29,6 +39,11 @@ type OutlineOptions = {
   expandReferences: boolean;
   maxReferenceDepth: number;
   excludeProperties: boolean;
+};
+
+type OutlineTargetDescriptor = {
+  kind: 'portal' | 'reference';
+  id: string;
 };
 
 const inputShape = {
@@ -152,16 +167,29 @@ function fetchOutlineNodes(db: BetterSqliteInstance, options: OutlineOptions): O
   }>;
 
   const nodes: OutlineNode[] = [];
+  const targetStmt = db.prepare('SELECT doc FROM quanta WHERE _id = ?');
+  const targetCache = new Map<string, OutlineTarget>();
 
   for (const row of rows) {
     const doc = safeJsonParse<Record<string, unknown>>(row.doc);
     const rawKey = doc?.key;
+    const targetDescriptor = findOutlineTargetDescriptor(doc, rawKey);
+    const target = targetDescriptor
+      ? (targetCache.get(targetDescriptor.id) ??
+        (() => {
+          const resolved = resolveOutlineTarget(targetStmt, db, targetDescriptor.id);
+          targetCache.set(targetDescriptor.id, resolved);
+          return resolved;
+        })())
+      : null;
+    const kind: OutlineNodeKind = targetDescriptor?.kind === 'portal' ? 'portal' : 'rem';
     const keySummary = summarizeKey(rawKey, db, {
       expand: options.expandReferences,
       maxDepth: options.maxReferenceDepth,
     });
+    const text = renderOutlineNodeText(kind, keySummary.text, target);
 
-    if (!options.includeEmpty && !keySummary.text && row.depth !== 0) {
+    if (!options.includeEmpty && !text && row.depth !== 0) {
       continue;
     }
 
@@ -181,9 +209,11 @@ function fetchOutlineNodes(db: BetterSqliteInstance, options: OutlineOptions): O
     nodes.push({
       id: row.id,
       depth: row.depth,
+      kind,
       sortKey: typeof doc?.f === 'string' ? doc.f : null,
       parentId: typeof doc?.parent === 'string' ? doc.parent : null,
-      text: keySummary.text,
+      text,
+      target,
       references: keySummary.references,
       rawKey,
     });
@@ -196,7 +226,9 @@ function simplifyOutlineNodes(nodes: OutlineNode[]) {
   return nodes.map((node) => ({
     id: node.id,
     depth: node.depth,
+    kind: node.kind,
     text: node.text,
+    target: node.target,
     references: node.references,
   }));
 }
@@ -209,4 +241,71 @@ function toMarkdown(nodes: OutlineNode[]): string {
       return `${indent}- ${text}`;
     })
     .join('\n');
+}
+
+function findOutlineTargetDescriptor(doc: Record<string, unknown> | null | undefined, value: unknown): OutlineTargetDescriptor | null {
+  const docType = typeof doc?.type === 'number' ? doc.type : typeof doc?.type === 'string' ? Number(doc.type) : NaN;
+  const pdRaw = doc?.pd;
+  if (docType === 6 && pdRaw && typeof pdRaw === 'object' && !Array.isArray(pdRaw)) {
+    const pdKeys = Object.keys(pdRaw as Record<string, unknown>).map((key) => key.trim()).filter(Boolean);
+    if (pdKeys.length > 0) {
+      return { kind: 'portal', id: pdKeys[0]! };
+    }
+  }
+
+  let referenceFallback: OutlineTargetDescriptor | null = null;
+
+  const visit = (input: unknown): OutlineTargetDescriptor | null => {
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        const found = visit(item);
+        if (found?.kind === 'portal') return found;
+      }
+      return null;
+    }
+
+    if (input && typeof input === 'object') {
+      const obj = input as Record<string, unknown>;
+      const tokenType = typeof obj.i === 'string' ? obj.i : '';
+      const targetId = typeof obj._id === 'string' ? obj._id.trim() : '';
+      if (tokenType === 'p' && targetId) {
+        return { kind: 'portal', id: targetId };
+      }
+      if (tokenType === 'q' && targetId && !referenceFallback) {
+        referenceFallback = { kind: 'reference', id: targetId };
+      }
+
+      for (const child of Object.values(obj)) {
+        const found = visit(child);
+        if (found?.kind === 'portal') return found;
+      }
+    }
+
+    return null;
+  };
+
+  const portal = visit(value);
+  return portal ?? referenceFallback;
+}
+
+function resolveOutlineTarget(stmt: any, db: BetterSqliteInstance, targetId: string): OutlineTarget {
+  const row = stmt.get(targetId) as { doc?: string } | undefined;
+  if (!row?.doc) {
+    return { id: targetId, text: null, resolved: false };
+  }
+
+  const parsed = safeJsonParse<{ key?: unknown }>(row.doc);
+  const summary = summarizeKey(parsed?.key, db, { expand: false, maxDepth: 0 });
+  const text = typeof summary.text === 'string' ? summary.text : null;
+  return { id: targetId, text, resolved: true };
+}
+
+function renderOutlineNodeText(kind: OutlineNodeKind, fallbackText: string, target: OutlineTarget | null): string {
+  if (kind === 'portal' && target) {
+    if (!target.resolved) {
+      return `Portal -> {ref:${target.id}}`;
+    }
+    return `Portal -> ${target.text && target.text.length > 0 ? target.text : '(empty)'}`;
+  }
+  return fallbackText;
 }

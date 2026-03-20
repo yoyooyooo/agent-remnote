@@ -25,6 +25,15 @@ function countByStatus(ops: readonly any[], status: string): number {
   return ops.filter((o) => String(o?.status || '') === status).length;
 }
 
+function expectedIdMapCount(ops: readonly any[]): number {
+  const seen = new Set<string>();
+  for (const op of ops) {
+    const clientTempId = typeof op?.payload?.client_temp_id === 'string' ? op.payload.client_temp_id.trim() : '';
+    if (clientTempId) seen.add(clientTempId);
+  }
+  return seen.size;
+}
+
 export type WaitTxnResult = {
   readonly txn_id: string;
   readonly status: TxnProgressStatus;
@@ -38,6 +47,7 @@ export type WaitTxnResult = {
   readonly is_success: boolean;
   readonly elapsed_ms: number;
   readonly last_update_at?: number | undefined;
+  readonly id_map: readonly any[];
 };
 
 export function waitForTxn(params: {
@@ -79,6 +89,7 @@ export function waitForTxn(params: {
     while (true) {
       const inspected = yield* queue.inspect({ dbPath: cfg.storeDb, txnId: params.txnId });
       const ops = Array.isArray((inspected as any).ops) ? ((inspected as any).ops as any[]) : [];
+      const idMap = Array.isArray((inspected as any).id_map) ? ((inspected as any).id_map as any[]) : [];
       const txnRow = (inspected as any).txn ?? {};
 
       const opsTotal = ops.length;
@@ -87,6 +98,7 @@ export function waitForTxn(params: {
       const opsInFlight = countByStatus(ops, 'in_flight');
       const opsPending = countByStatus(ops, 'pending');
       const opsFailed = ops.filter((o) => String(o?.status || '') === 'pending' && Number(o?.attempts ?? 0) > 0).length;
+      const expectedMappings = expectedIdMapCount(ops);
 
       const score =
         opsTotal > 0 ? Math.max(0, Math.min(100, Math.floor((100 * (opsSucceeded + opsDead)) / opsTotal))) : 0;
@@ -100,6 +112,37 @@ export function waitForTxn(params: {
 
       if (isDone) {
         if (isSuccess) {
+          const mappingIncomplete = expectedMappings > 0 && idMap.length < expectedMappings;
+          if (mappingIncomplete) {
+            if (Date.now() < deadline) {
+              yield* Effect.sleep(Duration.millis(resolvedPollMs));
+              continue;
+            }
+
+            return yield* Effect.fail(
+              new CliError({
+                code: 'TXN_TIMEOUT',
+                message: `Timed out waiting for id_map to reach ${expectedMappings} entries`,
+                exitCode: 1,
+                details: {
+                  txn_id: String(txnRow.txn_id ?? params.txnId),
+                  status,
+                  expected_id_map_count: expectedMappings,
+                  ops_total: opsTotal,
+                  ops_succeeded: opsSucceeded,
+                  ops_dead: opsDead,
+                  score,
+                  elapsed_ms: Date.now() - startedAt,
+                  last_update_at: lastUpdateAt || undefined,
+                  id_map: idMap,
+                },
+                hint: [
+                  `agent-remnote queue inspect --txn ${String(txnRow.txn_id ?? params.txnId)}`,
+                  `agent-remnote queue wait --txn ${String(txnRow.txn_id ?? params.txnId)} --timeout-ms ${resolvedTimeoutMs + resolvedPollMs}`,
+                ],
+              }),
+            );
+          }
           const data: WaitTxnResult = {
             txn_id: String(txnRow.txn_id ?? params.txnId),
             status,
@@ -110,9 +153,10 @@ export function waitForTxn(params: {
             ops_in_flight: opsInFlight,
             score,
             is_done: true,
-            is_success: true,
+            is_success: !mappingIncomplete,
             elapsed_ms: Date.now() - startedAt,
             last_update_at: lastUpdateAt || undefined,
+            id_map: idMap,
           };
           return data;
         }
@@ -134,6 +178,7 @@ export function waitForTxn(params: {
               score,
               elapsed_ms: Date.now() - startedAt,
               last_update_at: lastUpdateAt || undefined,
+              id_map: idMap,
             },
             hint: [
               `agent-remnote queue inspect --txn ${String(txnRow.txn_id ?? params.txnId)}`,
@@ -162,6 +207,7 @@ export function waitForTxn(params: {
               score,
               elapsed_ms: Date.now() - startedAt,
               last_update_at: lastUpdateAt || undefined,
+              id_map: idMap,
             },
             hint: [
               `agent-remnote queue progress --txn ${String(txnRow.txn_id ?? params.txnId)}`,

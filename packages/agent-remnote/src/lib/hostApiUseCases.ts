@@ -267,7 +267,9 @@ function simplifyOutlineTree(nodes: readonly any[]) {
   return nodes.map((node) => ({
     id: node.id,
     depth: node.depth,
+    kind: node.kind,
     text: node.text,
+    target: node.target ?? null,
     references: Array.isArray(node.references) ? node.references : [],
   }));
 }
