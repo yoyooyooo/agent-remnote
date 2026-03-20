@@ -71,9 +71,13 @@ describe('cli contract: plugin lifecycle', () => {
       expect(statusRes.stderr).toBe('');
       const statusEnv = JSON.parse(statusRes.stdout.trim());
       expect(statusEnv.ok).toBe(true);
+      expect(typeof statusEnv.data.runtime?.version).toBe('string');
+      expect(typeof statusEnv.data.service.build?.build_id).toBe('string');
       expect(statusEnv.data.service.running).toBe(true);
       expect(statusEnv.data.plugin_server.healthy).toBe(true);
       expect(statusEnv.data.plugin_server.base_url).toBe(baseUrl);
+      expect(typeof statusEnv.data.plugin_server.build?.version).toBe('string');
+      expect(typeof statusEnv.data.plugin_server.build?.build_id).toBe('string');
 
       const logsRes = await runCli(['--json', 'plugin', 'logs', '--pid-file', pidFile, '--lines', '20'], {
         env,

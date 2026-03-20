@@ -9,6 +9,7 @@ import { HostApiClient } from '../../services/HostApiClient.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { apiLocalBaseUrl } from '../../lib/apiUrls.js';
+import { currentRuntimeBuildInfo, runtimeVersionWarnings } from '../../lib/runtimeBuildInfo.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { API_HEALTH_TIMEOUT_MS } from './_shared.js';
 
@@ -41,9 +42,11 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
     const status = yield* api.status({ baseUrl: localBaseUrl, timeoutMs: API_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
 
     const data = {
+      runtime: currentRuntimeBuildInfo(),
       service: {
         running,
         pid: pid ?? null,
+        build: pidInfo?.build ?? state?.build ?? null,
         pid_file: pidFilePath,
         log_file: pidInfo?.log_file ?? cfg.apiLogFile ?? apiFiles.defaultLogFile(),
         state_file: pidInfo?.state_file ?? stateFilePath,
@@ -57,6 +60,18 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
         status: status._tag === 'Right' ? status.right : null,
         error: health._tag === 'Left' ? health.left.message : undefined,
       },
+      warnings:
+        status._tag === 'Right'
+          ? runtimeVersionWarnings({
+              current: currentRuntimeBuildInfo(),
+              api: pidInfo?.build ?? state?.build ?? null,
+              daemon: status.right?.daemon?.build ?? null,
+              plugin: status.right?.plugin?.active_worker?.runtime ?? null,
+            })
+          : runtimeVersionWarnings({
+              current: currentRuntimeBuildInfo(),
+              api: pidInfo?.build ?? state?.build ?? null,
+            }),
     };
 
     const md = [

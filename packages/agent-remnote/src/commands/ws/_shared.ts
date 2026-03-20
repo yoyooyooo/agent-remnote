@@ -10,6 +10,7 @@ import { Process } from '../../services/Process.js';
 import { SupervisorState, type SupervisorStateFile } from '../../services/SupervisorState.js';
 import { WsClient } from '../../services/WsClient.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 
 export const WS_HEALTH_TIMEOUT_MS = 2000;
 export const WS_START_WAIT_DEFAULT_MS = 15_000;
@@ -100,6 +101,7 @@ function toPidFileValue(params: {
 }): WsPidFile {
   return {
     pid: params.pid,
+    build: currentRuntimeBuildInfo(),
     started_at: params.startedAt,
     ws_url: params.wsUrl,
     log_file: params.logFile,

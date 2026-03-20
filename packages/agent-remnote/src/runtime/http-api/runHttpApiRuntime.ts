@@ -27,6 +27,7 @@ import {
   executeWriteApplyUseCase,
 } from '../../lib/hostApiUseCases.js';
 import { apiContainerBaseUrl, apiLocalBaseUrl, normalizeApiBasePath } from '../../lib/apiUrls.js';
+import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
@@ -589,6 +590,7 @@ export function runHttpApiRuntime(params?: {
     yield* apiFiles.writeStateFile(stateFilePath, {
       running: true,
       pid: process.pid,
+      build: currentRuntimeBuildInfo(),
       host,
       port: actualPort,
       basePath,

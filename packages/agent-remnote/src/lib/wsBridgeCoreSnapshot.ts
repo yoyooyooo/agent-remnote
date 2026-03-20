@@ -18,6 +18,7 @@ function toWsBridgeClient(client: WsBridgeCoreState['clients'] extends Map<any, 
     remoteAddr: client.remoteAddr,
     userAgent: client.userAgent,
     readyState: client.readyState,
+    runtime: client.runtime,
     selection: client.selection,
     uiContext: client.uiContext,
   };

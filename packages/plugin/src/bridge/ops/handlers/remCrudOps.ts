@@ -50,9 +50,10 @@ async function executeDeleteWithSafeSubtree(
 }
 
 export async function executeCreateRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
-  const { parent_id, text, tags, is_document, client_temp_id, position } = op.payload || {};
+  const { parent_id, text, tags, is_document, standalone, client_temp_id, position } = op.payload || {};
   const parentId = typeof parent_id === 'string' ? parent_id.trim() : '';
-  if (!parentId) throw new Error('Missing parent_id (refusing to create a Rem without a parent)');
+  const isStandalone = standalone === true;
+  if (!parentId && !isStandalone) throw new Error('Missing parent_id (refusing to create a Rem without a parent)');
   const rem = await plugin.rem.createRem();
   if (!rem) throw new Error('createRem returned null');
 
@@ -64,7 +65,9 @@ export async function executeCreateRem(plugin: ReactRNPlugin, op: OpDispatch): P
 
   try {
     const pos = typeof position === 'number' && Number.isFinite(position) && position >= 0 ? Math.floor(position) : 0;
-    await plugin.rem.moveRems([rem._id], parentId, pos);
+    if (parentId) {
+      await plugin.rem.moveRems([rem._id], parentId, pos);
+    }
 
     if (is_document === true) {
       // @ts-ignore - SDK Rem.setIsDocument may exist in some versions.
@@ -123,10 +126,81 @@ export async function executeUpdateText(plugin: ReactRNPlugin, op: OpDispatch): 
 }
 
 export async function executeMoveRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
-  const { rem_id, new_parent_id, position } = op.payload || {};
-  if (!rem_id || !new_parent_id) throw new Error('Missing rem_id/new_parent_id');
-  await plugin.rem.moveRems([rem_id], new_parent_id, typeof position === 'number' ? position : 0);
-  return { ok: true };
+  const { rem_id, new_parent_id, position, standalone, is_document, leave_portal } = op.payload || {};
+  const remId = typeof rem_id === 'string' ? rem_id.trim() : '';
+  const newParentId = typeof new_parent_id === 'string' ? new_parent_id.trim() : '';
+  const moveToStandalone = standalone === true;
+  if (!remId) throw new Error('Missing rem_id');
+  if (!moveToStandalone && !newParentId) throw new Error('Missing new_parent_id');
+
+  const rem = await plugin.rem.findOne(remId);
+  if (!rem) throw new Error(`Rem not found: ${remId}`);
+
+  const sourceParentId = typeof (rem as any).parent === 'string' ? String((rem as any).parent).trim() : '';
+  let sourcePosition = 0;
+  try {
+    if (typeof (rem as any).positionAmongstSiblings === 'function') {
+      const value = await (rem as any).positionAmongstSiblings();
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        sourcePosition = Math.floor(value);
+      }
+    }
+  } catch {}
+
+  if (moveToStandalone) {
+    if (typeof (rem as any).setParent === 'function') {
+      await (rem as any).setParent(null);
+    } else {
+      throw new Error('Standalone move requires Rem.setParent(null) support');
+    }
+  } else {
+    await plugin.rem.moveRems([remId], newParentId, typeof position === 'number' ? position : 0);
+  }
+
+  if (is_document === true && typeof (rem as any).setIsDocument === 'function') {
+    await (rem as any).setIsDocument(true);
+  }
+
+  const warnings: string[] = [];
+  const nextActions: string[] = [];
+  let portalId: string | undefined;
+
+  if (leave_portal === true) {
+    if (!sourceParentId) {
+      warnings.push('Move succeeded, but leave-portal could not determine the source parent');
+      nextActions.push(`agent-remnote --json portal create --parent <sourceParentId> --target ${remId}`);
+    } else {
+      const portal = await plugin.rem.createPortal().catch((error) => {
+        warnings.push(`Move succeeded, but leave-portal failed: ${String((error as any)?.message || error)}`);
+        return null;
+      });
+
+      if (portal?._id) {
+        try {
+          await plugin.rem.moveRems([portal._id], sourceParentId, sourcePosition);
+          await (rem as any).addToPortal(portal._id);
+          portalId = portal._id;
+        } catch (error) {
+          try {
+            await portal.remove();
+          } catch {}
+          warnings.push(`Move succeeded, but leave-portal failed: ${String((error as any)?.message || error)}`);
+          nextActions.push(`agent-remnote --json portal create --parent ${sourceParentId} --target ${remId}`);
+        }
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    rem_id: remId,
+    ...(moveToStandalone ? { standalone: true } : { new_parent_id: newParentId }),
+    ...(leave_portal === true ? { leave_portal: true, portal_created: Boolean(portalId) } : {}),
+    ...(sourceParentId ? { source_parent_id: sourceParentId } : {}),
+    ...(portalId ? { portal_id: portalId } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(nextActions.length > 0 ? { nextActions } : {}),
+  };
 }
 
 export async function executeDeleteRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {

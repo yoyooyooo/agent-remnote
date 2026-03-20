@@ -347,10 +347,22 @@ export function makeWsBridgeCore(params: {
             ? Math.floor(protocolVersionRaw)
             : undefined;
         const capabilities = msg?.capabilities && typeof msg.capabilities === 'object' ? msg.capabilities : {};
+        const runtime =
+          msg?.runtime && typeof msg.runtime === 'object'
+            ? {
+                name: typeof (msg.runtime as any).name === 'string' ? (msg.runtime as any).name : 'unknown',
+                version: typeof (msg.runtime as any).version === 'string' ? (msg.runtime as any).version : '0.0.0',
+                build_id: typeof (msg.runtime as any).build_id === 'string' ? (msg.runtime as any).build_id : 'unknown',
+                built_at: Number((msg.runtime as any).built_at ?? 0) || 0,
+                source_stamp: Number((msg.runtime as any).source_stamp ?? 0) || 0,
+                mode: typeof (msg.runtime as any).mode === 'string' ? (msg.runtime as any).mode : undefined,
+              }
+            : undefined;
 
         client.clientType = clientType || client.clientType;
         client.clientInstanceId = clientInstanceIdRaw ? clientInstanceIdRaw : null;
         if (protocolVersion) client.protocolVersion = protocolVersion;
+        if (runtime) client.runtime = runtime;
         client.capabilities = {
           control: !!(capabilities as any)?.control,
           worker: !!(capabilities as any)?.worker,
@@ -369,6 +381,7 @@ export function makeWsBridgeCore(params: {
             connId: event.connId,
             clientType: client.clientType ?? null,
             protocolVersion: client.protocolVersion ?? null,
+            runtime: client.runtime ?? null,
             capabilities: client.capabilities ?? null,
           },
         });

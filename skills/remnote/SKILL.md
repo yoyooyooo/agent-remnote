@@ -272,6 +272,24 @@ agent-remnote --json daily write --text "..."
 
 如果输入看起来像结构化 Markdown，不要走这条路。
 
+### 6.1 Promotion 路由
+
+当用户意图是“把内容沉淀成独立 destination，并且可选留 portal”时，优先走：
+
+```bash
+agent-remnote --json rem create --standalone --title "..." --markdown @./note.md
+agent-remnote --json rem create --standalone --title "..." --target "<remId>"
+agent-remnote --json rem create --from-selection --standalone --title "..." --leave-portal-in-place
+agent-remnote --json rem move --rem "<remId>" --standalone --leave-portal
+```
+
+路由规则：
+
+- 不要再默认走“先写 DN，再手工 portal create，再手工 move”的旧多步路径。
+- `--is-document` 是显式 opt-in，默认不要自动加。
+- `--from-selection` 只是 `targets[]` 的 sugar。
+- 单个 `--target` 可推断标题；多个 `--target` 必须显式 `--title`。
+
 ### 7. 写 Daily Note
 
 结构化内容：
@@ -666,7 +684,10 @@ agent-remnote --json daily write --markdown -
 agent-remnote --json daily write --text "..."
 agent-remnote --json rem set-text --rem <remId> --text "..."
 agent-remnote --json rem create --parent "<parentRemId>" --text "..."
+agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today
+agent-remnote --json rem create --standalone --title "..." --target "<remId>"
 agent-remnote --json rem move --rem "<remId>" --parent "<newParentRemId>"
+agent-remnote --json rem move --rem "<remId>" --standalone --leave-portal
 agent-remnote --json rem delete --rem "<remId>"
 agent-remnote --json apply --payload @plan.json
 agent-remnote --json queue wait --txn "<txn_id>"

@@ -10,6 +10,8 @@ import { DaemonFiles } from '../../services/DaemonFiles.js';
 import { Process } from '../../services/Process.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
 import { WsClient } from '../../services/WsClient.js';
+import { currentExpectedPluginBuildInfo, pluginBuildWarnings } from '../../lib/pluginBuildInfo.js';
+import { currentRuntimeBuildInfo, runtimeVersionWarnings } from '../../lib/runtimeBuildInfo.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { cleanupStatuslineArtifacts, resolveStatuslineArtifactPaths } from '../../lib/statuslineArtifacts.js';
 import { refreshTmuxStatusLine } from '../../lib/tmux.js';
@@ -71,10 +73,26 @@ export const wsStatusCommand = Command.make('status', { pidFile }, ({ pidFile })
     const health = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     const clientsRes = yield* ws.queryClients({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
 
+    const activeWorkerRuntime =
+      Either.isRight(clientsRes) && typeof clientsRes.right.activeWorkerConnId === 'string'
+        ? (clientsRes.right.clients.find((client: any) => client.connId === clientsRes.right.activeWorkerConnId)?.runtime ?? null)
+        : null;
+    const warnings = [
+      ...runtimeVersionWarnings({
+        current: currentRuntimeBuildInfo(),
+        daemon: pidInfo?.build,
+      }),
+      ...pluginBuildWarnings({
+        expected: currentExpectedPluginBuildInfo(),
+        live: activeWorkerRuntime,
+      }),
+    ];
     const data = {
+      runtime: currentRuntimeBuildInfo(),
       service: {
         running: supervisorRunning,
         pid: supervisorPid,
+        build: pidInfo?.build ?? null,
         pid_file: pidFilePath,
         started_at: pidInfo?.started_at,
         log_file: pidInfo?.log_file,
@@ -92,7 +110,14 @@ export const wsStatusCommand = Command.make('status', { pidFile }, ({ pidFile })
       },
       active_worker_conn_id: Either.isRight(clientsRes) ? (clientsRes.right.activeWorkerConnId ?? null) : null,
       clients: Either.isRight(clientsRes) ? clientsRes.right.clients : [],
+      warnings,
     };
+    if (data.service.running && !data.service.build) {
+      (data.warnings as string[]).push('daemon pid metadata has no build info; restart the daemon to refresh runtime metadata');
+    }
+    if (data.active_worker_conn_id && !(data.clients.find((client: any) => client.connId === data.active_worker_conn_id)?.runtime)) {
+      (data.warnings as string[]).push('active worker did not report runtime metadata; reload the RemNote plugin');
+    }
 
     const md = [
       `- service_running: ${data.service.running}`,

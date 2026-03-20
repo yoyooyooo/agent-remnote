@@ -10,6 +10,8 @@ import { Process } from '../../services/Process.js';
 import { Queue } from '../../services/Queue.js';
 import { WsClient } from '../../services/WsClient.js';
 import { apiLocalBaseUrl } from '../../lib/apiUrls.js';
+import { currentExpectedPluginBuildInfo, pluginBuildWarnings } from '../../lib/pluginBuildInfo.js';
+import { currentRuntimeBuildInfo, runtimeVersionWarnings } from '../../lib/runtimeBuildInfo.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
@@ -41,10 +43,16 @@ export const stackStatusCommand = Command.make('status', {}, () =>
       daemonPidInfo?.state_file ?? path.join(path.dirname(daemonPidFile), 'ws.state.json'),
     );
 
+    const activeWorkerRuntime =
+      clients._tag === 'Right' && typeof clients.right.activeWorkerConnId === 'string'
+        ? ((clients.right.clients as any[]).find((client: any) => client.connId === clients.right.activeWorkerConnId)?.runtime ?? null)
+        : null;
     const data = {
+      runtime: currentRuntimeBuildInfo(),
       daemon: {
         running: daemonRunning,
         pid: daemonPidInfo?.pid ?? null,
+        build: daemonPidInfo?.build ?? null,
         pid_file: daemonPidFile,
         ws_url: cfg.wsUrl,
         healthy: wsHealth._tag === 'Right',
@@ -53,6 +61,7 @@ export const stackStatusCommand = Command.make('status', {}, () =>
       api: {
         running: apiRunning,
         pid: apiPidInfo?.pid ?? null,
+        build: apiPidInfo?.build ?? null,
         pid_file: apiPidFile,
         base_url: apiBaseUrl,
         base_path: apiBasePath,
@@ -60,7 +69,22 @@ export const stackStatusCommand = Command.make('status', {}, () =>
         status: apiStatus._tag === 'Right' ? apiStatus.right : null,
       },
       active_worker_conn_id: clients._tag === 'Right' ? (clients.right.activeWorkerConnId ?? null) : null,
+      active_worker:
+        clients._tag === 'Right' && typeof clients.right.activeWorkerConnId === 'string'
+          ? (clients.right.clients as any[]).find((client: any) => client.connId === clients.right.activeWorkerConnId) ?? null
+          : null,
       queue: queueStats._tag === 'Right' ? queueStats.right : null,
+      warnings: [
+        ...runtimeVersionWarnings({
+          current: currentRuntimeBuildInfo(),
+          daemon: daemonPidInfo?.build ?? null,
+          api: apiPidInfo?.build ?? null,
+        }),
+        ...pluginBuildWarnings({
+          expected: currentExpectedPluginBuildInfo(),
+          live: activeWorkerRuntime,
+        }),
+      ],
     };
 
     const md = [

@@ -373,7 +373,7 @@ function buildMigrationPlan(specs: readonly MigrationSpec[]): {
 }
 
 const MIGRATION_PLAN = buildMigrationPlan(migrationSpecs);
-const LATEST_USER_VERSION = MIGRATION_PLAN.latestVersion;
+export const LATEST_USER_VERSION = MIGRATION_PLAN.latestVersion;
 
 function readUserVersion(db: StoreDB): number {
   const v = db.pragma('user_version', { simple: true }) as any;
@@ -472,6 +472,24 @@ function readAppliedMigrations(db: StoreDB): Map<number, AppliedMigration> {
   } catch {
     return new Map();
   }
+}
+
+export function readStoreSchemaStatus(db: StoreDB): {
+  readonly current_user_version: number;
+  readonly latest_supported_version: number;
+  readonly applied_migrations: number;
+  readonly latest_applied_version: number;
+} {
+  const applied = readAppliedMigrations(db);
+  const currentUserVersion = readUserVersion(db);
+  const appliedVersions = Array.from(applied.keys()).sort((a, b) => a - b);
+  const latestAppliedVersion = appliedVersions.length > 0 ? appliedVersions[appliedVersions.length - 1]! : 0;
+  return {
+    current_user_version: currentUserVersion,
+    latest_supported_version: LATEST_USER_VERSION,
+    applied_migrations: applied.size,
+    latest_applied_version: latestAppliedVersion,
+  };
 }
 
 function ensureMigrationRecorded(db: StoreDB, migration: Migration, appliedAt: number, appVersion: string): void {

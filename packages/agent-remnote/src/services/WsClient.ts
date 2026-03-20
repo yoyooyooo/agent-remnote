@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 
 import { CliError } from './Errors.js';
+import type { WsRuntimeInfo } from '../kernel/ws-bridge/index.js';
 
 export type WsHealthResult = { readonly url: string; readonly rtt_ms: number };
 export type WsTriggerResult = {
@@ -26,6 +27,7 @@ export type WsClientInfo = {
   readonly lastSeenAt: number;
   readonly remoteAddr?: string | undefined;
   readonly readyState: number;
+  readonly runtime?: WsRuntimeInfo | undefined;
 };
 export type WsClientsResult = {
   readonly clients: readonly WsClientInfo[];

@@ -107,17 +107,24 @@ const ACTIONS: Record<string, ActionSpec> = {
     aliasRefAllowlist: ['parent_id'],
     compile: ({ input, aliasTempId }) => {
       const parent_id = input.parent_id;
+      const standalone = input.standalone === true;
       const text = input.text;
-      if (typeof parent_id !== 'string' || !parent_id.trim()) {
-        throw new Error('write.bullet requires input.parent_id');
+      if (standalone && typeof parent_id === 'string' && parent_id.trim()) {
+        throw new Error('write.bullet does not allow input.parent_id when input.standalone=true');
+      }
+      if (!standalone && (typeof parent_id !== 'string' || !parent_id.trim())) {
+        throw new Error('write.bullet requires input.parent_id unless input.standalone=true');
       }
       if (typeof text !== 'string') {
         throw new Error('write.bullet requires input.text');
       }
 
-      const payload: Record<string, unknown> = { parent_id, text };
+      const payload: Record<string, unknown> = { text };
+      if (standalone) payload.standalone = true;
+      else payload.parent_id = parent_id;
       if (input.is_document === true) payload.is_document = true;
       if (Array.isArray(input.tags)) payload.tags = input.tags;
+      if (typeof input.position === 'number') payload.position = input.position;
       if (aliasTempId) payload.client_temp_id = aliasTempId;
 
       return { ops: [{ type: 'create_rem', payload }] };
@@ -280,9 +287,9 @@ const ACTIONS: Record<string, ActionSpec> = {
 
   'portal.create': {
     opType: 'create_portal',
-    supportsAs: false,
+    supportsAs: true,
     aliasRefAllowlist: ['parent_id', 'target_rem_id'],
-    compile: ({ input }) => {
+    compile: ({ input, aliasTempId }) => {
       const parent_id = input.parent_id;
       const target_rem_id = input.target_rem_id;
       if (typeof parent_id !== 'string' || !parent_id.trim()) {
@@ -294,6 +301,7 @@ const ACTIONS: Record<string, ActionSpec> = {
 
       const payload: Record<string, unknown> = { parent_id, target_rem_id };
       if (typeof input.position === 'number') payload.position = input.position;
+      if (aliasTempId) payload.client_temp_id = aliasTempId;
 
       return { ops: [{ type: 'create_portal', payload }] };
     },
@@ -385,6 +393,36 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
       const payload: Record<string, unknown> = { rem_id, text: input.text };
       return { ops: [{ type: 'update_text', payload }] };
+    },
+  },
+
+  'rem.move': {
+    opType: 'move_rem',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id', 'new_parent_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const new_parent_id = input.new_parent_id;
+      const standalone = input.standalone === true;
+
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('rem.move requires input.rem_id');
+      }
+      if (standalone && typeof new_parent_id === 'string' && new_parent_id.trim()) {
+        throw new Error('rem.move does not allow input.new_parent_id when input.standalone=true');
+      }
+      if (!standalone && (typeof new_parent_id !== 'string' || !new_parent_id.trim())) {
+        throw new Error('rem.move requires input.new_parent_id unless input.standalone=true');
+      }
+
+      const payload: Record<string, unknown> = { rem_id };
+      if (standalone) payload.standalone = true;
+      else payload.new_parent_id = new_parent_id;
+      if (typeof input.position === 'number') payload.position = input.position;
+      if (input.is_document === true) payload.is_document = true;
+      if (input.leave_portal === true) payload.leave_portal = true;
+
+      return { ops: [{ type: 'move_rem', payload }] };
     },
   },
 

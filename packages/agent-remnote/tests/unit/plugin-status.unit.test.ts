@@ -37,6 +37,7 @@ describe('plugin status (unit)', () => {
               port: 8080,
               state_file: customStateFile,
               log_file: logFile,
+              build: { name: 'agent-remnote', version: '1.3.0', build_id: 'agent:build', built_at: 1, source_stamp: 1, mode: 'src' },
             }),
           writePidFile: () => Effect.void,
           deletePidFile: () => Effect.void,
@@ -46,6 +47,8 @@ describe('plugin status (unit)', () => {
               return {
                 running: true,
                 pid: 123,
+                build: { name: 'agent-remnote', version: '1.3.0', build_id: 'agent:build', built_at: 1, source_stamp: 1, mode: 'src' },
+                plugin_build: { name: '@remnote/plugin', version: '0.0.2', build_id: 'plugin:build', built_at: 2, source_stamp: 2, mode: 'dist' },
                 host: '127.0.0.1',
                 port: 8080,
                 startedAt: 1,
@@ -67,6 +70,22 @@ describe('plugin status (unit)', () => {
 
     expect(readStatePaths).toEqual([customStateFile]);
     expect(result.service.state_file).toBe(customStateFile);
+    expect(result.service.build).toEqual({
+      name: 'agent-remnote',
+      version: '1.3.0',
+      build_id: 'agent:build',
+      built_at: 1,
+      source_stamp: 1,
+      mode: 'src',
+    });
+    expect(result.plugin_server.build).toEqual({
+      name: '@remnote/plugin',
+      version: '0.0.2',
+      build_id: 'plugin:build',
+      built_at: 2,
+      source_stamp: 2,
+      mode: 'dist',
+    });
   });
 
   it('keeps typed failures in the error channel', async () => {

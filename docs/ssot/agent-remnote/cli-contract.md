@@ -92,6 +92,67 @@ export type JsonEnvelope =
   - `rem children replace`：兼容性包装器
   - `replace markdown`：高级 / 仅本地的块替换
 
+### `rem create` / `rem move`
+
+- `rem create` 的 source model 固定为四选一：
+  - `--text`
+  - `--markdown`
+  - repeated `--target`
+  - `--from-selection`
+- `--from-selection` 只是 `targets[]` 的 sugar，不能与 `--text` / `--markdown` / explicit `--target` 混用
+- 内容位置固定为四选一：
+  - `--parent` / `--ref`
+  - `--before`
+  - `--after`
+  - `--standalone`
+- portal 位置最多一组：
+  - `--portal-parent`
+  - `--portal-before`
+  - `--portal-after`
+  - `--leave-portal`
+  - `--leave-portal-in-place`
+- `--is-document` 始终显式，默认 `false`
+- `rem create --markdown` 必须带 `--title`
+- repeated `--target` 多个 source 时必须带 `--title`
+- 单个 `--target` 与单个 `--from-selection` 允许从 source 标题推断 destination title
+- `--before` / `--after` 与 `--portal-before` / `--portal-after` 都会先归约为 parent-relative `parent_id + position`
+- `rem create --wait --json` 在 durable target 已落地、portal 步骤失败时，必须返回 partial-success receipt，并保留 durable target
+- `rem move --wait --json` 在 move 成功但 `--leave-portal` 失败时，必须返回：
+  - `durable_target`
+  - `portal.requested=true`
+  - `portal.created=false`
+  - `warnings[]`
+  - `nextActions[]`
+  - `source_context`
+
+### Promotion receipt
+
+对于 `rem create` / `rem move` 的 promotion flow，`--json` 成功回执至少应稳定暴露：
+
+- `txn_id`
+- `op_ids`
+- `durable_target`
+  - `rem_id`
+  - `is_document`
+  - `placement_kind`
+- `portal`
+  - `requested`
+  - `created`
+  - `placement_kind`
+  - `rem_id?`
+- `source_context`
+  - `source_kind`
+  - `source_origin?`
+  - `parent_id?`
+- `warnings?`
+- `nextActions?`
+
+若 portal 阶段失败但 durable target 已存在：
+
+- 仍应返回 `ok=true`
+- 允许 `status='partial_success'` 或 `partial_success=true`
+- 禁止丢失 durable target 标识
+
 ### `plugin serve`
 
 - `plugin serve`：启动本地静态文件服务器，服务 RemNote 插件构建产物
@@ -126,3 +187,31 @@ export type JsonEnvelope =
 - API host 优先级：`--api-host` > `REMNOTE_API_HOST` > 用户配置文件中的 `apiHost` > 默认 `0.0.0.0`
 - API port 优先级：`--api-port` > `PORT` / `REMNOTE_API_PORT` > 用户配置文件中的 `apiPort` > 默认 `3000`
 - API base path 优先级：`--api-base-path` > `REMNOTE_API_BASE_PATH` > 用户配置文件中的 `apiBasePath` > 默认 `/v1`
+
+## 7) 运行版本可观测性
+
+- `daemon status --json` 必须暴露：
+  - `runtime`
+  - `service.build`
+  - `clients[].runtime`
+  - `warnings`
+- `plugin status --json` 必须暴露：
+  - `runtime`
+  - `service.build`
+  - `plugin_server.build`
+  - `warnings`
+- `api status --json` 必须暴露：
+  - `runtime`
+  - `service.build`
+  - `api.status.runtime`
+  - `api.status.plugin.active_worker.runtime`
+  - `warnings`
+- 当 current CLI build 与 live daemon / api / plugin build 不一致时，status 输出必须返回稳定 warning，而不是要求用户从日志里猜。
+
+## 8) schema 可观测性
+
+- `doctor --json` 必须暴露 `queue.schema`：
+  - `current_user_version`
+  - `latest_supported_version`
+  - `applied_migrations`
+  - `latest_applied_version`

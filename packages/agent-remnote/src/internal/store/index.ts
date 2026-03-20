@@ -1,7 +1,7 @@
 import type { StoreDB } from './db.js';
 
 export type { StoreDB } from './db.js';
-export { StoreSchemaError, defaultLegacyQueuePath, defaultStorePath, ensureDir, openStoreDb } from './db.js';
+export { LATEST_USER_VERSION, StoreSchemaError, defaultLegacyQueuePath, defaultStorePath, ensureDir, openStoreDb, readStoreSchemaStatus } from './db.js';
 
 export type BackupKind = 'children_replace' | 'selection_replace';
 export type CleanupPolicy = 'auto' | 'visible';

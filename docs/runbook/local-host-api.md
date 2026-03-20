@@ -12,6 +12,24 @@ agent-remnote stack ensure
 agent-remnote stack status --json
 agent-remnote api status --json
 agent-remnote daemon status --json
+agent-remnote plugin status --json
+agent-remnote doctor --json
+```
+
+Interpretation:
+
+- `runtime`: current CLI/session build
+- `service.build`: live daemon/api/plugin-server process build
+- `active_worker.runtime`: live RemNote plugin build
+- `warnings`: build mismatch hints
+- `queue.schema`: current store schema version vs supported version
+
+If `build_id` values differ after local changes, restart the stale side:
+
+```bash
+agent-remnote --json daemon restart --wait 15000
+agent-remnote --json api restart
+agent-remnote --json plugin restart
 ```
 
 ## Read from host api

@@ -6,9 +6,11 @@ import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
 import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import type { RuntimeBuildInfo } from '../lib/runtimeBuildInfo.js';
 
 export type PluginServerPidFile = {
   readonly pid: number;
+  readonly build?: RuntimeBuildInfo | undefined;
   readonly started_at?: number | undefined;
   readonly host?: string | undefined;
   readonly port?: number | undefined;
@@ -20,6 +22,8 @@ export type PluginServerPidFile = {
 export type PluginServerStateFile = {
   readonly running: boolean;
   readonly pid: number;
+  readonly build?: RuntimeBuildInfo | undefined;
+  readonly plugin_build?: RuntimeBuildInfo | undefined;
   readonly host: string;
   readonly port: number;
   readonly startedAt: number;

@@ -11,6 +11,12 @@ import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 
 import { optionToUndefined, writeCommonOptions } from '../_shared.js';
+import {
+  buildMovePromotionActions,
+  isMovePromotionMode,
+  normalizeMovePromotionIntent,
+} from './_promotion.js';
+import { dryRunEnvelope, ensureWaitArgs, loadTxnDetail, submitActionEnvelope } from './children/common.js';
 
 function normalizeRemIdInput(raw: string): string {
   const trimmed = raw.trim();
@@ -19,12 +25,30 @@ function normalizeRemIdInput(raw: string): string {
   return trimmed;
 }
 
+function parseResultJson(raw: any): any {
+  const resultJson = raw?.result_json;
+  if (typeof resultJson === 'string' && resultJson.trim()) {
+    try {
+      return JSON.parse(resultJson);
+    } catch {}
+  }
+  return null;
+}
+
+const before = Options.text('before').pipe(Options.optional, Options.map(optionToUndefined));
+const after = Options.text('after').pipe(Options.optional, Options.map(optionToUndefined));
+
 export const writeRemMoveCommand = Command.make(
   'move',
   {
     rem: Options.text('rem'),
     parent: Options.text('parent').pipe(Options.optional, Options.map(optionToUndefined)),
     ref: Options.text('ref').pipe(Options.optional, Options.map(optionToUndefined)),
+    before,
+    after,
+    standalone: Options.boolean('standalone'),
+    isDocument: Options.boolean('is-document'),
+    leavePortal: Options.boolean('leave-portal'),
     position: Options.integer('position').pipe(Options.optional, Options.map(optionToUndefined)),
 
     notify: writeCommonOptions.notify,
@@ -43,6 +67,11 @@ export const writeRemMoveCommand = Command.make(
     rem,
     parent,
     ref,
+    before,
+    after,
+    standalone,
+    isDocument,
+    leavePortal,
     position,
     notify,
     ensureDaemon,
@@ -56,6 +85,130 @@ export const writeRemMoveCommand = Command.make(
     meta,
   }) =>
     Effect.gen(function* () {
+      if (
+        isMovePromotionMode({
+          rem,
+          parent,
+          ref,
+          before,
+          after,
+          standalone,
+          isDocument,
+          leavePortal,
+          position,
+        })
+      ) {
+        yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
+
+        const payloadSvc = yield* Payload;
+        const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
+        const intent = yield* normalizeMovePromotionIntent({
+          rem,
+          parent,
+          ref,
+          before,
+          after,
+          standalone,
+          isDocument,
+          leavePortal,
+          position,
+        });
+        const actions = yield* buildMovePromotionActions(intent);
+        const body: Record<string, unknown> = {
+          version: 1,
+          kind: 'actions',
+          actions,
+          ...(priority !== undefined ? { priority } : {}),
+          ...(clientId ? { client_id: clientId } : {}),
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+          ...(metaValue !== undefined ? { meta: metaValue } : {}),
+          notify,
+          ensure_daemon: ensureDaemon,
+        };
+
+        if (dryRun) {
+          const compiled = yield* dryRunEnvelope(body);
+          yield* writeSuccess({
+            data: {
+              dry_run: true,
+              kind: compiled.kind,
+              ops: compiled.ops,
+              alias_map: compiled.aliasMap,
+              meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
+            },
+            md: `- dry_run: true\n- action: rem.move\n- rem_id: ${intent.remId}\n`,
+          });
+          return;
+        }
+
+        const out = yield* submitActionEnvelope({
+          body,
+          wait,
+          timeoutMs,
+          pollMs,
+        });
+
+        const detail =
+          wait && typeof (out as any)?.txn_id === 'string'
+            ? yield* loadTxnDetail({ txnId: String((out as any).txn_id) }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+            : null;
+
+        const moveOp = Array.isArray((detail as any)?.ops)
+          ? (detail as any).ops.find((op: any) => String(op?.type ?? '').trim() === 'move_rem')
+          : null;
+        const moveResult = parseResultJson(moveOp?.result);
+
+        const warnings = [
+          ...((Array.isArray((out as any)?.warnings) ? (out as any).warnings : []) as string[]),
+          ...((Array.isArray(moveResult?.warnings) ? moveResult.warnings : []) as string[]),
+        ];
+        const nextActions = [
+          ...((Array.isArray((out as any)?.nextActions) ? (out as any).nextActions : []) as string[]),
+          ...((Array.isArray(moveResult?.nextActions) ? moveResult.nextActions : []) as string[]),
+        ];
+
+        const enriched = {
+          ...(out as any),
+          rem_id: intent.remId,
+          durable_target: {
+            rem_id: intent.remId,
+            is_document: intent.isDocument,
+            placement_kind: intent.contentPlacement.kind,
+          },
+          source_context: {
+            source_kind: 'targets',
+            source_origin: 'move_single_rem',
+            ...(typeof moveResult?.source_parent_id === 'string' && moveResult.source_parent_id.trim()
+              ? { parent_id: moveResult.source_parent_id.trim() }
+              : {}),
+          },
+          portal: {
+            requested: intent.leavePortal,
+            created: moveResult?.portal_created === true,
+            ...(typeof moveResult?.portal_id === 'string' && moveResult.portal_id.trim()
+              ? { rem_id: moveResult.portal_id.trim(), placement_kind: 'in_place_single_rem' }
+              : intent.leavePortal
+                ? { placement_kind: 'in_place_single_rem' }
+                : {}),
+          },
+          ...(warnings.length > 0 ? { warnings } : {}),
+          ...(nextActions.length > 0 ? { nextActions } : {}),
+        };
+
+        yield* writeSuccess({
+          data: enriched,
+          ids: Array.isArray((out as any)?.op_ids) ? [(out as any).txn_id, ...(out as any).op_ids] : [(out as any).txn_id],
+          md: [
+            `- txn_id: ${(out as any).txn_id}`,
+            `- op_ids: ${Array.isArray((out as any).op_ids) ? (out as any).op_ids.length : ''}`,
+            `- notified: ${(out as any).notified}`,
+            `- sent: ${(out as any).sent ?? ''}`,
+            ...((out as any).status ? [`- status: ${(out as any).status}`, `- elapsed_ms: ${(out as any).elapsed_ms ?? ''}`] : []),
+          ].join('\n'),
+        });
+        return;
+      }
+
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
           new CliError({

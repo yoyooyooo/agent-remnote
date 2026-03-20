@@ -24,6 +24,8 @@ import { RefResolver } from '../services/RefResolver.js';
 import { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 import { WsClient } from '../services/WsClient.js';
 import { apiContainerBaseUrl, apiLocalBaseUrl } from './apiUrls.js';
+import { currentExpectedPluginBuildInfo, pluginBuildWarnings } from './pluginBuildInfo.js';
+import { currentRuntimeBuildInfo, runtimeVersionWarnings } from './runtimeBuildInfo.js';
 import { dropBlankLinesOutsideFences, trimBoundaryBlankLines } from './text.js';
 import { requireResolvedWorkspace, resolveWorkspaceSnapshot } from './workspaceResolver.js';
 import { cliErrorFromUnknown } from '../commands/_tool.js';
@@ -555,13 +557,16 @@ export function collectApiHealthUseCase(params: {
     const queueStats = yield* queue.stats({ dbPath: cfg.storeDb }).pipe(Effect.either);
 
     return {
-      api: { running: true, healthy: true, pid: params.pid, startedAt: params.startedAt },
+      runtime: currentRuntimeBuildInfo(),
+      api: { running: true, healthy: true, pid: params.pid, startedAt: params.startedAt, build: currentRuntimeBuildInfo() },
       daemon: {
         running: wsHealth._tag === 'Right',
         healthy: wsHealth._tag === 'Right',
         wsUrl: cfg.wsUrl,
+        build: null,
       },
       activeWorkerConnId: clientsRes._tag === 'Right' ? (clientsRes.right.activeWorkerConnId ?? null) : null,
+      clients: clientsRes._tag === 'Right' ? clientsRes.right.clients : [],
       queue:
         queueStats._tag === 'Right'
           ? {
@@ -602,6 +607,28 @@ export function collectApiStatusUseCase(params: {
       workspaceResolution.bindingSource ??
       (cfg.remnoteDb ? 'config' : workspaceResolution.source === 'unresolved' ? undefined : workspaceResolution.source);
 
+    const activeWorkerRuntime =
+      typeof health.activeWorkerConnId === 'string' && Array.isArray((health as any)?.clients)
+        ? (((health as any).clients as any[]).find((client: any) => client.connId === health.activeWorkerConnId)?.runtime ??
+          null)
+        : null;
+
+    const warnings = [
+      ...runtimeVersionWarnings({
+        current: currentRuntimeBuildInfo(),
+      }) as string[],
+      ...pluginBuildWarnings({
+        expected: currentExpectedPluginBuildInfo(),
+        live: activeWorkerRuntime,
+      }),
+    ];
+    if (health.api?.running === true && !(health as any)?.api?.build) {
+      warnings.push('host api state has no build info; restart the api service to refresh runtime metadata');
+    }
+    if (health.activeWorkerConnId && !activeWorkerRuntime) {
+      warnings.push('active worker did not report runtime metadata; reload the RemNote plugin');
+    }
+
     return {
       ...health,
       capabilities: {
@@ -622,6 +649,12 @@ export function collectApiStatusUseCase(params: {
       plugin: {
         ws_healthy: health.daemon.healthy,
         active_worker_conn_id: health.activeWorkerConnId,
+        active_worker: health.activeWorkerConnId
+          ? {
+              conn_id: health.activeWorkerConnId,
+              runtime: activeWorkerRuntime,
+            }
+          : null,
       },
       write: {
         daemon_ready: health.daemon.healthy,
@@ -630,6 +663,7 @@ export function collectApiStatusUseCase(params: {
       },
       uiContext,
       selection,
+      warnings,
     };
   });
 }

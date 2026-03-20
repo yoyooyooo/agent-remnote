@@ -23,9 +23,12 @@ describe('cli contract: daemon status --json (supervisor mode)', () => {
 
       const parsed = JSON.parse(res.stdout.trim());
       expect(parsed.ok).toBe(true);
+      expect(typeof parsed.data.runtime?.version).toBe('string');
+      expect(typeof parsed.data.runtime?.build_id).toBe('string');
       expect(parsed.data.service.mode).toBe('supervisor');
       expect(typeof parsed.data.service.supervisor).toBe('object');
       expect(parsed.data.service.supervisor.running).toBe(false);
+      expect(parsed.data.service.build ?? null).toBe(null);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }

@@ -13,6 +13,9 @@ import { WsClient } from '../../src/services/WsClient.js';
 import { makeConfig, overrideHome, touchDbFile, writeWsState } from '../helpers/httpApiTestUtils.js';
 
 describe('api status capabilities (unit)', () => {
+  const previousBuildId = process.env.AGENT_REMNOTE_BUILD_ID;
+  const previousVersion = process.env.AGENT_REMNOTE_VERSION;
+
   it('returns unresolved workspace diagnostics without failing status', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-api-status-unresolved-'));
     const tmpHome = path.join(tmpDir, 'home');
@@ -91,7 +94,23 @@ describe('api status capabilities (unit)', () => {
         WorkspaceBindingsLive,
         Layer.succeed(WsClient, {
           health: () => Effect.succeed({ url: 'ws://127.0.0.1:6789/ws', rtt_ms: 1 }),
-          queryClients: () => Effect.succeed({ clients: [{ connId: 'conn-live' }], activeWorkerConnId: 'conn-live' }),
+          queryClients: () =>
+            Effect.succeed({
+              clients: [
+                {
+                  connId: 'conn-live',
+                  runtime: {
+                    name: '@remnote/plugin',
+                    version: '0.0.2',
+                    build_id: 'plugin-old',
+                    built_at: 1,
+                    source_stamp: 1,
+                    mode: 'dist',
+                  },
+                },
+              ],
+              activeWorkerConnId: 'conn-live',
+            }),
         } as any),
         Layer.succeed(Queue, {
           stats: () => Effect.succeed({ pending: 0, in_flight: 0 }),
@@ -115,6 +134,10 @@ describe('api status capabilities (unit)', () => {
       expect(data.capabilities.plugin_rpc_ready).toBe(true);
       expect(data.capabilities.write_ready).toBe(true);
       expect(data.capabilities.ui_session_ready).toBe(true);
+      expect(typeof data.runtime.version).toBe('string');
+      expect(data.plugin.active_worker?.runtime?.build_id).toBe('plugin-old');
+      expect(Array.isArray(data.warnings)).toBe(true);
+      expect(String(data.warnings.join(' '))).toContain('plugin build mismatch');
     } finally {
       restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });

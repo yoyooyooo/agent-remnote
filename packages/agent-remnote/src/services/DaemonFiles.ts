@@ -6,9 +6,11 @@ import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
 import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import type { RuntimeBuildInfo } from '../lib/runtimeBuildInfo.js';
 
 export type WsPidFile = {
   readonly pid: number;
+  readonly build?: RuntimeBuildInfo | undefined;
   readonly started_at?: number | undefined;
   readonly ws_url?: string | undefined;
   readonly log_file?: string | undefined;

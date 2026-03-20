@@ -24,6 +24,7 @@ import { WsBridgeStateFile } from '../../services/WsBridgeStateFile.js';
 import { wsLog } from '../../lib/wsDebug.js';
 import { cleanupStatuslineArtifacts, resolveStatuslineArtifactPaths } from '../../lib/statuslineArtifacts.js';
 import { refreshTmuxStatusLine } from '../../lib/tmux.js';
+import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 import { StatusLineController } from '../status-line/StatusLineController.js';
 
 type BridgeEvent =
@@ -99,7 +100,7 @@ export function runWsBridgeRuntime(params: {
 
       const core = makeWsBridgeCore({
         config: {
-          serverInfo: server.serverInfo,
+          serverInfo: { ...server.serverInfo, runtime: currentRuntimeBuildInfo() },
           queueDbPath: cfg.storeDb,
           stateFileEnabled: !cfg.wsStateFile.disabled,
           stateWriteMinIntervalMs: STATE_FILE_MIN_INTERVAL_MS,

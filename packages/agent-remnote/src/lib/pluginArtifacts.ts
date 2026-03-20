@@ -48,7 +48,15 @@ function validateDistPath(targetPath: string): boolean {
   return isDirectory(targetPath) && existsSync(path.join(targetPath, 'manifest.json'));
 }
 
+function hasBuildInfo(targetPath: string): boolean {
+  return isFile(path.join(targetPath, 'build-info.json'));
+}
+
 export function resolvePluginDistPath(moduleUrl = import.meta.url): string {
+  for (const candidate of distCandidates(moduleUrl)) {
+    if (validateDistPath(candidate) && hasBuildInfo(candidate)) return candidate;
+  }
+
   for (const candidate of distCandidates(moduleUrl)) {
     if (validateDistPath(candidate)) return candidate;
   }

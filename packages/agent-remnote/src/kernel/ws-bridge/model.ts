@@ -38,6 +38,15 @@ export type WsClientUiContext = {
   readonly updatedAt: number;
 };
 
+export type WsRuntimeInfo = {
+  readonly name: string;
+  readonly version: string;
+  readonly build_id: string;
+  readonly built_at: number;
+  readonly source_stamp: number;
+  readonly mode?: string | undefined;
+};
+
 export type WsBridgeClient = {
   readonly connId: WsConnId;
   readonly clientType?: string | undefined;
@@ -50,6 +59,7 @@ export type WsBridgeClient = {
   readonly remoteAddr?: string | undefined;
   readonly userAgent?: string | undefined;
   readonly readyState: number;
+  readonly runtime?: WsRuntimeInfo | undefined;
   readonly selection?: WsClientSelection | undefined;
   readonly uiContext?: WsClientUiContext | undefined;
 };
@@ -57,6 +67,7 @@ export type WsBridgeClient = {
 export type WsBridgeServerInfo = {
   readonly port: number;
   readonly path: string;
+  readonly runtime?: WsRuntimeInfo | undefined;
 };
 
 export type WsBridgeKickConfig = {
