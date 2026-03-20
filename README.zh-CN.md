@@ -253,6 +253,8 @@ agent-remnote --json apply --payload @plan.json --idempotency-key "plan:demo:202
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
+`apply` 里的 action/op payload 若带 `markdown` 字段，也会按 `--markdown` 同一套 input-spec 规则展开：支持 inline 文本、`@file`、`-` 与 `@@literal`。
+
 ## 如何使用（面向 Agent）
 
 ### 读取：双通道互补

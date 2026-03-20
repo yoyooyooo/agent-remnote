@@ -1,12 +1,15 @@
 import * as Effect from 'effect/Effect';
 
 import { compileWritePlanV1 } from '../kernel/write-plan/index.js';
+import { trimBoundaryBlankLines } from '../lib/text.js';
 import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
+import type { FileInput } from '../services/FileInput.js';
 import { Payload } from '../services/Payload.js';
 import { RefResolver } from '../services/RefResolver.js';
 import type { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 
+import { readMarkdownTextFromInputSpec } from './_shared.js';
 import { normalizeOp, normalizeOps } from './_enqueue.js';
 import { resolveRefsInPayload } from './_resolveRefsInPayload.js';
 import { makeTempId } from './_tempId.js';
@@ -92,6 +95,40 @@ function readOptionalBoolean(obj: Record<string, unknown>, key: string): boolean
   if (!hasOwn(obj, key) || value === undefined) return undefined;
   if (typeof value !== 'boolean') throw invalidFieldType(key, 'a boolean');
   return value;
+}
+
+function expandMarkdownInputSpecs(value: unknown): Effect.Effect<unknown, CliError, FileInput> {
+  return Effect.gen(function* () {
+    if (Array.isArray(value)) {
+      return yield* Effect.forEach(value, (item) => expandMarkdownInputSpecs(item), { concurrency: 1 });
+    }
+
+    if (!value || typeof value !== 'object') return value;
+
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+
+    for (const [key, entry] of Object.entries(obj)) {
+      if (key === 'markdown' && typeof entry === 'string') {
+        const raw = yield* readMarkdownTextFromInputSpec(entry);
+        out[key] = trimBoundaryBlankLines(raw);
+        continue;
+      }
+      out[key] = yield* expandMarkdownInputSpecs(entry);
+    }
+
+    return out;
+  });
+}
+
+export function normalizeAndExpandApplyEnvelope(
+  raw: unknown,
+): Effect.Effect<unknown, CliError, Payload | FileInput> {
+  return Effect.gen(function* () {
+    const payloadSvc = yield* Payload;
+    const normalized = payloadSvc.normalizeKeys(raw);
+    return yield* expandMarkdownInputSpecs(normalized);
+  });
 }
 
 export function parseApplyEnvelope(raw: unknown): ParsedApplyEnvelope {

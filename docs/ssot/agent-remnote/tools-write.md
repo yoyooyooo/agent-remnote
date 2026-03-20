@@ -64,6 +64,11 @@
 - payload 顶层 envelope：
   - `{"version":1,"kind":"actions","actions":[...]}`
   - `{"version":1,"kind":"ops","ops":[...]}`
+- envelope 内所有 `markdown` 字段都支持与 `--markdown <input-spec>` 相同的 input-spec 语义：
+  - inline：`"- root\n  - child"`
+  - file：`"@/absolute/or/relative/path.md"`
+  - stdin：`"-"`（仅当当前进程 stdin 仍可用于 markdown 内容时）
+  - literal leading `@`：`"@@/tmp/demo.md"` 会保留为字面文本 `@/tmp/demo.md`
 - 默认行为：入队后触发一次同步（notify=true，ensure-daemon=true）；可用 `--no-notify` / `--no-ensure-daemon` 关闭。
 - `actions` 适用于 agent 友好的结构化写入；`ops` 适用于 advanced/debug。
 - `portal.create` 是 canonical portal atomic action；`input.parent_id` 与 `input.target_rem_id` 都允许引用 earlier `@alias`。

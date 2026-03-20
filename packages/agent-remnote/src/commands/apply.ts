@@ -8,7 +8,7 @@ import { CliError, isCliError } from '../services/Errors.js';
 import { HostApiClient } from '../services/HostApiClient.js';
 import { Payload } from '../services/Payload.js';
 import { executeWriteApplyUseCase } from '../lib/hostApiUseCases.js';
-import { compileApplyEnvelope, parseApplyEnvelope } from './_applyEnvelope.js';
+import { compileApplyEnvelope, normalizeAndExpandApplyEnvelope, parseApplyEnvelope } from './_applyEnvelope.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { validateOptionMutationOps } from './write/_optionRuntimeGuard.js';
 
@@ -75,8 +75,9 @@ export const applyCommand = Command.make(
       const payloadSvc = yield* Payload;
 
       const raw = yield* payloadSvc.readJson(payload);
+      const expanded = yield* normalizeAndExpandApplyEnvelope(raw);
       const parsed = yield* Effect.try({
-        try: () => parseApplyEnvelope(payloadSvc.normalizeKeys(raw)),
+        try: () => parseApplyEnvelope(expanded),
         catch: (error) =>
           isCliError(error)
             ? error
@@ -113,7 +114,7 @@ export const applyCommand = Command.make(
         ? yield* hostApi.writeApply({
             baseUrl: cfg.apiBaseUrl,
             body: {
-              ...(raw as Record<string, unknown>),
+              ...(expanded as Record<string, unknown>),
               priority: resolvedPriority,
               clientId: resolvedClientId,
               idempotencyKey: resolvedIdempotencyKey,
@@ -129,7 +130,7 @@ export const applyCommand = Command.make(
             yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
             return yield* executeWriteApplyUseCase({
               raw: {
-                ...(raw as Record<string, unknown>),
+                ...(expanded as Record<string, unknown>),
                 priority: resolvedPriority,
                 clientId: resolvedClientId,
                 idempotencyKey: resolvedIdempotencyKey,

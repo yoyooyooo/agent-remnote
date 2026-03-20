@@ -253,6 +253,8 @@ agent-remnote --json apply --payload @plan.json --idempotency-key "plan:demo:202
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
+`apply` also expands `markdown` fields inside action/op payloads using the same input-spec semantics as `--markdown`: inline text, `@file`, `-`, and `@@literal`.
+
 ## Usage with AI agents
 
 ### Read: two complementary channels
