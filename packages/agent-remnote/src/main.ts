@@ -14,6 +14,7 @@ import { rootCommand } from './commands/index.js';
 import { buildCliEnvConfigProvider } from './services/CliConfigProvider.js';
 import { cliErrorFromValidationError, exitCodeFromExit, fail, isCliError, toJsonError } from './services/Errors.js';
 import { CliError } from './services/Errors.js';
+import { currentRuntimeBuildInfo } from './lib/runtimeBuildInfo.js';
 
 function packageVersion(): string {
   try {
@@ -26,6 +27,12 @@ function packageVersion(): string {
 
 const version = packageVersion();
 if (!process.env.AGENT_REMNOTE_VERSION) process.env.AGENT_REMNOTE_VERSION = version;
+const buildInfo = currentRuntimeBuildInfo();
+if (!process.env.AGENT_REMNOTE_NAME) process.env.AGENT_REMNOTE_NAME = buildInfo.name;
+if (!process.env.AGENT_REMNOTE_BUILD_ID) process.env.AGENT_REMNOTE_BUILD_ID = buildInfo.build_id;
+if (!process.env.AGENT_REMNOTE_BUILD_AT) process.env.AGENT_REMNOTE_BUILD_AT = String(buildInfo.built_at);
+if (!process.env.AGENT_REMNOTE_SOURCE_STAMP) process.env.AGENT_REMNOTE_SOURCE_STAMP = String(buildInfo.source_stamp);
+if (!process.env.AGENT_REMNOTE_BUILD_MODE) process.env.AGENT_REMNOTE_BUILD_MODE = buildInfo.mode;
 
 const cli = Command.run(rootCommand, {
   name: 'agent-remnote',

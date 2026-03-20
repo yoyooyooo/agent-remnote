@@ -129,6 +129,7 @@ function assertOpsNoOrphanCreates(ops: readonly EnqueueOpInput[]): void {
     }
 
     if (!OP_TYPES_REQUIRE_PARENT_ID.has(op.type)) continue;
+    if (op.type === 'create_rem' && (op.payload as any)?.standalone === true) continue;
     const parentId = readParentIdFromPayload(op.payload);
     if (parentId) continue;
     throw new CliError({

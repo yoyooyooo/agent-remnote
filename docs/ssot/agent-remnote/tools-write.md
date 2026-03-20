@@ -17,7 +17,15 @@
   - `agent-remnote rem replace`：规范化替换命令族。目标选择器负责表达“替换谁”，`--surface children|self` 负责表达“替换哪一层”。
   - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。其中 `rem children replace` 保留为兼容性包装器；规范化路径优先用 `rem replace --surface children`。
   - `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
-  - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。其中 `rem delete` 在插件侧默认走 `safeDeleteSubtree`，会优先直接删除“节点数不超过阈值”的整棵小子树；超过阈值时，再拆成多个阈值内的小子树做前端本地安全删除，以规避宿主的大树删除确认。CLI 可按次通过 `--max-delete-subtree-nodes <n>` 覆盖前端默认阈值。
+  - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。`rem create` / `rem move` 现在同时承担 promotion façade：
+    - `rem create` 支持 `--text | --markdown | repeated --target | --from-selection`
+    - 内容位置统一为 `--parent/--ref | --before | --after | --standalone`
+    - portal 位置统一为 `--portal-parent | --portal-before | --portal-after`
+    - `--is-document` 保持显式，默认 `false`
+    - `rem move --leave-portal` 支持单 Rem promotion 后原地留 portal
+    - `rem create --from-selection --leave-portal-in-place` 支持把原 selection range 替换为 portal
+    - 当 durable target 已成功创建但 portal 失败时，`--wait --json` 必须返回 partial-success receipt，而不是丢失 durable target 诊断
+    - 其中 `rem delete` 在插件侧默认走 `safeDeleteSubtree`，会优先直接删除“节点数不超过阈值”的整棵小子树；超过阈值时，再拆成多个阈值内的小子树做前端本地安全删除，以规避宿主的大树删除确认。CLI 可按次通过 `--max-delete-subtree-nodes <n>` 覆盖前端默认阈值。
   - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
   - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
 - `agent-remnote backup list/cleanup`：backup artifact 的治理入口。`list` 只读列出 Store DB registry；`cleanup` 默认 dry-run，只有显式 `--apply` 才入队删除。
@@ -52,6 +60,13 @@
 - 成功时返回 `txn_id/op_ids`，并附带 `nextActions`（英文命令）用于闭环验证（例如 `queue inspect` / `queue progress` / `daemon sync`）。
 - 需要“同一次调用闭环确认落库”时，优先使用写入命令自带的 `--wait/--timeout-ms/--poll-ms`；`queue wait` 仅作为诊断工具保留。
 - wait-mode 的机器主契约统一为 `id_map`。若 wrapper 额外返回 `rem_id` / `portal_rem_id` 等字段，它们只能视为从 `id_map` 派生出的 convenience sugar。
+- promotion wrapper 的稳定补充字段：
+  - `durable_target`
+  - `portal`
+  - `source_context`
+  - `warnings`
+  - `nextActions`
+  - 当 portal 失败但 durable target 已存在时，仍返回成功 envelope，并用 partial-success 语义表达
 - 对写入类命令，建议为每次“逻辑写入”提供稳定的 `--idempotency-key`（例如 URL / 文件 hash / 业务 key）。当 key 已存在时，CLI 会复用既有 txn（`deduped=true`），避免重复入队与重复写入。
 
 协议补充（与 `docs/ssot/agent-remnote/cli-contract.md` 对齐）：

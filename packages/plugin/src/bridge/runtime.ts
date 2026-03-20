@@ -6,6 +6,7 @@ import { sleep } from './shared/sleep';
 import { BRIDGE_SETTING_IDS } from './settings';
 import { computeOpLockKeys, OpLockManager } from './opConcurrency';
 import { openWs, send, waitForOpOrNoWork } from './ws';
+import { PLUGIN_BUILD_INFO } from './buildInfo';
 
 let controlWs: WebSocket | null = null;
 let controlReconnectTimer: any = null;
@@ -1067,6 +1068,7 @@ export function startControlChannel(plugin: ReactRNPlugin, url: string, clientIn
           protocolVersion: 2,
           clientType: 'remnote-plugin',
           clientInstanceId,
+          runtime: PLUGIN_BUILD_INFO,
           capabilities: { control: true, worker: true, readRpc: true, batchPull: true },
         }),
       );
@@ -1277,6 +1279,7 @@ export async function runSyncLoop(
         protocolVersion: 2,
         clientType: 'remnote-plugin',
         clientInstanceId,
+        runtime: PLUGIN_BUILD_INFO,
         capabilities: { control: isControl, worker: true, readRpc: true, batchPull: true },
       });
     } catch {}

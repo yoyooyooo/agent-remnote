@@ -73,6 +73,8 @@ describe('cli contract: api lifecycle', () => {
       expect(statusRes.stderr).toBe('');
       const statusEnv = JSON.parse(statusRes.stdout.trim());
       expect(statusEnv.ok).toBe(true);
+      expect(typeof statusEnv.data.runtime?.version).toBe('string');
+      expect(typeof statusEnv.data.service.build?.build_id).toBe('string');
       expect(statusEnv.data.service.running).toBe(true);
       expect(statusEnv.data.api.healthy).toBe(true);
       expect(statusEnv.data.api.base_url).toBe(`http://127.0.0.1:${port}${basePath}`);

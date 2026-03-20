@@ -7,6 +7,8 @@ import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { checkPluginServerHealth } from '../../lib/pluginServerHealth.js';
+import { currentExpectedPluginBuildInfo } from '../../lib/pluginBuildInfo.js';
+import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 import { CliError } from '../../services/Errors.js';
 import {
   PLUGIN_SERVER_DEFAULT_HOST,
@@ -28,9 +30,11 @@ export function getPluginStatus(params: {
   readonly explicitStateFilePath?: string | undefined;
 }): Effect.Effect<
   {
+    readonly runtime: import('../../lib/runtimeBuildInfo.js').RuntimeBuildInfo;
     readonly service: {
       readonly running: boolean;
       readonly pid: number | null;
+      readonly build: import('../../lib/runtimeBuildInfo.js').RuntimeBuildInfo | null;
       readonly pid_file: string;
       readonly log_file: string;
       readonly state_file: string;
@@ -43,8 +47,10 @@ export function getPluginStatus(params: {
       readonly host: string;
       readonly port: number;
       readonly dist_path: string;
+      readonly build: import('../../lib/runtimeBuildInfo.js').RuntimeBuildInfo | null;
       readonly error?: string | undefined;
     };
+    readonly warnings?: readonly string[] | undefined;
   },
   CliError,
   PluginServerFiles | Process
@@ -67,10 +73,30 @@ export function getPluginStatus(params: {
 
     const health = yield* checkPluginServerHealth(baseUrl, PLUGIN_SERVER_HEALTH_TIMEOUT_MS).pipe(Effect.either);
 
+    const runtime = currentRuntimeBuildInfo();
+    const serviceBuild = pidInfo?.build ?? state?.build ?? null;
+    const pluginBuild = state?.plugin_build ?? null;
+    const warnings: string[] = [];
+    if (serviceBuild && serviceBuild.build_id !== runtime.build_id) {
+      warnings.push(`plugin server process build mismatch: current=${runtime.build_id} live=${serviceBuild.build_id}`);
+    }
+    const expectedPluginBuild = currentExpectedPluginBuildInfo();
+    if (expectedPluginBuild && pluginBuild && pluginBuild.build_id !== expectedPluginBuild.build_id) {
+      warnings.push(`served plugin build mismatch: expected=${expectedPluginBuild.build_id} live=${pluginBuild.build_id}`);
+    }
+    if (running && !serviceBuild) {
+      warnings.push('plugin server pid/state metadata has no build info; restart plugin server to refresh runtime metadata');
+    }
+    if (running && !pluginBuild) {
+      warnings.push('served plugin artifact build info is unavailable; rebuild plugin artifacts and restart plugin server');
+    }
+
     return {
+      runtime,
       service: {
         running,
         pid: pid ?? null,
+        build: serviceBuild,
         pid_file: params.pidFilePath,
         log_file: pidInfo?.log_file ?? files.defaultLogFile(),
         state_file: effectiveStateFilePath,
@@ -83,8 +109,10 @@ export function getPluginStatus(params: {
         host,
         port,
         dist_path: state?.distPath ?? '',
+        build: pluginBuild,
         error: health._tag === 'Left' ? health.left.message : undefined,
       },
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   });
 }

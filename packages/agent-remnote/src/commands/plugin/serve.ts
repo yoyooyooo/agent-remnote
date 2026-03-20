@@ -4,12 +4,14 @@ import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
 import { resolvePluginDistPath } from '../../lib/pluginArtifacts.js';
+import { readPluginDistBuildInfo } from '../../lib/pluginBuildInfo.js';
 import { runPluginStaticRuntime } from '../../runtime/plugin-static/runPluginStaticRuntime.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { CliError, isCliError } from '../../services/Errors.js';
 import { Output } from '../../services/Output.js';
 import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 import { writeFailure } from '../_shared.js';
 import { pluginServerLocalBaseUrl } from './_shared.js';
 
@@ -53,6 +55,8 @@ export const pluginServeCommand = Command.make('serve', { host, port, stateFile 
             yield* files.writeStateFile(stateFilePath, {
               running: true,
               pid: process.pid,
+              build: currentRuntimeBuildInfo(),
+              plugin_build: readPluginDistBuildInfo(distPath) ?? undefined,
               host,
               port,
               startedAt: Date.now(),

@@ -6,9 +6,11 @@ import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
 import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import type { RuntimeBuildInfo } from '../lib/runtimeBuildInfo.js';
 
 export type ApiPidFile = {
   readonly pid: number;
+  readonly build?: RuntimeBuildInfo | undefined;
   readonly started_at?: number | undefined;
   readonly host?: string | undefined;
   readonly port?: number | undefined;
@@ -21,6 +23,7 @@ export type ApiPidFile = {
 export type ApiStateFile = {
   readonly running: boolean;
   readonly pid: number;
+  readonly build?: RuntimeBuildInfo | undefined;
   readonly host: string;
   readonly port: number;
   readonly basePath: string;

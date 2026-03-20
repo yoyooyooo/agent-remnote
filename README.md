@@ -346,8 +346,11 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
 | Read typed outline nodes                 | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
 | Query normalized recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
-| Create a Rem                             | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| Create a short child Rem                 | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| Promote markdown into a standalone page  | `agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today --wait`              |
+| Promote selected/known content           | `agent-remnote --json rem create --standalone --title "..." --target "<rem_id>" [--target "<rem_id>"] --wait`                                     |
 | Move a Rem                               | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
+| Promote a Rem and leave a portal         | `agent-remnote --json rem move --rem "<rem_id>" --standalone --is-document --leave-portal --wait`                                                |
 | Update Rem text                          | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
 | Tag a Rem                                | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
 | Un-tag a Rem                             | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
@@ -370,6 +373,34 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 Most write commands also support `--wait --timeout-ms <ms> --poll-ms <ms>` to close the loop in a single call. In wait-mode receipts, parse `id_map` first; wrapper-specific ids such as `rem_id` or `portal_rem_id` are secondary sugar derived from the same mapping.
 
 `rem delete` keeps the same CLI surface, but the plugin now defaults to a frontend-local `safeDeleteSubtree` strategy: small subtrees are deleted directly, while large trees are partitioned into threshold-bounded rooted subtrees before deletion. Use `--max-delete-subtree-nodes <n>` when you want to probe a different threshold without reloading the plugin.
+
+## Runtime Version Checks
+
+When local iteration gets confusing, use these first:
+
+```bash
+agent-remnote --json daemon status
+agent-remnote --json plugin status
+agent-remnote --json api status
+agent-remnote --json stack status
+agent-remnote --json doctor
+```
+
+What they now expose:
+
+- `runtime`: the current CLI/session build
+- `service.build`: the live daemon/api/plugin-server process build when available
+- `clients[].runtime` or `active_worker.runtime`: the live RemNote plugin build when connected
+- `warnings`: explicit mismatch hints when you are still talking to an old daemon/api/plugin
+- `doctor.queue.schema`: current and supported store schema versions
+
+If you still see old `build_id` values after code changes, restart the affected process:
+
+```bash
+agent-remnote --json daemon restart --wait 15000
+agent-remnote --json api restart
+agent-remnote --json plugin restart
+```
 
 ## Optional: tmux statusline (RN segment)
 

@@ -15,10 +15,10 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     op_type: 'create_rem',
     aliases: ['rem.create'],
     payload: {
-      required: ['parent_id'],
-      optional: ['text', 'tags', 'is_document', 'position', 'client_temp_id'],
+      required: [],
+      optional: ['parent_id', 'standalone', 'text', 'tags', 'is_document', 'position', 'client_temp_id'],
     },
-    description: 'Create a Rem (parent required).',
+    description: 'Create a Rem (either parent_id or standalone=true required).',
     id_fields: ['parent_id', 'tags[]'],
   },
 
@@ -55,8 +55,11 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
   move_rem: {
     op_type: 'move_rem',
     aliases: ['rem.move'],
-    payload: { required: ['rem_id', 'new_parent_id'], optional: ['position'] },
-    description: 'Move a Rem to a new parent.',
+    payload: {
+      required: ['rem_id'],
+      optional: ['new_parent_id', 'standalone', 'position', 'is_document', 'leave_portal'],
+    },
+    description: 'Move a Rem to a new parent or to standalone top-level placement.',
     id_fields: ['rem_id', 'new_parent_id'],
   },
 

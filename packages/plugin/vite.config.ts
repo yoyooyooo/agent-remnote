@@ -20,6 +20,30 @@ function walkFiles(dir: string): string[] {
   return results;
 }
 
+function packageInfo() {
+  const raw = readFileSync(path.resolve(__dirname, 'package.json'), 'utf8');
+  const parsed = JSON.parse(raw);
+  return {
+    name: typeof parsed?.name === 'string' ? parsed.name : '@remnote/plugin',
+    version: typeof parsed?.version === 'string' ? parsed.version : '0.0.0',
+  };
+}
+
+function maxMtime(paths: string[]): number {
+  let max = 0;
+  for (const target of paths) {
+    try {
+      const st = statSync(target);
+      if (st.isDirectory()) {
+        max = Math.max(max, ...walkFiles(target).map((file) => Math.floor(statSync(file).mtimeMs)));
+      } else {
+        max = Math.max(max, Math.floor(st.mtimeMs));
+      }
+    } catch {}
+  }
+  return max || Date.now();
+}
+
 function collectWidgetEntries() {
   const widgetsDir = path.resolve(__dirname, 'src/widgets');
   const files = walkFiles(widgetsDir).filter((f) => /\.[tj]sx?$/.test(f));
@@ -107,6 +131,20 @@ function emitReadmePlugin(): Plugin {
   };
 }
 
+function emitBuildInfoPlugin(buildInfo: Record<string, unknown>): Plugin {
+  return {
+    name: 'remnote-plugin-emit-build-info',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-info.json',
+        source: JSON.stringify(buildInfo, null, 2),
+      });
+    },
+  };
+}
+
 function duplicateSandboxCssPlugin(baseWidgetNames: string[]): Plugin {
   return {
     name: 'remnote-plugin-duplicate-sandbox-css',
@@ -171,15 +209,34 @@ const { inputs, widgetNames, widgetSource } = collectWidgetEntries();
 const baseWidgetNames = Array.from(
   new Set(widgetNames.map((n) => (n.endsWith(SANDBOX_SUFFIX) ? n.slice(0, -SANDBOX_SUFFIX.length) : n))),
 );
+const pkg = packageInfo();
+const sourceStamp = maxMtime([
+  path.resolve(__dirname, 'src'),
+  path.resolve(__dirname, 'package.json'),
+  path.resolve(__dirname, 'vite.config.ts'),
+]);
+const builtAt = Date.now();
+const buildInfo = {
+  name: pkg.name,
+  version: pkg.version,
+  build_id: `${pkg.version}:${String(sourceStamp)}`,
+  built_at: builtAt,
+  source_stamp: sourceStamp,
+  mode: 'dist',
+} as const;
 
 export default defineConfig({
   base: '',
+  define: {
+    __REMNOTE_PLUGIN_BUILD_INFO__: JSON.stringify(buildInfo),
+  },
   plugins: [
     react(),
     virtualWidgetEntriesPlugin(widgetSource),
     devEntryShimPlugin(widgetSource),
     injectImportMetaConstantPlugin(),
     emitReadmePlugin(),
+    emitBuildInfoPlugin(buildInfo),
     duplicateSandboxCssPlugin(baseWidgetNames),
   ],
   server: {

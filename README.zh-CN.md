@@ -346,8 +346,11 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
 | 读取 typed outline 节点            | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
 | 查询归一化 recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
-| 创建 Rem                           | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| 创建短子项 Rem                     | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
+| 把 Markdown 沉淀成独立 page       | `agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today --wait`              |
+| 提级已有内容到新 destination      | `agent-remnote --json rem create --standalone --title "..." --target "<rem_id>" [--target "<rem_id>"] --wait`                                     |
 | 移动 Rem                           | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
+| 提级单个 Rem 并原地留 portal      | `agent-remnote --json rem move --rem "<rem_id>" --standalone --is-document --leave-portal --wait`                                                |
 | 更新 Rem 文本                      | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
 | 给 Rem 加 Tag                      | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
 | 给 Rem 移除 Tag                    | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
@@ -370,6 +373,34 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 多数写入命令也支持 `--wait --timeout-ms <ms> --poll-ms <ms>`，用于一次调用闭环确认 txn 终态。进入 wait-mode 后，优先解析 `id_map`；`rem_id`、`portal_rem_id` 这类字段只是从同一映射派生出来的便捷字段。
 
 `rem delete` 的 CLI 形式没有变化，但插件侧现在默认走前端本地 `safeDeleteSubtree` 安全删除策略：小子树直接整棵删除，超阈值的大树会先切成多个阈值内的小子树再删。要试探不同阈值时，可以按次传 `--max-delete-subtree-nodes <n>`，不需要重新 reload 插件。
+
+## 运行版本排查
+
+本地持续迭代时，优先看这几条：
+
+```bash
+agent-remnote --json daemon status
+agent-remnote --json plugin status
+agent-remnote --json api status
+agent-remnote --json stack status
+agent-remnote --json doctor
+```
+
+现在这些输出会直接给出：
+
+- `runtime`：当前 CLI / 会话构建
+- `service.build`：当前 live daemon / api / plugin-server 进程构建
+- `clients[].runtime` 或 `active_worker.runtime`：当前 live RemNote 插件构建
+- `warnings`：当你连到旧 daemon / 旧 api / 旧 plugin 时的明确告警
+- `doctor.queue.schema`：当前 store schema 版本与支持版本
+
+如果改了代码但 `build_id` 还旧，直接重启对应进程：
+
+```bash
+agent-remnote --json daemon restart --wait 15000
+agent-remnote --json api restart
+agent-remnote --json plugin restart
+```
 
 ## 可选：tmux statusline（右下角 RN 段）
 

@@ -4,6 +4,7 @@ import type {
   WsBridgeKickConfig,
   WsBridgeServerInfo,
   WsClientCapabilities,
+  WsRuntimeInfo,
   WsClientSelection,
   WsClientUiContext,
   WsConnId,
@@ -40,6 +41,7 @@ export type WsBridgeCoreClientState = {
   remoteAddr?: string;
   userAgent?: string;
   readyState: number;
+  runtime?: WsRuntimeInfo;
   selection?: WsClientSelection;
   uiContext?: WsClientUiContext;
 };

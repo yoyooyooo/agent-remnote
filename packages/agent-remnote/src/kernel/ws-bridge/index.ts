@@ -7,6 +7,7 @@ export type {
   WsClientCapabilities,
   WsClientSelection,
   WsClientUiContext,
+  WsRuntimeInfo,
   WsConnId,
 } from './model.js';
 

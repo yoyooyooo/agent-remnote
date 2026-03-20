@@ -7,6 +7,7 @@ import { FsAccess } from '../services/FsAccess.js';
 import { Queue } from '../services/Queue.js';
 import { RemDb } from '../services/RemDb.js';
 import { WsClient } from '../services/WsClient.js';
+import { openStoreDb, readStoreSchemaStatus } from '../internal/store/index.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { WS_HEALTH_TIMEOUT_MS } from './ws/_shared.js';
 
@@ -32,6 +33,17 @@ export const doctorCommand = Command.make('doctor', {}, () =>
         return { has_search_index: hasSearchInfos && hasContents };
       })
       .pipe(Effect.either);
+    const schema = yield* Effect.try({
+      try: () => {
+        const db = openStoreDb(cfg.storeDb);
+        try {
+          return readStoreSchemaStatus(db);
+        } finally {
+          db.close();
+        }
+      },
+      catch: () => null as any,
+    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
     const wsHealth = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     const wsClients = yield* ws.queryClients({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
@@ -47,6 +59,7 @@ export const doctorCommand = Command.make('doctor', {}, () =>
       queue: {
         ok: queueStats._tag === 'Right',
         db_path: cfg.storeDb,
+        schema,
         writable: storeDbWritable.ok,
         writable_reason: storeDbWritable.reason,
         stats: queueStats._tag === 'Right' ? queueStats.right : undefined,
@@ -106,6 +119,9 @@ export const doctorCommand = Command.make('doctor', {}, () =>
       `- overall_ok: ${overallOk}`,
       `- queue_ok: ${data.queue.ok}`,
       `- store_db: ${data.queue.db_path}`,
+      `- store_schema_current_user_version: ${data.queue.schema?.current_user_version ?? ''}`,
+      `- store_schema_latest_supported_version: ${data.queue.schema?.latest_supported_version ?? ''}`,
+      `- store_schema_applied_migrations: ${data.queue.schema?.applied_migrations ?? ''}`,
       `- remnote_db_ok: ${data.remnote_db.ok}`,
       `- remnote_db: ${data.remnote_db.db_path ?? ''}`,
       `- remnote_db_resolution: ${data.remnote_db.resolution ?? ''}`,
