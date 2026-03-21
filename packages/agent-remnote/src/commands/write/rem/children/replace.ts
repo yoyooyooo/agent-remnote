@@ -12,9 +12,9 @@ import {
   ensureWaitArgs,
   extractReplaceBackupSummary,
   loadTxnDetail,
-  normalizeRemIdInput,
   readMarkdownArg,
   resolveCurrentSelectionRemId,
+  resolveSubjectRemId,
   submitActionEnvelope,
 } from './common.js';
 
@@ -25,7 +25,7 @@ function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
 export const writeRemChildrenReplaceCommand = Command.make(
   'replace',
   {
-    rem: Options.text('rem').pipe(Options.optional, Options.map(optionToUndefined)),
+    subject: Options.text('subject').pipe(Options.optional, Options.map(optionToUndefined)),
     selection: Options.boolean('selection'),
     stateFile: Options.text('state-file').pipe(Options.optional, Options.map(optionToUndefined)),
     staleMs: Options.integer('stale-ms').pipe(Options.optional, Options.map(optionToUndefined)),
@@ -48,7 +48,7 @@ export const writeRemChildrenReplaceCommand = Command.make(
     meta: writeCommonOptions.meta,
   },
   ({
-    rem,
+    subject,
     selection,
     stateFile,
     staleMs,
@@ -68,13 +68,13 @@ export const writeRemChildrenReplaceCommand = Command.make(
   }) =>
     Effect.gen(function* () {
       yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
-      const hasRem = typeof rem === 'string' && rem.trim().length > 0;
-      const targetCount = Number(hasRem) + Number(selection === true);
+      const hasSubject = typeof subject === 'string' && subject.trim().length > 0;
+      const targetCount = Number(hasSubject) + Number(selection === true);
       if (targetCount !== 1) {
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
-            message: 'Provide exactly one target via --rem or --selection',
+            message: 'Provide exactly one target via --subject or --selection',
             exitCode: 2,
           }),
         );
@@ -83,8 +83,8 @@ export const writeRemChildrenReplaceCommand = Command.make(
       const target = selection
         ? yield* resolveCurrentSelectionRemId({ stateFile, staleMs })
         : {
-            source: 'rem' as const,
-            rem_id: normalizeRemIdInput(String(rem)),
+            source: 'subject' as const,
+            rem_id: yield* resolveSubjectRemId(String(subject)),
           };
       const remId = target.rem_id;
       const markdownValue = yield* readMarkdownArg(markdown);

@@ -6,39 +6,24 @@ import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { Queue } from '../../../services/Queue.js';
-import { RefResolver } from '../../../services/RefResolver.js';
-import { tryParseRemnoteLink } from '../../../lib/remnote.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 import { makeTempId } from '../../_tempId.js';
-
-import { optionToUndefined, writeCommonOptions } from '../_shared.js';
-
-function normalizeRemIdInput(raw: string): string {
-  const trimmed = raw.trim();
-  const link = tryParseRemnoteLink(trimmed);
-  if (link?.remId) return link.remId;
-  return trimmed;
-}
-
-function looksLikeRef(raw: string): boolean {
-  const s = raw.trim();
-  if (!s) return false;
-  if (s.startsWith('remnote://') || s.startsWith('http://') || s.startsWith('https://')) return true;
-  const idx = s.indexOf(':');
-  if (idx <= 0) return false;
-  const prefix = s.slice(0, idx).trim().toLowerCase();
-  return prefix === 'id' || prefix === 'page' || prefix === 'title' || prefix === 'daily';
-}
+import { readOptionalText, writeCommonOptions } from '../_shared.js';
+import { parsePlacementSpec, resolveTreePlacementSpec } from '../_placementSpec.js';
+import { resolveRefValue } from '../_refValue.js';
 
 export const writePortalCreateCommand = Command.make(
   'create',
   {
-    parent: Options.text('parent'),
-    target: Options.text('target'),
-    position: Options.integer('position').pipe(Options.optional, Options.map(optionToUndefined)),
-    clientTempId: Options.text('client-temp-id').pipe(Options.optional, Options.map(optionToUndefined)),
+    to: Options.text('to').pipe(Options.withDescription('Target Rem that the portal should point to.')),
+    at: Options.text('at').pipe(
+      Options.withDescription(
+        'Examples: parent:id:P1, parent[2]:id:P1, before:id:R1, after:id:R1. standalone is invalid for portal placement.',
+      ),
+    ),
+    clientTempId: readOptionalText('client-temp-id'),
 
     notify: writeCommonOptions.notify,
     ensureDaemon: writeCommonOptions.ensureDaemon,
@@ -52,22 +37,7 @@ export const writePortalCreateCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({
-    parent,
-    target,
-    position,
-    clientTempId,
-    notify,
-    ensureDaemon,
-    wait,
-    timeoutMs,
-    pollMs,
-    dryRun,
-    priority,
-    clientId,
-    idempotencyKey,
-    meta,
-  }) =>
+  ({ to, at, clientTempId, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -87,53 +57,14 @@ export const writePortalCreateCommand = Command.make(
           }),
         );
       }
-      if (position !== undefined && (!Number.isFinite(position) || position < 0)) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: '--position must be a non-negative integer',
-            exitCode: 2,
-            details: { position },
-          }),
-        );
-      }
+
+      const placementSpec = yield* parsePlacementSpec(at, { optionName: '--at', allowStandalone: false });
+      const resolvedPlacement = yield* resolveTreePlacementSpec(placementSpec, { optionName: '--at' });
+      const targetRemId = yield* resolveRefValue(to);
 
       const cfg = yield* AppConfig;
-      const refs = yield* RefResolver;
       const payloadSvc = yield* Payload;
-
-      const parentIdInput = parent;
-      const targetIdInput = target;
-
-      const parentId =
-        looksLikeRef(parentIdInput) && !dryRun
-          ? yield* refs.resolve(parentIdInput)
-          : normalizeRemIdInput(parentIdInput);
-      const targetRemId =
-        looksLikeRef(targetIdInput) && !dryRun
-          ? yield* refs.resolve(targetIdInput)
-          : normalizeRemIdInput(targetIdInput);
-
-      if (!parentId) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'Missing --parent',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (!targetRemId) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'Missing --target',
-            exitCode: 2,
-          }),
-        );
-      }
-
-      const portalClientTempId = clientTempId ? String(clientTempId).trim() : makeTempId();
+      const portalClientTempId = clientTempId?.trim() || makeTempId();
 
       const op = yield* Effect.try({
         try: () =>
@@ -141,9 +72,9 @@ export const writePortalCreateCommand = Command.make(
             {
               type: 'create_portal',
               payload: {
-                parentId,
+                parentId: resolvedPlacement.parentId,
                 targetRemId,
-                ...(position !== undefined ? { position } : {}),
+                ...(resolvedPlacement.position !== undefined ? { position: resolvedPlacement.position } : {}),
                 clientTempId: portalClientTempId,
               },
             },
@@ -220,4 +151,4 @@ export const writePortalCreateCommand = Command.make(
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
-);
+).pipe(Command.withDescription('Create one portal relation by pointing at a target Rem and inserting the portal into the tree.'));

@@ -4,25 +4,18 @@ import * as Effect from 'effect/Effect';
 
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
-import { tryParseRemnoteLink } from '../../../lib/remnote.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 
 import { optionToUndefined, writeCommonOptions } from '../_shared.js';
-
-function normalizeRemIdInput(raw: string): string {
-  const trimmed = raw.trim();
-  const link = tryParseRemnoteLink(trimmed);
-  if (link?.remId) return link.remId;
-  return trimmed;
-}
+import { resolveRefValue } from '../_refValue.js';
 
 export const writeTagAddCommand = Command.make(
   'add',
   {
-    rem: Options.text('rem'),
-    tag: Options.text('tag'),
+    tag: Options.text('tag').pipe(Options.repeated, Options.withDescription('Tag endpoint. May be repeated.')),
+    to: Options.text('to').pipe(Options.repeated, Options.withDescription('Rem endpoint. May be repeated.')),
 
     notify: writeCommonOptions.notify,
     ensureDaemon: writeCommonOptions.ensureDaemon,
@@ -36,7 +29,7 @@ export const writeTagAddCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, tag, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({ tag, to, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -58,34 +51,47 @@ export const writeTagAddCommand = Command.make(
       }
 
       const payloadSvc = yield* Payload;
-      const remId = normalizeRemIdInput(rem);
-      const tagId = normalizeRemIdInput(tag);
+      if (tag.length === 0 || to.length === 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: 'tag add requires at least one --tag and at least one --to',
+            exitCode: 2,
+          }),
+        );
+      }
 
-      const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'add_tag', payload: { remId, tagId } }, payloadSvc.normalizeKeys),
-        catch: (e) =>
-          isCliError(e)
-            ? e
-            : new CliError({
-                code: 'INVALID_PAYLOAD',
-                message: 'Failed to generate op',
-                exitCode: 2,
-                details: { error: String((e as any)?.message || e) },
-              }),
-      });
+      const tagIds = yield* Effect.forEach(tag, (value) => resolveRefValue(value));
+      const remIds = yield* Effect.forEach(to, (value) => resolveRefValue(value));
+      const ops = yield* Effect.forEach(tagIds, (tagId) =>
+        Effect.forEach(remIds, (remId) =>
+          Effect.try({
+            try: () => normalizeOp({ type: 'add_tag', payload: { remId, tagId } }, payloadSvc.normalizeKeys),
+            catch: (e) =>
+              isCliError(e)
+                ? e
+                : new CliError({
+                    code: 'INVALID_PAYLOAD',
+                    message: 'Failed to generate op',
+                    exitCode: 2,
+                    details: { error: String((e as any)?.message || e) },
+                  }),
+          }),
+        ),
+      ).pipe(Effect.map((rows) => rows.flat()));
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
 
       if (dryRun) {
         yield* writeSuccess({
-          data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
-          md: `- dry_run: true\n- op: add_tag\n- rem_id: ${remId}\n- tag_id: ${tagId}\n`,
+          data: { dry_run: true, ops, meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
+          md: `- dry_run: true\n- op: add_tag\n- relations: ${ops.length}\n`,
         });
         return;
       }
 
       const data = yield* enqueueOps({
-        ops: [op],
+        ops,
         priority,
         clientId,
         idempotencyKey,
@@ -109,13 +115,13 @@ export const writeTagAddCommand = Command.make(
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
-);
+).pipe(Command.withDescription('Relation write. Repeated --tag and repeated --to expand as a cross-product, not pairwise.'));
 
 export const writeTagRemoveCommand = Command.make(
   'remove',
   {
-    rem: Options.text('rem'),
-    tag: Options.text('tag'),
+    tag: Options.text('tag').pipe(Options.repeated, Options.withDescription('Tag endpoint. May be repeated.')),
+    to: Options.text('to').pipe(Options.repeated, Options.withDescription('Rem endpoint. May be repeated.')),
     removeProperties: Options.boolean('remove-properties').pipe(Options.optional, Options.map(optionToUndefined)),
 
     notify: writeCommonOptions.notify,
@@ -131,8 +137,8 @@ export const writeTagRemoveCommand = Command.make(
     meta: writeCommonOptions.meta,
   },
   ({
-    rem,
     tag,
+    to,
     removeProperties,
     notify,
     ensureDaemon,
@@ -166,37 +172,50 @@ export const writeTagRemoveCommand = Command.make(
       }
 
       const payloadSvc = yield* Payload;
-      const remId = normalizeRemIdInput(rem);
-      const tagId = normalizeRemIdInput(tag);
+      if (tag.length === 0 || to.length === 0) {
+        return yield* Effect.fail(
+          new CliError({
+            code: 'INVALID_ARGS',
+            message: 'tag remove requires at least one --tag and at least one --to',
+            exitCode: 2,
+          }),
+        );
+      }
 
-      const payload: Record<string, unknown> = { remId, tagId };
-      if (removeProperties !== undefined) payload.removeProperties = removeProperties;
+      const tagIds = yield* Effect.forEach(tag, (value) => resolveRefValue(value));
+      const remIds = yield* Effect.forEach(to, (value) => resolveRefValue(value));
+      const ops = yield* Effect.forEach(tagIds, (tagId) =>
+        Effect.forEach(remIds, (remId) => {
+          const payload: Record<string, unknown> = { remId, tagId };
+          if (removeProperties !== undefined) payload.removeProperties = removeProperties;
 
-      const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'remove_tag', payload }, payloadSvc.normalizeKeys),
-        catch: (e) =>
-          isCliError(e)
-            ? e
-            : new CliError({
-                code: 'INVALID_PAYLOAD',
-                message: 'Failed to generate op',
-                exitCode: 2,
-                details: { error: String((e as any)?.message || e) },
-              }),
-      });
+          return Effect.try({
+            try: () => normalizeOp({ type: 'remove_tag', payload }, payloadSvc.normalizeKeys),
+            catch: (e) =>
+              isCliError(e)
+                ? e
+                : new CliError({
+                    code: 'INVALID_PAYLOAD',
+                    message: 'Failed to generate op',
+                    exitCode: 2,
+                    details: { error: String((e as any)?.message || e) },
+                  }),
+          });
+        }),
+      ).pipe(Effect.map((rows) => rows.flat()));
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
 
       if (dryRun) {
         yield* writeSuccess({
-          data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
-          md: `- dry_run: true\n- op: remove_tag\n- rem_id: ${remId}\n- tag_id: ${tagId}\n`,
+          data: { dry_run: true, ops, meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
+          md: `- dry_run: true\n- op: remove_tag\n- relations: ${ops.length}\n`,
         });
         return;
       }
 
       const data = yield* enqueueOps({
-        ops: [op],
+        ops,
         priority,
         clientId,
         idempotencyKey,
@@ -220,7 +239,7 @@ export const writeTagRemoveCommand = Command.make(
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
-);
+).pipe(Command.withDescription('Relation write. Repeated --tag and repeated --to expand as a cross-product, not pairwise.'));
 
 export const writeTagCommand = Command.make('tag', {}).pipe(
   Command.withSubcommands([writeTagAddCommand, writeTagRemoveCommand]),

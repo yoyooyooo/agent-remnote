@@ -1,6 +1,5 @@
 import * as Effect from 'effect/Effect';
 
-import { tryParseRemnoteLink } from '../../../../lib/remnote.js';
 import { trimBoundaryBlankLines } from '../../../../lib/text.js';
 import { collectSelectionCurrentUseCase, executeWriteApplyUseCase } from '../../../../lib/hostApiUseCases.js';
 import { AppConfig } from '../../../../services/AppConfig.js';
@@ -14,12 +13,16 @@ import { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
 import { readMarkdownTextFromInputSpec } from '../../../_shared.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../../../_applyEnvelope.js';
 import { RefResolver } from '../../../../services/RefResolver.js';
+import { normalizeRefValue, resolveRefValue } from '../../_refValue.js';
 
 export function normalizeRemIdInput(raw: string): string {
-  const trimmed = raw.trim();
-  const link = tryParseRemnoteLink(trimmed);
-  if (link?.remId) return link.remId;
-  return trimmed;
+  return normalizeRefValue(raw);
+}
+
+export function resolveSubjectRemId(
+  raw: string,
+): Effect.Effect<string, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+  return resolveRefValue(raw);
 }
 
 export function ensureWaitArgs(params: {

@@ -39,8 +39,8 @@
 - 解析 Powerup（只读）：`agent-remnote --json powerup resolve --powerup "Todo"`
 - 通过主写入面新增结构化数据：`agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - 把某个 Rem 标记为 Todo（安全写入）：`agent-remnote --json todo add --rem "<rem_id>" --wait`
-- 把信息集中到一个地方（安全写入）：`agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
-- 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
+- 把信息集中到一个地方（安全写入）：`agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md`
+- 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md`
 
 ## 安装（用户）
 
@@ -199,7 +199,7 @@ agent-remnote --json search --query "keyword" --timeout-ms 30000
 安全写入 + 进度查询：
 
 ```bash
-agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -210,7 +210,7 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ### 1) 研究总结 → 归档到 Reading 页面（Markdown 导入）
 
 ```bash
-agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
+agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -280,7 +280,7 @@ agent-remnote --json search --query "keyword" --timeout-ms 30000
 写入永远不直接落到 `remnote.db`，而是走队列并由插件通过官方 SDK 执行。
 
 ```bash
-agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -336,29 +336,29 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | 读取 UI 上下文（IDs）              | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
 | 解析今日 Daily Note 条目 ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
 | 解析指定日期 Daily Note 条目 ID    | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
-| 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
-| 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
-| 替换某个 Rem 的直接子级            | `agent-remnote --json rem replace --rem "page:..." --surface children --markdown @./note.md`                                                      |
+| 追加 Markdown 到某个 Rem 的子级    | `agent-remnote --json rem children append --subject "page:..." --markdown @./note.md`                                                            |
+| 顶部插入 Markdown 到某个 Rem 的子级 | `agent-remnote --json rem children prepend --subject "page:..." --markdown @./note.md`                                                           |
+| 替换某个 Rem 的直接子级            | `agent-remnote --json rem replace --subject "page:..." --surface children --markdown @./note.md`                                                 |
 | 就地替换当前选中的并列 Rem         | `agent-remnote --json rem replace --selection --surface self --markdown @./note.md`                                                                |
-| 清空某个 Rem 的直接子级            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
+| 清空某个 Rem 的直接子级            | `agent-remnote --json rem children clear --subject "<rem_id>" --wait`                                                                            |
 | 以内联 Markdown 写 Daily Note      | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | 从 stdin 写 Daily Note Markdown    | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
-| 创建 Portal（传送门）              | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| 创建 Portal（传送门）              | `agent-remnote --json portal create --to "id:<rem_id>" --at "parent:id:<parent_id>" --wait`                                                     |
 | 读取 typed outline 节点            | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
 | 查询归一化 recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
-| 创建短子项 Rem                     | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
-| 把 Markdown 沉淀成独立 page       | `agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today --wait`              |
-| 提级已有内容到新 destination      | `agent-remnote --json rem create --standalone --title "..." --target "<rem_id>" [--target "<rem_id>"] --wait`                                     |
-| 移动 Rem                           | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
-| 提级单个 Rem 并原地留 portal      | `agent-remnote --json rem move --rem "<rem_id>" --standalone --is-document --leave-portal --wait`                                                |
-| 更新 Rem 文本                      | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
-| 给 Rem 加 Tag                      | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
-| 给 Rem 移除 Tag                    | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
+| 创建短子项 Rem                     | `agent-remnote --json rem create --at "parent:id:<parent_id>" --text "..." --wait`                                                               |
+| 把 Markdown 沉淀成独立 page       | `agent-remnote --json rem create --at standalone --is-document --title "..." --markdown @./note.md --portal "at:parent:daily:today" --wait`     |
+| 提级已有内容到新 destination      | `agent-remnote --json rem create --at standalone --title "..." --from "id:<rem_id>" [--from "id:<rem_id>"] --wait`                              |
+| 移动 Rem                           | `agent-remnote --json rem move --subject "id:<rem_id>" --at "parent[0]:id:<parent_id>" --wait`                                                  |
+| 提级单个 Rem 并原地留 portal      | `agent-remnote --json rem move --subject "id:<rem_id>" --at standalone --is-document --portal in-place --wait`                                   |
+| 更新 Rem 文本                      | `agent-remnote --json rem set-text --subject "<rem_id>" --text "..." --wait`                                                                     |
+| 给 Rem 加 Tag                      | `agent-remnote --json tag add --tag "<tag_id>" --to "<rem_id>" [--to "<rem_id>"]`                                                              |
+| 给 Rem 移除 Tag                    | `agent-remnote --json tag remove --tag "<tag_id>" --to "<rem_id>" [--to "<rem_id>"]`                                                           |
 | Powerup schema（只读检查）         | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
 | Todo：标记完成                     | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
 | Table：创建表                      | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table：新增一行                    | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
-| 删除 Rem                           | `agent-remnote --json rem delete --rem "<rem_id>" [--max-delete-subtree-nodes 100]`                                                              |
+| 删除 Rem                           | `agent-remnote --json rem delete --subject "<rem_id>" [--max-delete-subtree-nodes 100]`                                                         |
 | 结构化多步写入                    | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | raw ops 入队（advanced）           | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
 | 列出 backup artifact               | `agent-remnote --json backup list`                                                                                                                |

@@ -2,33 +2,21 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
-import { AppConfig } from '../../../services/AppConfig.js';
-import { CliError, isCliError } from '../../../services/Errors.js';
+import { CliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
-import { Queue } from '../../../services/Queue.js';
-import { RefResolver } from '../../../services/RefResolver.js';
-import { tryParseRemnoteLink } from '../../../lib/remnote.js';
-import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../../lib/text.js';
-import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
-import { waitForTxn } from '../../_waitTxn.js';
-import { makeTempId } from '../../_tempId.js';
-
-import { optionToUndefined, writeCommonOptions } from '../_shared.js';
+import { readOptionalText, writeCommonOptions } from '../_shared.js';
 import {
   DURABLE_TARGET_ALIAS,
   PORTAL_REM_ALIAS,
   buildCreatePromotionActions,
-  isCreatePromotionMode,
   normalizeCreatePromotionIntent,
+  type NormalizedCreatePromotionIntent,
 } from './_promotion.js';
 import { dryRunEnvelope, ensureWaitArgs, loadTxnDetail, submitActionEnvelope } from './children/common.js';
 
-function normalizeRemIdInput(raw: string): string {
-  const trimmed = raw.trim();
-  const link = tryParseRemnoteLink(trimmed);
-  if (link?.remId) return link.remId;
-  return trimmed;
+function normalizeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function findRemoteId(idMap: unknown, clientTempId: string | undefined): string | undefined {
@@ -48,16 +36,44 @@ function parseResultJson(raw: any): any {
   return null;
 }
 
+function replaceStringRecursive(value: unknown, from: string, to: string): unknown {
+  if (typeof value === 'string') return value === from ? to : value;
+  if (Array.isArray(value)) return value.map((item) => replaceStringRecursive(item, from, to));
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    out[key] = replaceStringRecursive(entry, from, to);
+  }
+  return out;
+}
+
+function remapDurableTargetTempId(params: {
+  readonly compiled: { readonly kind: string; readonly ops: unknown; readonly aliasMap?: unknown };
+  readonly nextTempId?: string | undefined;
+}): { readonly kind: string; readonly ops: unknown; readonly aliasMap?: unknown } {
+  const nextTempId = normalizeString(params.nextTempId);
+  if (!nextTempId || !params.compiled.aliasMap || typeof params.compiled.aliasMap !== 'object') return params.compiled;
+
+  const aliasMap = params.compiled.aliasMap as Record<string, string>;
+  const current = normalizeString(aliasMap[DURABLE_TARGET_ALIAS]);
+  if (!current || current === nextTempId) return params.compiled;
+
+  return {
+    kind: params.compiled.kind,
+    ops: replaceStringRecursive(params.compiled.ops, current, nextTempId),
+    aliasMap: {
+      ...aliasMap,
+      [DURABLE_TARGET_ALIAS]: nextTempId,
+    },
+  };
+}
+
 function buildPartialCreateReceipt(params: {
   readonly txnId: string;
   readonly detail: any;
   readonly remClientTempId?: string;
   readonly portalClientTempId?: string;
-  readonly intent: {
-    readonly isDocument: boolean;
-    readonly contentPlacement: { readonly kind: string };
-    readonly portalPlacement: { readonly kind: string };
-  };
+  readonly intent: NormalizedCreatePromotionIntent;
 }): any | undefined {
   const idMap = Array.isArray(params.detail?.id_map) ? params.detail.id_map : [];
   const remId = findRemoteId(idMap, params.remClientTempId);
@@ -91,15 +107,8 @@ function buildPartialCreateReceipt(params: {
       placement_kind: params.intent.contentPlacement.kind,
     },
     source_context: {
-      source_kind:
-        params.intent.portalPlacement.kind === 'in_place_selection_range'
-          ? 'targets'
-          : params.intent.contentPlacement.kind === 'standalone'
-            ? 'markdown'
-            : 'markdown',
-      ...(params.intent.portalPlacement.kind === 'in_place_selection_range'
-        ? { source_origin: 'selection' }
-        : {}),
+      source_kind: params.intent.source.kind,
+      ...(params.intent.source.kind === 'targets' ? { source_origin: params.intent.source.sourceOrigin } : {}),
     },
     portal: {
       requested: params.intent.portalPlacement.kind !== 'none',
@@ -112,41 +121,32 @@ function buildPartialCreateReceipt(params: {
   };
 }
 
-function normalizeString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 const tag = Options.text('tag').pipe(Options.repeated);
-const title = Options.text('title').pipe(Options.optional, Options.map(optionToUndefined));
-const markdown = Options.text('markdown').pipe(Options.optional, Options.map(optionToUndefined));
-const target = Options.text('target').pipe(Options.repeated);
-const before = Options.text('before').pipe(Options.optional, Options.map(optionToUndefined));
-const after = Options.text('after').pipe(Options.optional, Options.map(optionToUndefined));
-const portalParent = Options.text('portal-parent').pipe(Options.optional, Options.map(optionToUndefined));
-const portalBefore = Options.text('portal-before').pipe(Options.optional, Options.map(optionToUndefined));
-const portalAfter = Options.text('portal-after').pipe(Options.optional, Options.map(optionToUndefined));
 
 export const writeRemCreateCommand = Command.make(
   'create',
   {
-    parent: Options.text('parent').pipe(Options.optional, Options.map(optionToUndefined)),
-    ref: Options.text('ref').pipe(Options.optional, Options.map(optionToUndefined)),
-    title,
-    text: Options.text('text').pipe(Options.optional, Options.map(optionToUndefined)),
-    markdown,
-    target,
-    fromSelection: Options.boolean('from-selection'),
-    before,
-    after,
-    standalone: Options.boolean('standalone'),
-    portalParent,
-    portalBefore,
-    portalAfter,
-    leavePortalInPlace: Options.boolean('leave-portal-in-place'),
+    at: Options.text('at').pipe(
+      Options.withDescription('Examples: standalone, parent:id:P1, parent[2]:id:P1, before:id:R1, after:id:R1.'),
+    ),
+    title: readOptionalText('title'),
+    text: readOptionalText('text'),
+    markdown: readOptionalText('markdown'),
+    from: Options.text('from').pipe(
+      Options.repeated,
+      Options.withDescription(
+        'Advanced path: combine repeated --from with --portal in-place only for one contiguous sibling range under one parent.',
+      ),
+    ),
+    fromSelection: Options.boolean('from-selection').pipe(
+      Options.withDescription('Preferred default for --portal in-place when the current UI selection already matches the intended source range.'),
+    ),
+    portal: readOptionalText('portal').pipe(
+      Options.withDescription('Use in-place for original-slot backfill, or at:<placement-spec> for explicit portal placement.'),
+    ),
     isDocument: Options.boolean('is-document'),
     tag,
-    position: Options.integer('position').pipe(Options.optional, Options.map(optionToUndefined)),
-    clientTempId: Options.text('client-temp-id').pipe(Options.optional, Options.map(optionToUndefined)),
+    clientTempId: readOptionalText('client-temp-id'),
     forceText: Options.boolean('force-text'),
 
     notify: writeCommonOptions.notify,
@@ -162,23 +162,15 @@ export const writeRemCreateCommand = Command.make(
     meta: writeCommonOptions.meta,
   },
   ({
-    parent,
-    ref,
+    at,
     title,
     text,
     markdown,
-    target,
+    from,
     fromSelection,
-    before,
-    after,
-    standalone,
-    portalParent,
-    portalBefore,
-    portalAfter,
-    leavePortalInPlace,
+    portal,
     isDocument,
     tag,
-    position,
     clientTempId,
     forceText,
     notify,
@@ -193,345 +185,158 @@ export const writeRemCreateCommand = Command.make(
     meta,
   }) =>
     Effect.gen(function* () {
-      if (
-        isCreatePromotionMode({
-          parent,
-          ref,
-          before,
-          after,
-          standalone,
-          text,
-          markdown,
-          target,
-          fromSelection,
-          title,
-          isDocument,
-          tag,
-          position,
-          forceText,
-          portalParent,
-          portalBefore,
-          portalAfter,
-          leavePortalInPlace,
-        })
-      ) {
-        yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
+      yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
 
-        const payloadSvc = yield* Payload;
-        const intent = yield* normalizeCreatePromotionIntent({
-          parent,
-          ref,
-          before,
-          after,
-          standalone,
-          text,
-          markdown,
-          target,
-          fromSelection,
-          title,
-          isDocument,
-          tag,
-          position,
-          forceText,
-          portalParent,
-          portalBefore,
-          portalAfter,
-          leavePortalInPlace,
-        });
-        const actions = yield* buildCreatePromotionActions(intent);
-        const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
-        const body: Record<string, unknown> = {
-          version: 1,
-          kind: 'actions',
-          actions,
-          ...(priority !== undefined ? { priority } : {}),
-          ...(clientId ? { client_id: clientId } : {}),
-          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-          ...(metaValue !== undefined ? { meta: metaValue } : {}),
-          notify,
-          ensure_daemon: ensureDaemon,
-        };
-        const compiled = yield* dryRunEnvelope(body);
-        const aliasMap =
-          compiled.aliasMap && typeof compiled.aliasMap === 'object'
-            ? (compiled.aliasMap as Record<string, string>)
-            : undefined;
-        const remClientTempId = aliasMap?.[DURABLE_TARGET_ALIAS];
-        const portalClientTempId = aliasMap?.[PORTAL_REM_ALIAS];
-
-        if (dryRun) {
-          yield* writeSuccess({
-            data: {
-              dry_run: true,
-              kind: compiled.kind,
-              rem_client_temp_id: remClientTempId,
-              portal_client_temp_id: aliasMap?.[PORTAL_REM_ALIAS],
-              ops: compiled.ops,
-              alias_map: aliasMap,
-              meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
-            },
-            md: [
-              '- dry_run: true',
-              '- kind: actions',
-              ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
-            ].join('\n'),
-          });
-          return;
-        }
-
-        const submitBody: Record<string, unknown> = {
-          version: 1,
-          kind: 'ops',
-          ops: compiled.ops,
-          ...(priority !== undefined ? { priority } : {}),
-          ...(clientId ? { client_id: clientId } : {}),
-          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-          ...(metaValue !== undefined ? { meta: metaValue } : {}),
-          notify,
-          ensure_daemon: ensureDaemon,
-        };
-
-        const submitted = yield* submitActionEnvelope({
-          body: submitBody,
-          wait,
-          timeoutMs,
-          pollMs,
-        }).pipe(Effect.either);
-
-        if (submitted._tag === 'Left') {
-          const txnId = String((submitted.left as any)?.details?.txn_id ?? '').trim();
-          if (wait && txnId) {
-            const detail = yield* loadTxnDetail({ txnId }).pipe(Effect.catchAll(() => Effect.succeed(null)));
-            const partial = detail
-              ? buildPartialCreateReceipt({
-                  txnId,
-                  detail,
-                  remClientTempId,
-                  portalClientTempId,
-                  intent,
-                })
-              : undefined;
-
-            if (partial) {
-              yield* writeSuccess({
-                data: partial,
-                ids: [txnId, ...(Array.isArray(partial.op_ids) ? partial.op_ids : [])],
-                md: [
-                  `- txn_id: ${txnId}`,
-                  `- status: partial_success`,
-                  ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
-                  ...(portalClientTempId ? [`- portal_client_temp_id: ${portalClientTempId}`] : []),
-                ].join('\n'),
-              });
-              return;
-            }
-          }
-
-          return yield* Effect.fail(submitted.left);
-        }
-
-        const out = submitted.right;
-        const remId = findRemoteId((out as any)?.id_map, remClientTempId);
-        const portalRemId = findRemoteId((out as any)?.id_map, portalClientTempId);
-
-        const enriched = {
-          ...(out as any),
-          rem_client_temp_id: remClientTempId,
-          ...(portalClientTempId ? { portal_client_temp_id: portalClientTempId } : {}),
-          ...(remId ? { rem_id: remId } : {}),
-          ...(portalRemId ? { portal_rem_id: portalRemId } : {}),
-          ...(remId
-            ? {
-                durable_target: {
-                  rem_id: remId,
-                  is_document: intent.isDocument,
-                  placement_kind: intent.contentPlacement.kind,
-                },
-              }
-            : {}),
-          source_context: {
-            source_kind: intent.source.kind,
-            ...(intent.source.kind === 'targets' ? { source_origin: intent.source.sourceOrigin } : {}),
-          },
-          portal: {
-            requested: intent.portalPlacement.kind !== 'none',
-            created: Boolean(portalRemId),
-            ...(portalRemId ? { rem_id: portalRemId } : {}),
-            ...(intent.portalPlacement.kind !== 'none' ? { placement_kind: intent.portalPlacement.kind } : {}),
-          },
-        };
-
-        yield* writeSuccess({
-          data: enriched,
-          ids: Array.isArray((out as any)?.op_ids) ? [(out as any).txn_id, ...(out as any).op_ids] : [(out as any).txn_id],
-          md: [
-            `- txn_id: ${(out as any).txn_id}`,
-            `- op_ids: ${Array.isArray((out as any).op_ids) ? (out as any).op_ids.length : ''}`,
-            `- notified: ${(out as any).notified}`,
-            `- sent: ${(out as any).sent ?? ''}`,
-            ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
-            ...(portalClientTempId ? [`- portal_client_temp_id: ${portalClientTempId}`] : []),
-            ...((out as any).status ? [`- status: ${(out as any).status}`, `- elapsed_ms: ${(out as any).elapsed_ms ?? ''}`] : []),
-          ].join('\n'),
-        });
-        return;
-      }
-
-      if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'Use --wait to enable --timeout-ms/--poll-ms',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (dryRun && wait) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: '--wait is not compatible with --dry-run',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (parent && ref) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'Choose only one of --parent or --ref',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (!parent && !ref) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'You must provide --parent or --ref',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (position !== undefined && (!Number.isFinite(position) || position < 0)) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: '--position must be a non-negative integer',
-            exitCode: 2,
-            details: { position },
-          }),
-        );
-      }
-
-      const cfg = yield* AppConfig;
-      const refs = yield* RefResolver;
       const payloadSvc = yield* Payload;
-
-      const resolvedRef = ref ?? '';
-      const parentId =
-        typeof parent === 'string'
-          ? normalizeRemIdInput(parent)
-          : dryRun
-            ? normalizeRemIdInput(resolvedRef)
-            : yield* refs.resolve(resolvedRef);
-
-      const tags = Array.isArray(tag) ? tag.map(normalizeRemIdInput).filter(Boolean) : [];
-
-      const remClientTempId = clientTempId ? String(clientTempId).trim() : makeTempId();
-      const textValue = text !== undefined ? trimBoundaryBlankLines(text) : undefined;
-
-      if (textValue && !forceText && looksLikeStructuredMarkdown(textValue)) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message:
-              'Input passed to --text looks like structured Markdown. Use rem children append --rem <parentRemId> --markdown ... instead, or pass --force-text to keep it literal.',
-            exitCode: 2,
-          }),
-        );
-      }
-
-      const payload: Record<string, unknown> = {
-        parentId,
-        clientTempId: remClientTempId,
-      };
-      if (textValue !== undefined) payload.text = textValue;
-      if (isDocument) payload.isDocument = true;
-      if (tags.length > 0) payload.tags = tags;
-      if (position !== undefined) payload.position = position;
-
-      const op = yield* Effect.try({
-        try: () => normalizeOp({ type: 'create_rem', payload }, payloadSvc.normalizeKeys),
-        catch: (e) =>
-          isCliError(e)
-            ? e
-            : new CliError({
-                code: 'INVALID_PAYLOAD',
-                message: 'Failed to generate op',
-                exitCode: 2,
-                details: { error: String((e as any)?.message || e) },
-              }),
+      const intent = yield* normalizeCreatePromotionIntent({
+        at,
+        text,
+        markdown,
+        from,
+        fromSelection,
+        title,
+        isDocument,
+        tag,
+        forceText,
+        portal,
       });
-
+      const actions = yield* buildCreatePromotionActions(intent);
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
+      const body: Record<string, unknown> = {
+        version: 1,
+        kind: 'actions',
+        actions,
+        ...(priority !== undefined ? { priority } : {}),
+        ...(clientId ? { client_id: clientId } : {}),
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        ...(metaValue !== undefined ? { meta: metaValue } : {}),
+        notify,
+        ensure_daemon: ensureDaemon,
+      };
+
+      const compiledBase = yield* dryRunEnvelope(body);
+      const compiled = remapDurableTargetTempId({ compiled: compiledBase, nextTempId: clientTempId });
+      const aliasMap =
+        compiled.aliasMap && typeof compiled.aliasMap === 'object'
+          ? (compiled.aliasMap as Record<string, string>)
+          : undefined;
+      const remClientTempId = aliasMap?.[DURABLE_TARGET_ALIAS];
+      const portalClientTempId = aliasMap?.[PORTAL_REM_ALIAS];
 
       if (dryRun) {
         yield* writeSuccess({
           data: {
             dry_run: true,
+            kind: compiled.kind,
             rem_client_temp_id: remClientTempId,
-            ops: [op],
+            ...(portalClientTempId ? { portal_client_temp_id: portalClientTempId } : {}),
+            ops: compiled.ops,
+            alias_map: aliasMap,
             meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined,
           },
-          md: `- dry_run: true\n- op: create_rem\n- rem_client_temp_id: ${remClientTempId}\n`,
+          md: [
+            '- dry_run: true',
+            '- kind: actions',
+            ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
+          ].join('\n'),
         });
         return;
       }
 
-      const data = yield* enqueueOps({
-        ops: [op],
-        priority,
-        clientId,
-        idempotencyKey,
-        meta: metaValue,
+      const submitBody: Record<string, unknown> = {
+        version: 1,
+        kind: 'ops',
+        ops: compiled.ops,
+        ...(priority !== undefined ? { priority } : {}),
+        ...(clientId ? { client_id: clientId } : {}),
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        ...(metaValue !== undefined ? { meta: metaValue } : {}),
         notify,
-        ensureDaemon,
-      });
+        ensure_daemon: ensureDaemon,
+      };
 
-      const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
-      const queue = yield* Queue;
-      const created =
-        waited && (waited as any).is_success === true
-          ? yield* Effect.gen(function* () {
-              let idMap = Array.isArray((waited as any)?.id_map) ? ((waited as any).id_map as any[]) : [];
-              if (idMap.length === 0) {
-                const inspected = yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
-                  Effect.catchAll(() => Effect.succeed({ id_map: [] } as any)),
-                );
-                idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-              }
-              const match = idMap.find((r) => String(r?.client_temp_id ?? '') === remClientTempId);
-              const remoteId = match?.remote_id ? String(match.remote_id) : '';
-              return remoteId ? { rem_id: remoteId, id_map: idMap } : { id_map: idMap };
-            })
-          : {};
+      const submitted = yield* submitActionEnvelope({
+        body: submitBody,
+        wait,
+        timeoutMs,
+        pollMs,
+      }).pipe(Effect.either);
 
-      const legacyOut = waited
-        ? ({ ...data, ...waited, rem_client_temp_id: remClientTempId, ...created } as any)
-        : ({ ...data, rem_client_temp_id: remClientTempId } as any);
+      if (submitted._tag === 'Left') {
+        const txnId = String((submitted.left as any)?.details?.txn_id ?? '').trim();
+        if (wait && txnId) {
+          const detail = yield* loadTxnDetail({ txnId }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+          const partial = detail
+            ? buildPartialCreateReceipt({
+                txnId,
+                detail,
+                remClientTempId,
+                portalClientTempId,
+                intent,
+              })
+            : undefined;
+
+          if (partial) {
+            yield* writeSuccess({
+              data: partial,
+              ids: [txnId, ...(Array.isArray(partial.op_ids) ? partial.op_ids : [])],
+              md: [
+                `- txn_id: ${txnId}`,
+                '- status: partial_success',
+                ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
+                ...(portalClientTempId ? [`- portal_client_temp_id: ${portalClientTempId}`] : []),
+              ].join('\n'),
+            });
+            return;
+          }
+        }
+
+        return yield* Effect.fail(submitted.left);
+      }
+
+      const out = submitted.right;
+      const remId = findRemoteId((out as any)?.id_map, remClientTempId);
+      const portalRemId = findRemoteId((out as any)?.id_map, portalClientTempId);
+
+      const enriched = {
+        ...(out as any),
+        rem_client_temp_id: remClientTempId,
+        ...(portalClientTempId ? { portal_client_temp_id: portalClientTempId } : {}),
+        ...(remId ? { rem_id: remId } : {}),
+        ...(portalRemId ? { portal_rem_id: portalRemId } : {}),
+        ...(remId
+          ? {
+              durable_target: {
+                rem_id: remId,
+                is_document: intent.isDocument,
+                placement_kind: intent.contentPlacement.kind,
+              },
+            }
+          : {}),
+        source_context: {
+          source_kind: intent.source.kind,
+          ...(intent.source.kind === 'targets' ? { source_origin: intent.source.sourceOrigin } : {}),
+        },
+        portal: {
+          requested: intent.portalPlacement.kind !== 'none',
+          created: Boolean(portalRemId),
+          ...(portalRemId ? { rem_id: portalRemId } : {}),
+          ...(intent.portalPlacement.kind !== 'none' ? { placement_kind: intent.portalPlacement.kind } : {}),
+        },
+      };
 
       yield* writeSuccess({
-        data: legacyOut,
-        ids: [data.txn_id, ...data.op_ids],
+        data: enriched,
+        ids: Array.isArray((out as any)?.op_ids) ? [(out as any).txn_id, ...(out as any).op_ids] : [(out as any).txn_id],
         md: [
-          `- txn_id: ${data.txn_id}`,
-          `- op_ids: ${data.op_ids.length}`,
-          `- notified: ${data.notified}`,
-          `- sent: ${data.sent ?? ''}`,
-          `- rem_client_temp_id: ${remClientTempId}`,
-          ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          `- txn_id: ${(out as any).txn_id}`,
+          `- op_ids: ${Array.isArray((out as any).op_ids) ? (out as any).op_ids.length : ''}`,
+          `- notified: ${(out as any).notified}`,
+          `- sent: ${(out as any).sent ?? ''}`,
+          ...(remClientTempId ? [`- rem_client_temp_id: ${remClientTempId}`] : []),
+          ...(portalClientTempId ? [`- portal_client_temp_id: ${portalClientTempId}`] : []),
+          ...((out as any).status ? [`- status: ${(out as any).status}`, `- elapsed_ms: ${(out as any).elapsed_ms ?? ''}`] : []),
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),
-);
+).pipe(Command.withDescription('Create a new durable subject from text, markdown, explicit refs, or the current selection.'));

@@ -40,7 +40,7 @@ describe('cli contract: markdown input spec', () => {
     try {
       await fs.writeFile(notePath, '- root\n  - child\n', 'utf8');
 
-      const res = await runCli(['--json', 'rem', 'children', 'append', '--rem', 'RID-1', '--markdown', `@${notePath}`, '--dry-run'], {
+      const res = await runCli(['--json', 'rem', 'children', 'append', '--subject', 'RID-1', '--markdown', `@${notePath}`, '--dry-run'], {
         timeoutMs: 15_000,
       });
 
@@ -56,7 +56,7 @@ describe('cli contract: markdown input spec', () => {
   });
 
   it('accepts stdin for rem children append', async () => {
-    const res = await runCli(['--json', 'rem', 'children', 'append', '--rem', 'RID-1', '--markdown', '-', '--dry-run'], {
+    const res = await runCli(['--json', 'rem', 'children', 'append', '--subject', 'RID-1', '--markdown', '-', '--dry-run'], {
       timeoutMs: 15_000,
       stdin: '\n- root\n  - child\n',
     });

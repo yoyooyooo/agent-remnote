@@ -4,7 +4,7 @@ import { runCli } from '../helpers/runCli.js';
 
 describe('cli contract: rem set-text trims boundary blank lines', () => {
   it('removes leading/trailing blank lines from payload.text (dry-run)', async () => {
-    const res = await runCli(['--json', 'rem', 'set-text', '--rem', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'], {
+    const res = await runCli(['--json', 'rem', 'set-text', '--subject', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'], {
       env: { REMNOTE_TMUX_REFRESH: '0' },
       timeoutMs: 15_000,
     });
@@ -20,7 +20,7 @@ describe('cli contract: rem set-text trims boundary blank lines', () => {
   });
 
   it('rejects rem text alias and keeps only rem set-text', async () => {
-    const res = await runCli(['--json', 'rem', 'text', '--rem', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'], {
+    const res = await runCli(['--json', 'rem', 'text', '--subject', 'REM_ID', '--text', '\n\nhello\n\n', '--dry-run'], {
       env: { REMNOTE_TMUX_REFRESH: '0' },
       timeoutMs: 15_000,
     });
@@ -35,7 +35,7 @@ describe('cli contract: rem set-text trims boundary blank lines', () => {
 
   it('fails fast in remote mode because rem set-text is local-only', async () => {
     const res = await runCli(
-      ['--json', '--api-base-url', 'http://127.0.0.1:9', 'rem', 'set-text', '--rem', 'REM_ID', '--text', 'hello'],
+      ['--json', '--api-base-url', 'http://127.0.0.1:9', 'rem', 'set-text', '--subject', 'REM_ID', '--text', 'hello'],
       {
         timeoutMs: 15_000,
       },

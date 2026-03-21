@@ -9,8 +9,8 @@ function parseJsonLine(text: string): any {
 }
 
 describe('cli contract: write tag/rem', () => {
-  it('write tag add --dry-run --json emits add_tag op (snake_case payload)', async () => {
-    const res = await runCli(['--json', 'tag', 'add', '--rem', 'r1', '--tag', 't1', '--dry-run']);
+  it('write tag add --dry-run --json emits add_tag op from relation args', async () => {
+    const res = await runCli(['--json', 'tag', 'add', '--tag', 't1', '--to', 'r1', '--dry-run']);
 
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');
@@ -23,11 +23,41 @@ describe('cli contract: write tag/rem', () => {
     expect(env.data.ops[0].payload.tag_id).toBe('t1');
   });
 
+  it('write tag add cross-products repeated --tag and repeated --to', async () => {
+    const res = await runCli([
+      '--json',
+      'tag',
+      'add',
+      '--tag',
+      't1',
+      '--tag',
+      't2',
+      '--to',
+      'r1',
+      '--to',
+      'r2',
+      '--dry-run',
+    ]);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const env = parseJsonLine(res.stdout);
+    expect(env.ok).toBe(true);
+    expect(env.data?.dry_run).toBe(true);
+    expect(env.data.ops).toEqual([
+      { type: 'add_tag', payload: { rem_id: 'r1', tag_id: 't1' } },
+      { type: 'add_tag', payload: { rem_id: 'r2', tag_id: 't1' } },
+      { type: 'add_tag', payload: { rem_id: 'r1', tag_id: 't2' } },
+      { type: 'add_tag', payload: { rem_id: 'r2', tag_id: 't2' } },
+    ]);
+  });
+
   it('write rem tag add --dry-run --json matches write tag add (including deeplink parsing)', async () => {
     const remLink = 'remnote://w/ws1/r1';
     const tagLink = 'remnote://w/ws1/t1';
-    const tagRes = await runCli(['--json', 'tag', 'add', '--rem', remLink, '--tag', tagLink, '--dry-run']);
-    const remRes = await runCli(['--json', 'rem', 'tag', 'add', '--rem', remLink, '--tag', tagLink, '--dry-run']);
+    const tagRes = await runCli(['--json', 'tag', 'add', '--tag', tagLink, '--to', remLink, '--dry-run']);
+    const remRes = await runCli(['--json', 'rem', 'tag', 'add', '--tag', tagLink, '--to', remLink, '--dry-run']);
 
     expect(tagRes.exitCode).toBe(0);
     expect(tagRes.stderr).toBe('');
@@ -53,10 +83,10 @@ describe('cli contract: write tag/rem', () => {
       '--json',
       'tag',
       'remove',
-      '--rem',
-      'r1',
       '--tag',
       't1',
+      '--to',
+      'r1',
       '--remove-properties',
       '--dry-run',
     ]);
@@ -78,10 +108,10 @@ describe('cli contract: write tag/rem', () => {
       '--json',
       'tag',
       'remove',
-      '--rem',
-      'r1',
       '--tag',
       't1',
+      '--to',
+      'r1',
       '--remove-properties',
       '--dry-run',
     ]);
@@ -91,10 +121,10 @@ describe('cli contract: write tag/rem', () => {
       'rem',
       'tag',
       'remove',
-      '--rem',
-      'r1',
       '--tag',
       't1',
+      '--to',
+      'r1',
       '--remove-properties',
       '--dry-run',
     ]);
@@ -120,7 +150,7 @@ describe('cli contract: write tag/rem', () => {
   });
 
   it('write rem delete --dry-run --json emits delete_rem op', async () => {
-    const res = await runCli(['--json', 'rem', 'delete', '--rem', 'r1', '--dry-run']);
+    const res = await runCli(['--json', 'rem', 'delete', '--subject', 'r1', '--dry-run']);
 
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');
@@ -137,7 +167,7 @@ describe('cli contract: write tag/rem', () => {
       '--json',
       'rem',
       'delete',
-      '--rem',
+      '--subject',
       'r1',
       '--max-delete-subtree-nodes',
       '77',
@@ -160,7 +190,7 @@ describe('cli contract: write tag/rem', () => {
       '--json',
       'rem',
       'delete',
-      '--rem',
+      '--subject',
       'r1',
       '--max-delete-subtree-nodes',
       '0',

@@ -11,4 +11,5 @@
 4. Host API 契约：`docs/ssot/agent-remnote/http-api-contract.md`
 5. UI 上下文与持久化：`docs/ssot/agent-remnote/ui-context-and-persistence.md`
 6. 写入工具语义：`docs/ssot/agent-remnote/tools-write.md`
-7. SQLite 性能排查与优化：`docs/ssot/agent-remnote/performance-sqlite.md`
+7. 写入输入面矩阵：`docs/ssot/agent-remnote/write-input-surfaces.md`
+8. SQLite 性能排查与优化：`docs/ssot/agent-remnote/performance-sqlite.md`

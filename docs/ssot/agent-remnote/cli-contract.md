@@ -82,7 +82,7 @@ export type JsonEnvelope =
 
 - `rem` 下的规范化替换命令族
 - 目标选择器：
-  - 可重复的 `--rem`
+  - 可重复的 `--subject`
   - `--selection`
 - replace surface：
   - `--surface children`
@@ -97,33 +97,40 @@ export type JsonEnvelope =
 - `rem create` 的 source model 固定为四选一：
   - `--text`
   - `--markdown`
-  - repeated `--target`
+  - repeated `--from`
   - `--from-selection`
-- `--from-selection` 只是 `targets[]` 的 sugar，不能与 `--text` / `--markdown` / explicit `--target` 混用
-- 内容位置固定为四选一：
-  - `--parent` / `--ref`
-  - `--before`
-  - `--after`
-  - `--standalone`
-- portal 位置最多一组：
-  - `--portal-parent`
-  - `--portal-before`
-  - `--portal-after`
-  - `--leave-portal`
-  - `--leave-portal-in-place`
+- `--from-selection` 只是 `from[]` 的 sugar，不能与 `--text` / `--markdown` / explicit `--from` 混用
+- 显式主体统一为 `--subject`
+- 关系目标统一为 `--to`
+- 内容位置统一为 `--at <placement-spec>`
+- portal 策略统一为 `--portal in-place | at:<placement-spec>`
 - `--is-document` 始终显式，默认 `false`
 - `rem create --markdown` 必须带 `--title`
-- repeated `--target` 多个 source 时必须带 `--title`
-- 单个 `--target` 与单个 `--from-selection` 允许从 source 标题推断 destination title
-- `--before` / `--after` 与 `--portal-before` / `--portal-after` 都会先归约为 parent-relative `parent_id + position`
+- repeated `--from` 多个 source 时必须带 `--title`
+- 单个 `--from` 与单个 `--from-selection` 允许从 source 标题推断 destination title
+- `placement-spec` 固定为：
+  - `standalone`
+  - `parent:<ref>`
+  - `parent[<position>]:<ref>`
+  - `before:<ref>`
+  - `after:<ref>`
 - `rem create --wait --json` 在 durable target 已落地、portal 步骤失败时，必须返回 partial-success receipt，并保留 durable target
-- `rem move --wait --json` 在 move 成功但 `--leave-portal` 失败时，必须返回：
+- `rem move --wait --json` 在 move 成功但 `--portal in-place` 失败时，必须返回：
   - `durable_target`
   - `portal.requested=true`
   - `portal.created=false`
   - `warnings[]`
   - `nextActions[]`
   - `source_context`
+
+### `tag add` / `tag remove`
+
+- `tag add` / `tag remove` 是 relation write，不属于 single-subject write
+- `--tag <ref>` 至少一个，可重复
+- `--to <ref>` 至少一个，可重复
+- direct CLI surface 必须把 repeated `--tag` 与 repeated `--to` 展开为多条关系边
+- 旧的 `--subject` 与 `--rem` 在 `tag add/remove` 上都必须拒绝
+- `rem tag add/remove` 只是命令树别名，参数面必须与 `tag add/remove` 完全一致
 
 ### Promotion receipt
 

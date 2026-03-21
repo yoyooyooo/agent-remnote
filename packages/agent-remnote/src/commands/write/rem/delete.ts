@@ -10,6 +10,7 @@ import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 
 import { writeCommonOptions } from '../_shared.js';
+import { resolveRefValue } from '../_refValue.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -18,7 +19,7 @@ function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
 export const writeRemDeleteCommand = Command.make(
   'delete',
   {
-    rem: Options.text('rem'),
+    subject: Options.text('subject'),
     maxDeleteSubtreeNodes: Options.integer('max-delete-subtree-nodes').pipe(
       Options.optional,
       Options.map(optionToUndefined),
@@ -37,7 +38,7 @@ export const writeRemDeleteCommand = Command.make(
     meta: writeCommonOptions.meta,
   },
   ({
-    rem,
+    subject,
     maxDeleteSubtreeNodes,
     notify,
     ensureDaemon,
@@ -80,6 +81,7 @@ export const writeRemDeleteCommand = Command.make(
       }
 
       const payloadSvc = yield* Payload;
+      const remId = yield* resolveRefValue(subject);
 
       const op = yield* Effect.try({
         try: () =>
@@ -87,7 +89,7 @@ export const writeRemDeleteCommand = Command.make(
             {
               type: 'delete_rem',
               payload: {
-                remId: rem,
+                remId,
                 ...(maxDeleteSubtreeNodes !== undefined ? { maxDeleteSubtreeNodes } : {}),
               },
             },
@@ -109,7 +111,7 @@ export const writeRemDeleteCommand = Command.make(
       if (dryRun) {
         yield* writeSuccess({
           data: { dry_run: true, ops: [op], meta: metaValue ? payloadSvc.normalizeKeys(metaValue) : undefined },
-          md: `- dry_run: true\n- op: delete_rem\n- rem_id: ${rem}\n`,
+          md: `- dry_run: true\n- op: delete_rem\n- rem_id: ${remId}\n`,
         });
         return;
       }

@@ -6,7 +6,7 @@
 - op.type：操作类型。支持“标准类型”（下划线）与“点式别名”（namespace.action）。
 - payload：操作参数。可用 camelCase 或 snake_case，服务端会标准化为 snake_case。
 - RID：Rem id（大纲节点 id）。
-- TagId：Tag 本体也是一个 Rem；`tag add/remove` 操作的是“关系”，不创建/删除 Tag Rem。
+- TagId：Tag 本体也是一个 Rem；`tag add/remove` 操作的是“tag-rem 关系边”，不创建/删除 Tag Rem。
 - tableTagId：Table 以 Tag Rem 表示；`table ...` 的 `--table-tag` 就是 tableTagId。
 - PoRID/TRID：Portal container / Portal target 的 Rem id（Portal 容器是特殊 RemType，不是富文本 token）。
 - Deep link：`remnote://w/<workspaceId>/<remId>` / `https://www.remnote.com/w/<workspaceId>/<remId>`；CLI 对所有 “RemId” 参数只提取 `<remId>`。
@@ -15,19 +15,22 @@
 - Agent-primary primitives
   - `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
   - `agent-remnote rem replace`：规范化替换命令族。目标选择器负责表达“替换谁”，`--surface children|self` 负责表达“替换哪一层”。
-  - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。其中 `rem children replace` 保留为兼容性包装器；规范化路径优先用 `rem replace --surface children`。
+  - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。显式目标统一用 `--subject <ref>`；其中 `rem children replace` 保留为兼容性包装器；规范化路径优先用 `rem replace --surface children`。
   - `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
-  - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。`rem create` / `rem move` 现在同时承担 promotion façade：
-    - `rem create` 支持 `--text | --markdown | repeated --target | --from-selection`
-    - 内容位置统一为 `--parent/--ref | --before | --after | --standalone`
-    - portal 位置统一为 `--portal-parent | --portal-before | --portal-after`
+  - `agent-remnote rem create/move/set-text/delete`：Rem 结构与文本写入（对应 `create_rem`/`move_rem`/`update_text`/`delete_rem`）。`029` 起，写入面按 `subject / from / to / at / portal` 五轴收口：
+    - `rem create` 支持 `--text | --markdown | repeated --from | --from-selection`
+    - `rem create` 必须带 `--at <placement-spec>`
+    - `rem move` 必须带 `--subject <ref>` 与 `--at <placement-spec>`
+    - `portal create` 必须带 `--to <ref>` 与 `--at <placement-spec>`
+    - `--portal` 统一承载 portal 策略：`in-place | at:<placement-spec>`
     - `--is-document` 保持显式，默认 `false`
-    - `rem move --leave-portal` 支持单 Rem promotion 后原地留 portal
-    - `rem create --from-selection --leave-portal-in-place` 支持把原 selection range 替换为 portal
+    - `rem move --portal in-place` 支持单 Rem promotion 后原地留 portal
+    - `rem create --from-selection --portal in-place` 支持把原 selection range 替换为 portal
+    - repeated `--from` 在同 parent 且 contiguous sibling range 下也支持 `--portal in-place`
     - 当 durable target 已成功创建但 portal 失败时，`--wait --json` 必须返回 partial-success receipt，而不是丢失 durable target 诊断
     - 其中 `rem delete` 在插件侧默认走 `safeDeleteSubtree`，会优先直接删除“节点数不超过阈值”的整棵小子树；超过阈值时，再拆成多个阈值内的小子树做前端本地安全删除，以规避宿主的大树删除确认。CLI 可按次通过 `--max-delete-subtree-nodes <n>` 覆盖前端默认阈值。
   - `agent-remnote portal create`：创建真正的 Portal（SDK `createPortal + moveRems + addToPortal`；对应 `create_portal`）。
-  - `agent-remnote tag add/remove`：对单个 Rem 增删 Tag（关系写入；对应 `add_tag`/`remove_tag`）。
+  - `agent-remnote tag add/remove`：增删 tag-rem 关系边（关系写入；对应 `add_tag`/`remove_tag`）。CLI surface 为 repeated `--tag <ref>` + repeated `--to <ref>`，运行时按笛卡尔积 fan-out。
 - `agent-remnote backup list/cleanup`：backup artifact 的治理入口。`list` 只读列出 Store DB registry；`cleanup` 默认 dry-run，只有显式 `--apply` 才入队删除。
   - `backup cleanup` 额外支持 `--backup-rem-id <rem_id>`，用于精确清理单个 backup artifact，避免在多个 retained/orphan backup 共存时误删“最新一条”之外的对象。
   - `backup cleanup` 额外支持 `--max-delete-subtree-nodes <n>`，用于按次覆盖前端安全删除阈值，便于持续试探宿主可接受的单次子树删除上限。
@@ -210,7 +213,7 @@
 
 ```bash
 node scripts/remnote-set-text-verify-ref.mjs \
-  --rem "<remId>" \
+  --subject "<remId>" \
   --text "see also {ref:<targetRemId>}" \
   --timeout-ms 60000 \
   --poll-ms 1000

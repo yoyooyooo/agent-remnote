@@ -8,15 +8,15 @@ import {
   buildActionEnvelope,
   dryRunEnvelope,
   ensureWaitArgs,
-  normalizeRemIdInput,
   readMarkdownArg,
+  resolveSubjectRemId,
   submitActionEnvelope,
 } from './common.js';
 
 export const writeRemChildrenPrependCommand = Command.make(
   'prepend',
   {
-    rem: Options.text('rem'),
+    subject: Options.text('subject'),
     markdown: Options.text('markdown'),
 
     notify: writeCommonOptions.notify,
@@ -31,10 +31,10 @@ export const writeRemChildrenPrependCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, markdown, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({ subject, markdown, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
       yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
-      const remId = normalizeRemIdInput(rem);
+      const remId = yield* resolveSubjectRemId(subject);
       const markdownValue = yield* readMarkdownArg(markdown);
       const body = yield* buildActionEnvelope({
         action: 'rem.children.prepend',

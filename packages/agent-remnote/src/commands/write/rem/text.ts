@@ -4,7 +4,6 @@ import * as Effect from 'effect/Effect';
 
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
-import { tryParseRemnoteLink } from '../../../lib/remnote.js';
 import { trimBoundaryBlankLines } from '../../../lib/text.js';
 import { enqueueOps, normalizeOp } from '../../_enqueue.js';
 import { failInRemoteMode } from '../../_remoteMode.js';
@@ -12,18 +11,12 @@ import { writeFailure, writeSuccess } from '../../_shared.js';
 import { waitForTxn } from '../../_waitTxn.js';
 
 import { writeCommonOptions } from '../_shared.js';
-
-function normalizeRemIdInput(raw: string): string {
-  const trimmed = raw.trim();
-  const link = tryParseRemnoteLink(trimmed);
-  if (link?.remId) return link.remId;
-  return trimmed;
-}
+import { resolveRefValue } from '../_refValue.js';
 
 export const writeRemSetTextCommand = Command.make(
   'set-text',
   {
-    rem: Options.text('rem'),
+    subject: Options.text('subject'),
     text: Options.text('text'),
 
     notify: writeCommonOptions.notify,
@@ -38,7 +31,7 @@ export const writeRemSetTextCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, text, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({ subject, text, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
       if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
         return yield* Effect.fail(
@@ -66,7 +59,7 @@ export const writeRemSetTextCommand = Command.make(
 
       const payloadSvc = yield* Payload;
 
-      const remId = normalizeRemIdInput(rem);
+      const remId = yield* resolveRefValue(subject);
       const textValue = trimBoundaryBlankLines(text);
 
       const op = yield* Effect.try({

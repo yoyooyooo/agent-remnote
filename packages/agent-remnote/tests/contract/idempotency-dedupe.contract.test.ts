@@ -24,7 +24,7 @@ describe('cli contract: idempotency-key dedupe', () => {
         'rem',
         'children',
         'append',
-        '--rem',
+        '--subject',
         'dummy-parent',
         '--markdown',
         '# hi',
