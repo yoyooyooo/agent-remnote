@@ -785,4 +785,131 @@ describe('WsBridgeRuntime (integration)', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('dispatches sibling create_rem ops in txn order and preserves requested positions', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-bridge-sibling-create-'));
+
+    try {
+      const port = await getFreePort();
+      const wsUrl = `ws://127.0.0.1:${port}/ws`;
+      const cfg = makeTestConfig({
+        storeDb: path.join(tmpDir, 'store.sqlite'),
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+        statusLineFile: path.join(tmpDir, 'status-line.txt'),
+        statusLineJsonFile: path.join(tmpDir, 'status-line.json'),
+      });
+
+      const seedDb = openQueueDb(cfg.storeDb);
+      try {
+        enqueueTxn(seedDb as any, [
+          { type: 'create_rem', payload: { parent_id: 'parent-1', position: 2, text: 'after sibling 1' } },
+          { type: 'create_rem', payload: { parent_id: 'parent-1', position: 3, text: 'after sibling 2' } },
+        ]);
+      } finally {
+        seedDb.close();
+      }
+
+      const cfgLayer = Layer.succeed(AppConfig, cfg);
+      const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
+
+      const program = Effect.gen(function* () {
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          heartbeatIntervalMs: 50,
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
+
+        yield* Effect.promise(async () => {
+          const plugin = await connectWsWithRetry(wsUrl, 3000);
+          const q = createJsonQueue(plugin);
+
+          try {
+            plugin.send(JSON.stringify({ type: 'Hello' }));
+            await q.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+            plugin.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'sibling-create-test',
+                capabilities: { control: true, worker: true, readRpc: false, batchPull: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'Registered');
+            plugin.send(
+              JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }),
+            );
+            await q.next((m) => m?.type === 'SelectionAck');
+
+            plugin.send(JSON.stringify({ type: 'RequestOps', leaseMs: 5000, maxOps: 2 }));
+            const batch1 = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1,
+            );
+            const op1 = (batch1 as any).ops[0];
+            expect(op1.op_type).toBe('create_rem');
+            expect(op1.payload).toMatchObject({
+              parent_id: 'parent-1',
+              position: 2,
+              text: 'after sibling 1',
+            });
+
+            plugin.send(
+              JSON.stringify({
+                type: 'OpAck',
+                op_id: op1.op_id,
+                attempt_id: op1.attempt_id,
+                status: 'success',
+                result: { ok: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'AckOk' && m?.op_id === op1.op_id);
+
+            plugin.send(JSON.stringify({ type: 'RequestOps', leaseMs: 5000, maxOps: 2 }));
+            const batch2 = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 1,
+            );
+            const op2 = (batch2 as any).ops[0];
+            expect(op2.op_type).toBe('create_rem');
+            expect(op2.payload).toMatchObject({
+              parent_id: 'parent-1',
+              position: 3,
+              text: 'after sibling 2',
+            });
+
+            plugin.send(
+              JSON.stringify({
+                type: 'OpAck',
+                op_id: op2.op_id,
+                attempt_id: op2.attempt_id,
+                status: 'success',
+                result: { ok: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'AckOk' && m?.op_id === op2.op_id);
+          } finally {
+            try {
+              q.close();
+            } catch {}
+            try {
+              plugin.close();
+            } catch {}
+          }
+        });
+      }).pipe(Effect.provide(live));
+
+      await Effect.runPromise(Effect.scoped(program));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
