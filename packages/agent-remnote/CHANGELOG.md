@@ -1,5 +1,11 @@
 # agent-remnote
 
+## 1.3.3
+
+### Patch Changes
+
+- ca915b7: Fix `apply --payload` so nested `markdown` fields expand input-spec values like `@file`, `-`, and `@@literal`, and harden queue enqueue/wait behavior by making enqueue atomic to reduce CI and `--wait` flakiness.
+
 ## 1.3.0
 
 ### Minor Changes
