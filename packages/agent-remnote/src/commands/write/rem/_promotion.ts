@@ -13,7 +13,7 @@ import { WorkspaceBindings } from '../../../services/WorkspaceBindings.js';
 import { type PlacementSpec, fetchRemLayouts, listSiblingOrder, parsePlacementSpec, resolveLocalDbPath, resolvePlacementSpec } from '../_placementSpec.js';
 import { type PortalStrategy, parsePortalStrategy } from '../_portalStrategy.js';
 import { resolveRefValue } from '../_refValue.js';
-import { invalidArgs, normalizeOptionalText, requireStableSiblingRange, resolveCreateDestinationTitle } from '../_shared.js';
+import { invalidArgs, normalizeOptionalText, normalizeString, requireStableSiblingRange, resolveCreateDestinationTitle } from '../_shared.js';
 import { readMarkdownArg, resolveCurrentSelectionRemIds } from './children/common.js';
 
 export const DURABLE_TARGET_ALIAS = 'durable_target';
@@ -85,10 +85,6 @@ export type NormalizedMovePromotionIntent = {
   readonly portalPlacement: MovePortalPlacement;
 };
 
-function normalizeText(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 function truncateText(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   if (!normalized) return '';
@@ -97,8 +93,8 @@ function truncateText(value: string, maxLength: number): string {
 }
 
 function pickTitle(kt: unknown, ke: unknown, r: unknown): string {
-  const combined = [kt, ke].map(normalizeText).filter(Boolean).join(' | ');
-  const raw = combined || normalizeText(r);
+  const combined = [kt, ke].map(normalizeString).filter(Boolean).join(' | ');
+  const raw = combined || normalizeString(r);
   if (!raw) return '';
   const normalized = raw.replace(/\s+/g, ' ').trim();
   const title = normalized.split(/\n| - |——|。|！|？|\.|: /)[0]?.trim() || normalized;

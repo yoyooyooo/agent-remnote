@@ -9,6 +9,7 @@ export {
   insertEventRecord,
   listBackupArtifacts,
   openStoreDb,
+  readStoreSchemaStatus,
   upsertTaskDefinition,
   upsertTaskRun,
   upsertTriggerRule,

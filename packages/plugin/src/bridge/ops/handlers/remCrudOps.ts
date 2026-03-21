@@ -145,7 +145,9 @@ export async function executeMoveRem(plugin: ReactRNPlugin, op: OpDispatch): Pro
         sourcePosition = Math.floor(value);
       }
     }
-  } catch {}
+  } catch (error) {
+    console.warn('[agent-remnote][move] failed to get source position', { error });
+  }
 
   if (moveToStandalone) {
     if (typeof (rem as any).setParent === 'function') {

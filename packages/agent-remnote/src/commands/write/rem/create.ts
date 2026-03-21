@@ -5,7 +5,7 @@ import * as Effect from 'effect/Effect';
 import { CliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
-import { readOptionalText, writeCommonOptions } from '../_shared.js';
+import { normalizeString, readOptionalText, writeCommonOptions } from '../_shared.js';
 import {
   DURABLE_TARGET_ALIAS,
   PORTAL_REM_ALIAS,
@@ -14,10 +14,6 @@ import {
   type NormalizedCreatePromotionIntent,
 } from './_promotion.js';
 import { dryRunEnvelope, ensureWaitArgs, loadTxnDetail, submitActionEnvelope } from './children/common.js';
-
-function normalizeString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
 function findRemoteId(idMap: unknown, clientTempId: string | undefined): string | undefined {
   if (!clientTempId || !Array.isArray(idMap)) return undefined;

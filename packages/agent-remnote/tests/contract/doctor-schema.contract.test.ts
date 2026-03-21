@@ -49,4 +49,29 @@ describe('cli contract: doctor schema visibility', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('reports store schema errors instead of silently swallowing them', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-doctor-schema-error-'));
+    const remnoteDb = path.join(tmpDir, 'remnote.db');
+
+    try {
+      createMinimalRemnoteDb(remnoteDb);
+
+      const res = await runCli(['--json', '--store-db', tmpDir, '--remnote-db', remnoteDb, 'doctor'], {
+        env: { HOME: path.join(tmpDir, 'home'), REMNOTE_TMUX_REFRESH: '0' },
+        timeoutMs: 20_000,
+      });
+
+      expect(res.exitCode).toBe(0);
+      expect(res.stderr).toBe('');
+
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(true);
+      expect(parsed.data?.queue?.ok).toBe(false);
+      expect(typeof parsed.data?.queue?.schema_error).toBe('string');
+      expect(String(parsed.data?.queue?.schema_error ?? '')).not.toBe('');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

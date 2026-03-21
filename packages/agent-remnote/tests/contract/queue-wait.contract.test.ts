@@ -19,7 +19,7 @@ describe('cli contract: queue wait', () => {
 
     try {
       const writeRes = await runCli(
-        ['--json', 'rem', 'create', '--parent', 'dummy-parent', '--text', 'hello', '--no-notify', '--no-ensure-daemon'],
+        ['--json', 'rem', 'create', '--at', 'parent:id:dummy-parent', '--text', 'hello', '--no-notify', '--no-ensure-daemon'],
         { env: { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' } },
       );
 
