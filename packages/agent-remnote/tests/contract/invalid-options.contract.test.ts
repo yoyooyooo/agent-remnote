@@ -62,4 +62,25 @@ describe('cli contract: invalid options', () => {
     expect(parsed.error.code).toBe('INVALID_ARGS');
     expect(parsed.error.message).toContain('--query');
   });
+
+  it('rejects removed tag relation flags in human mode', async () => {
+    const res = await runCli(['tag', 'add', '--subject', 'r1', '--tag', 't1']);
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stdout).toBe('');
+    expect(res.stderr).toMatch(/^Error:/);
+    expect(res.stderr).toContain("Received unknown argument: '--subject'");
+  });
+
+  it('rejects removed tag relation flags in --json mode without stderr noise', async () => {
+    const res = await runCli(['--json', 'tag', 'add', '--subject', 'r1', '--tag', 't1']);
+
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toBe('');
+
+    const parsed = JSON.parse(res.stdout.trim());
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error.code).toBe('INVALID_ARGS');
+    expect(parsed.error.message).toContain('--subject');
+  });
 });

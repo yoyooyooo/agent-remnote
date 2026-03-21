@@ -56,6 +56,73 @@ describe('cli contract: --help', () => {
     expect(out).toContain('delete');
   });
 
+  it('prints rem create help with the reset axes', async () => {
+    const res = await runCli(['rem', 'create', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('--from');
+    expect(out).toContain('--from-selection');
+    expect(out).toContain('--at');
+    expect(out).toContain('--portal');
+    expect(out).not.toContain('--target');
+    expect(out).not.toContain('--parent');
+    expect(out).not.toContain('--standalone');
+    expect(out).toContain('Create a new durable subject');
+    expect(out).toContain('Examples: standalone, parent:id:P1, parent[2]:id:P1');
+    expect(out).toContain('Preferred default for --portal in-place');
+    expect(out).toContain('Advanced path');
+  });
+
+  it('prints rem move help with subject/at/portal', async () => {
+    const res = await runCli(['rem', 'move', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('--subject');
+    expect(out).toContain('--at');
+    expect(out).toContain('--portal');
+    expect(out).not.toContain('--rem');
+    expect(out).not.toContain('--leave-portal');
+    expect(out).toContain('Move an existing durable subject');
+    expect(out).toContain('Use in-place to leave a portal at the original location');
+  });
+
+  it('prints portal create help with to/at', async () => {
+    const res = await runCli(['portal', 'create', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('--to');
+    expect(out).toContain('--at');
+    expect(out).not.toContain('--target');
+    expect(out).not.toContain('--parent');
+    expect(out).toContain('Create one portal relation');
+    expect(out).toContain('standalone is invalid for portal placement');
+  });
+
+  it('prints tag add help with tag/to relation surface', async () => {
+    const res = await runCli(['tag', 'add', '--help']);
+
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr).toBe('');
+
+    const out = stripAnsi(res.stdout);
+    expect(out).toContain('--tag');
+    expect(out).toContain('--to');
+    expect(out).not.toContain('--subject');
+    expect(out).not.toContain('--rem');
+    expect(out).toContain('Relation write');
+    expect(out).toContain('cross-product');
+    expect(out).toContain('not pairwise');
+  });
+
   it('does not print duplicated command prefixes', async () => {
     const res = await runCli(['--help']);
 

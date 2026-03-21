@@ -4,7 +4,7 @@ import { runCli } from '../helpers/runCli.js';
 
 describe('cli contract: rem children append --dry-run --json', () => {
   it('accepts inline markdown via --markdown', async () => {
-    const res = await runCli(['--json', 'rem', 'children', 'append', '--rem', 'PARENT_ID', '--markdown', '- a\\n  - b\\n', '--dry-run']);
+    const res = await runCli(['--json', 'rem', 'children', 'append', '--subject', 'PARENT_ID', '--markdown', '- a\\n  - b\\n', '--dry-run']);
 
     expect(res.exitCode).toBe(0);
     expect(res.stderr).toBe('');

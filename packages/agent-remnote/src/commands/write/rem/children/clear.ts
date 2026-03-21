@@ -4,12 +4,12 @@ import * as Effect from 'effect/Effect';
 
 import { writeFailure, writeSuccess } from '../../../_shared.js';
 import { writeCommonOptions } from '../../_shared.js';
-import { buildActionEnvelope, dryRunEnvelope, ensureWaitArgs, normalizeRemIdInput, submitActionEnvelope } from './common.js';
+import { buildActionEnvelope, dryRunEnvelope, ensureWaitArgs, resolveSubjectRemId, submitActionEnvelope } from './common.js';
 
 export const writeRemChildrenClearCommand = Command.make(
   'clear',
   {
-    rem: Options.text('rem'),
+    subject: Options.text('subject'),
 
     notify: writeCommonOptions.notify,
     ensureDaemon: writeCommonOptions.ensureDaemon,
@@ -23,10 +23,10 @@ export const writeRemChildrenClearCommand = Command.make(
     idempotencyKey: writeCommonOptions.idempotencyKey,
     meta: writeCommonOptions.meta,
   },
-  ({ rem, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
+  ({ subject, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
       yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
-      const remId = normalizeRemIdInput(rem);
+      const remId = yield* resolveSubjectRemId(subject);
       const body = yield* buildActionEnvelope({
         action: 'rem.children.clear',
         remId,

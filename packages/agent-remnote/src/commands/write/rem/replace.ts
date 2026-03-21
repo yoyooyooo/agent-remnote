@@ -5,12 +5,13 @@ import type { WriteStructureAssertion } from '../../../kernel/write-plan/model.j
 
 import { CliError } from '../../../services/Errors.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
+import { repeatedSubjectOption } from '../_subjectOptions.js';
 import { optionToUndefined, writeCommonOptions } from '../_shared.js';
+import { resolveRefValue } from '../_refValue.js';
 import {
   buildActionEnvelope,
   dryRunEnvelope,
   ensureWaitArgs,
-  normalizeRemIdInput,
   readMarkdownArg,
   resolveCurrentSelectionRemIds,
   submitActionEnvelope,
@@ -19,7 +20,7 @@ import {
 export const writeRemReplaceCommand = Command.make(
   'replace',
   {
-    rem: Options.text('rem').pipe(Options.repeated),
+    subject: repeatedSubjectOption,
     selection: Options.boolean('selection'),
     stateFile: Options.text('state-file').pipe(Options.optional, Options.map(optionToUndefined)),
     staleMs: Options.integer('stale-ms').pipe(Options.optional, Options.map(optionToUndefined)),
@@ -42,7 +43,7 @@ export const writeRemReplaceCommand = Command.make(
     meta: writeCommonOptions.meta,
   },
   ({
-    rem,
+    subject,
     selection,
     stateFile,
     staleMs,
@@ -63,12 +64,14 @@ export const writeRemReplaceCommand = Command.make(
     Effect.gen(function* () {
       yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
 
-      const explicitIds = rem.map(normalizeRemIdInput).filter(Boolean);
+      const explicitIds = yield* Effect.forEach(subject, (value) => resolveRefValue(value)).pipe(
+        Effect.map((ids) => ids.filter(Boolean)),
+      );
       if ((explicitIds.length === 0 && !selection) || (explicitIds.length > 0 && selection)) {
         return yield* Effect.fail(
           new CliError({
             code: 'INVALID_ARGS',
-            message: 'Provide exactly one target selector via repeated --rem or --selection',
+            message: 'Provide exactly one target selector via repeated --subject or --selection',
             exitCode: 2,
           }),
         );

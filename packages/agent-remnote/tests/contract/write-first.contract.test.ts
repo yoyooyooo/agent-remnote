@@ -24,7 +24,7 @@ describe('cli contract: write-first workflow', () => {
           'rem',
           'children',
           'append',
-          '--rem',
+          '--subject',
           'dummy-parent',
           '--markdown',
           '# hi',

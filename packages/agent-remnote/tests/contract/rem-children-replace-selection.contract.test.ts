@@ -231,7 +231,7 @@ describe('cli contract: rem children replace --selection', () => {
         'rem',
         'children',
         'replace',
-        '--rem',
+        '--subject',
         'PARENT-1',
         '--markdown',
         '- Report\n  - detail',

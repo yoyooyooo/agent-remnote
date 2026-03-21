@@ -64,16 +64,18 @@ async function waitForMovePartialSuccess(params: {
 }
 
 describe('cli contract: rem move promotion', () => {
-  it('dry-run compiles standalone promotion with leave-portal and explicit document flag', async () => {
+  it('dry-run compiles standalone promotion with in-place portal and explicit document flag', async () => {
     const res = await runCli([
       '--json',
       'rem',
       'move',
-      '--rem',
-      'r1',
-      '--standalone',
+      '--subject',
+      'id:r1',
+      '--at',
+      'standalone',
       '--is-document',
-      '--leave-portal',
+      '--portal',
+      'in-place',
       '--dry-run',
     ]);
 
@@ -97,16 +99,17 @@ describe('cli contract: rem move promotion', () => {
     ]);
   });
 
-  it('fails fast when multiple destination placement groups are combined', async () => {
+  it('fails fast when portal strategy standalone placement is requested', async () => {
     const res = await runCli([
       '--json',
       'rem',
       'move',
-      '--rem',
-      'r1',
-      '--parent',
-      'p1',
-      '--standalone',
+      '--subject',
+      'id:r1',
+      '--at',
+      'standalone',
+      '--portal',
+      'at:standalone',
       '--dry-run',
     ]);
 
@@ -116,7 +119,7 @@ describe('cli contract: rem move promotion', () => {
     const env = parseJsonLine(res.stdout);
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INVALID_ARGS');
-    expect(String(env.error?.message ?? '')).toContain('placement');
+    expect(String(env.error?.message ?? '')).toContain('standalone');
   });
 
   it('resolves --after anchor placement into parent-relative move_rem coordinates', async () => {
@@ -147,10 +150,10 @@ describe('cli contract: rem move promotion', () => {
         dbPath,
         'rem',
         'move',
-        '--rem',
-        'r1',
-        '--after',
-        'ANCHOR_AFTER',
+        '--subject',
+        'id:r1',
+        '--at',
+        'after:id:ANCHOR_AFTER',
         '--dry-run',
       ]);
 
@@ -188,10 +191,12 @@ describe('cli contract: rem move promotion', () => {
           '--json',
           'rem',
           'move',
-          '--rem',
-          'r1',
-          '--standalone',
-          '--leave-portal',
+          '--subject',
+          'id:r1',
+          '--at',
+          'standalone',
+          '--portal',
+          'in-place',
           '--no-notify',
           '--no-ensure-daemon',
           '--wait',

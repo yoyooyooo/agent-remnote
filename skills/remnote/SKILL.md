@@ -163,7 +163,7 @@ description: 'Use this skill for any RemNote-specific read/write or local plugin
 默认命令：
 
 ```bash
-cat <<'MD' | agent-remnote --json rem children append --rem <parentRemId> --markdown -
+cat <<'MD' | agent-remnote --json rem children append --subject <parentRemId> --markdown -
 - title
   - point
 MD
@@ -180,7 +180,7 @@ MD
 默认命令：
 
 ```bash
-cat <<'MD' | agent-remnote --json rem children prepend --rem <parentRemId> --markdown -
+cat <<'MD' | agent-remnote --json rem children prepend --subject <parentRemId> --markdown -
 - title
   - point
 MD
@@ -200,7 +200,7 @@ MD
 默认命令：
 
 ```bash
-cat <<'MD' | agent-remnote --json rem children replace --rem <parentRemId> --markdown -
+cat <<'MD' | agent-remnote --json rem children replace --subject <parentRemId> --markdown -
 - title
   - point
 MD
@@ -236,7 +236,7 @@ MD
 默认命令：
 
 ```bash
-agent-remnote --json rem children clear --rem <parentRemId>
+agent-remnote --json rem children clear --subject <parentRemId>
 ```
 
 适用：
@@ -256,7 +256,7 @@ agent-remnote --json rem children clear --rem <parentRemId>
 默认命令：
 
 ```bash
-agent-remnote --json rem set-text --rem <remId> --text "..."
+agent-remnote --json rem set-text --subject <remId> --text "..."
 ```
 
 ### 6. 短纯文本新增
@@ -264,7 +264,7 @@ agent-remnote --json rem set-text --rem <remId> --text "..."
 默认命令：
 
 ```bash
-agent-remnote --json rem create --parent "<parentRemId>" --text "..."
+agent-remnote --json rem create --at "parent:id:<parentRemId>" --text "..."
 agent-remnote --json daily write --text "..."
 ```
 
@@ -277,18 +277,20 @@ agent-remnote --json daily write --text "..."
 当用户意图是“把内容沉淀成独立 destination，并且可选留 portal”时，优先走：
 
 ```bash
-agent-remnote --json rem create --standalone --title "..." --markdown @./note.md
-agent-remnote --json rem create --standalone --title "..." --target "<remId>"
-agent-remnote --json rem create --from-selection --standalone --title "..." --leave-portal-in-place
-agent-remnote --json rem move --rem "<remId>" --standalone --leave-portal
+agent-remnote --json rem create --at standalone --title "..." --markdown @./note.md
+agent-remnote --json rem create --at standalone --title "..." --from "id:<remId>"
+agent-remnote --json rem create --from-selection --at standalone --title "..." --portal in-place
+agent-remnote --json rem move --subject "id:<remId>" --at standalone --portal in-place
 ```
 
 路由规则：
 
 - 不要再默认走“先写 DN，再手工 portal create，再手工 move”的旧多步路径。
 - `--is-document` 是显式 opt-in，默认不要自动加。
-- `--from-selection` 只是 `targets[]` 的 sugar。
-- 单个 `--target` 可推断标题；多个 `--target` 必须显式 `--title`。
+- `--from-selection` 只是 `from[]` 的 sugar。
+- 单个 `--from` 可推断标题；多个 `--from` 必须显式 `--title`。
+- `--from-selection --portal in-place` 是默认原位回填路径。
+- repeated `--from ... --portal in-place` 属于 advanced path。只有上游已经拿到稳定 rem ids，且满足同 parent + contiguous sibling range 时再用。
 
 ### 7. 写 Daily Note
 
@@ -322,7 +324,28 @@ agent-remnote --json daily write --text "..."
 - 不要为了“看起来更安全”就默认再加一层 bundle；双层单根通常是噪音。
 - 只有用户明确要求导入容器，或输入本身没有自然单根、又必须整体包成一篇时，才考虑额外容器。
 
-### 8. 多步依赖写入
+### 8. Tag 关系写入
+
+默认命令：
+
+```bash
+agent-remnote --json tag add --tag <tagRemId> --to <remId>
+agent-remnote --json tag remove --tag <tagRemId> --to <remId>
+```
+
+批量关系：
+
+```bash
+agent-remnote --json tag add --tag <tagA> --tag <tagB> --to <rem1> --to <rem2>
+```
+
+规则：
+
+- 实际语义是 `tags × to`
+- 不要脑补成一一配对
+- 如果你要表达配对关系，拆成多次调用，或直接用 `apply --payload`
+
+### 9. 多步依赖写入
 
 只有在以下情况才用 `apply --payload`：
 
@@ -485,7 +508,7 @@ agent-remnote config validate
 之后继续用同一套业务命令：
 
 ```bash
-agent-remnote --api-base-url http://host.docker.internal:3000 rem children append --rem <parentRemId> --markdown -
+agent-remnote --api-base-url http://host.docker.internal:3000 rem children append --subject <parentRemId> --markdown -
 agent-remnote --api-base-url http://host.docker.internal:3000 daily write --markdown -
 agent-remnote --api-base-url http://host.docker.internal:3000 apply --payload @plan.json
 ```
@@ -611,7 +634,7 @@ Portal 不是 Reference。
 插 Portal 时用：
 
 ```bash
-agent-remnote --json portal create --parent "<parentRemId>" --target "<targetRemId>"
+agent-remnote --json portal create --to "id:<targetRemId>" --at "parent:id:<parentRemId>"
 ```
 
 ## Failure Routing
@@ -676,19 +699,21 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ```bash
 agent-remnote --json plugin current --compact
 agent-remnote --ids daily rem-id
-agent-remnote --json rem children append --rem <parentRemId> --markdown -
-agent-remnote --json rem children prepend --rem <parentRemId> --markdown -
-agent-remnote --json rem children replace --rem <parentRemId> --markdown -
-agent-remnote --json rem children clear --rem <parentRemId>
+agent-remnote --json rem children append --subject <parentRemId> --markdown -
+agent-remnote --json rem children prepend --subject <parentRemId> --markdown -
+agent-remnote --json rem children replace --subject <parentRemId> --markdown -
+agent-remnote --json rem children clear --subject <parentRemId>
 agent-remnote --json daily write --markdown -
 agent-remnote --json daily write --text "..."
-agent-remnote --json rem set-text --rem <remId> --text "..."
-agent-remnote --json rem create --parent "<parentRemId>" --text "..."
-agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today
-agent-remnote --json rem create --standalone --title "..." --target "<remId>"
-agent-remnote --json rem move --rem "<remId>" --parent "<newParentRemId>"
-agent-remnote --json rem move --rem "<remId>" --standalone --leave-portal
-agent-remnote --json rem delete --rem "<remId>"
+agent-remnote --json rem set-text --subject <remId> --text "..."
+agent-remnote --json rem create --at "parent:id:<parentRemId>" --text "..."
+agent-remnote --json rem create --at standalone --is-document --title "..." --markdown @./note.md --portal "at:parent:daily:today"
+agent-remnote --json rem create --at standalone --title "..." --from "id:<remId>"
+agent-remnote --json rem move --subject "id:<remId>" --at "parent:id:<newParentRemId>"
+agent-remnote --json rem move --subject "id:<remId>" --at standalone --portal in-place
+agent-remnote --json tag add --tag "<tagRemId>" --to "<remId>"
+agent-remnote --json tag remove --tag "<tagRemId>" --to "<remId>"
+agent-remnote --json rem delete --subject "<remId>"
 agent-remnote --json apply --payload @plan.json
 agent-remnote --json queue wait --txn "<txn_id>"
 agent-remnote --json daemon status

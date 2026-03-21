@@ -39,8 +39,8 @@ This repo is optimized for the “agent calls CLI” workflow, not for humans cl
 - Resolve a powerup (read-only): `agent-remnote --json powerup resolve --powerup "Todo"`
 - Add structured data through the primary table surface: `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - Mark a Rem as Todo (safe write): `agent-remnote --json todo add --rem "<rem_id>" --wait`
-- Dump everything into one place (safe write): `agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md`
-- Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md`
+- Dump everything into one place (safe write): `agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md`
+- Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md`
 
 ## Installation (users)
 
@@ -199,7 +199,7 @@ Safety defaults: most list-like read commands are paginated with a default `--li
 Safe write + progress tracking:
 
 ```bash
-agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -210,7 +210,7 @@ All write recipes require a connected RemNote window + plugin (active worker) an
 ### 1) Research summary → Reading page (Markdown import)
 
 ```bash
-agent-remnote --json rem children append --rem "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
+agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md --idempotency-key "reading:summary:2026-01-26"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -280,7 +280,7 @@ If Plugin RPC is unavailable, the command returns `ok=false` with `error.code` a
 Writes never touch `remnote.db` directly. They go through the operation queue and are applied by the plugin via the official SDK.
 
 ```bash
-agent-remnote --json rem children append --rem "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
+agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md --idempotency-key "inbox:note:2026-01-25"
 agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
@@ -336,29 +336,29 @@ npx add-skill https://github.com/yoyooyooo/agent-remnote -g -a codex -a claude-c
 | UI context snapshot (IDs)                | `agent-remnote --json plugin ui-context snapshot`                                                                                                 |
 | Resolve today's Daily Note Rem ID        | `agent-remnote --ids daily rem-id`                                                                                                                |
 | Resolve a specific Daily Note Rem ID     | `agent-remnote --json daily rem-id --date "2026-03-08"`                                                                                           |
-| Append Markdown to a Rem's children      | `agent-remnote --json rem children append --rem "page:..." --markdown @./note.md`                                                                 |
-| Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --rem "page:..." --markdown @./note.md`                                                                |
-| Replace a Rem's direct children          | `agent-remnote --json rem replace --rem "page:..." --surface children --markdown @./note.md`                                                      |
+| Append Markdown to a Rem's children      | `agent-remnote --json rem children append --subject "page:..." --markdown @./note.md`                                                            |
+| Prepend Markdown to a Rem's children     | `agent-remnote --json rem children prepend --subject "page:..." --markdown @./note.md`                                                           |
+| Replace a Rem's direct children          | `agent-remnote --json rem replace --subject "page:..." --surface children --markdown @./note.md`                                                 |
 | Replace selected sibling Rems in place   | `agent-remnote --json rem replace --selection --surface self --markdown @./note.md`                                                                |
-| Clear a Rem's direct children            | `agent-remnote --json rem children clear --rem "<rem_id>" --wait`                                                                                 |
+| Clear a Rem's direct children            | `agent-remnote --json rem children clear --subject "<rem_id>" --wait`                                                                            |
 | Write Daily Note Markdown inline         | `agent-remnote --json daily write --markdown $'- topic\n  - note' --wait`                                                                         |
 | Write Daily Note Markdown from stdin     | `cat note.md \| agent-remnote --json daily write --markdown - --wait`                                                                             |
-| Create a Portal                          | `agent-remnote --json portal create --parent "<parent_id>" --target "<rem_id>" --wait`                                                            |
+| Create a Portal                          | `agent-remnote --json portal create --to "id:<rem_id>" --at "parent:id:<parent_id>" --wait`                                                     |
 | Read typed outline nodes                 | `agent-remnote --json rem outline --id "<rem_id>" --depth 3 --format json`                                                                        |
 | Query normalized recent activity         | `agent-remnote --json db recent --days 7 --kind all --aggregate day --aggregate parent --timezone Asia/Shanghai --item-limit 20 --aggregate-limit 10` |
-| Create a short child Rem                 | `agent-remnote --json rem create --parent "<parent_id>" --text "..." --wait`                                                                      |
-| Promote markdown into a standalone page  | `agent-remnote --json rem create --standalone --is-document --title "..." --markdown @./note.md --portal-parent daily:today --wait`              |
-| Promote selected/known content           | `agent-remnote --json rem create --standalone --title "..." --target "<rem_id>" [--target "<rem_id>"] --wait`                                     |
-| Move a Rem                               | `agent-remnote --json rem move --rem "<rem_id>" --parent "<parent_id>" --position 0 --wait`                                                       |
-| Promote a Rem and leave a portal         | `agent-remnote --json rem move --rem "<rem_id>" --standalone --is-document --leave-portal --wait`                                                |
-| Update Rem text                          | `agent-remnote --json rem set-text --rem "<rem_id>" --text "..." --wait`                                                                          |
-| Tag a Rem                                | `agent-remnote --json tag add --rem "<rem_id>" --tag "<tag_id>"`                                                                                  |
-| Un-tag a Rem                             | `agent-remnote --json tag remove --rem "<rem_id>" --tag "<tag_id>"`                                                                               |
+| Create a short child Rem                 | `agent-remnote --json rem create --at "parent:id:<parent_id>" --text "..." --wait`                                                               |
+| Promote markdown into a standalone page  | `agent-remnote --json rem create --at standalone --is-document --title "..." --markdown @./note.md --portal "at:parent:daily:today" --wait`     |
+| Promote selected/known content           | `agent-remnote --json rem create --at standalone --title "..." --from "id:<rem_id>" [--from "id:<rem_id>"] --wait`                              |
+| Move a Rem                               | `agent-remnote --json rem move --subject "id:<rem_id>" --at "parent[0]:id:<parent_id>" --wait`                                                  |
+| Promote a Rem and leave a portal         | `agent-remnote --json rem move --subject "id:<rem_id>" --at standalone --is-document --portal in-place --wait`                                   |
+| Update Rem text                          | `agent-remnote --json rem set-text --subject "<rem_id>" --text "..." --wait`                                                                     |
+| Tag Rems                                 | `agent-remnote --json tag add --tag "<tag_id>" --to "<rem_id>" [--to "<rem_id>"]`                                                              |
+| Un-tag Rems                              | `agent-remnote --json tag remove --tag "<tag_id>" --to "<rem_id>" [--to "<rem_id>"]`                                                           |
 | Powerup schema (read-only inspection)    | `agent-remnote --json powerup schema --powerup "Todo" --include-options`                                                                          |
 | Todo: mark done                          | `agent-remnote --json todo done --rem "<rem_id>" --wait`                                                                                          |
 | Table: create a table                    | `agent-remnote --json table create --table-tag "<tag_id>" --parent "<parent_id>" --wait`                                                          |
 | Table: add a row                         | `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`                                                |
-| Delete a Rem                             | `agent-remnote --json rem delete --rem "<rem_id>" [--max-delete-subtree-nodes 100]`                                                              |
+| Delete a Rem                             | `agent-remnote --json rem delete --subject "<rem_id>" [--max-delete-subtree-nodes 100]`                                                         |
 | Structured multi-step write              | `agent-remnote --json apply --payload @plan.json`                                                                                                 |
 | Raw ops enqueue (advanced)               | `agent-remnote --json apply --payload @ops.json`                                                                                                  |
 | List backup artifacts                    | `agent-remnote --json backup list`                                                                                                                |

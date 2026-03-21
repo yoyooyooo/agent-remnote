@@ -17,6 +17,24 @@ agent-remnote --json plugin current --compact
 agent-remnote plugin serve
 ```
 
+## Write surface
+
+Core write commands use the reset axes `subject / from / to / at / portal`.
+
+```bash
+agent-remnote --json rem create --at standalone --markdown @./note.md --title "Doc"
+agent-remnote --json rem move --subject "id:<remId>" --at "parent[0]:id:<parentId>" --portal in-place
+agent-remnote --json portal create --to "id:<targetRemId>" --at "after:id:<anchorRemId>"
+agent-remnote --json rem children append --subject "id:<parentRemId>" --markdown @./children.md
+agent-remnote --json tag add --tag "id:<tagRemId>" --to "id:<remId1>" --to "id:<remId2>"
+```
+
+Notes:
+
+- `rem create --from-selection --portal in-place` is the preferred original-slot backfill path.
+- repeated `--from ... --portal in-place` is an advanced path that requires one contiguous sibling range under one parent.
+- `tag add/remove` are relation writes. Repeated `--tag` and repeated `--to` expand as a cross-product, not pairwise.
+
 ## Remote mode
 
 Configure once in `~/.agent-remnote/config.json`:

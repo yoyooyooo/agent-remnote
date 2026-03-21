@@ -14,12 +14,10 @@ describe('cli contract: write portal create', () => {
       '--json',
       'portal',
       'create',
-      '--parent',
-      'p1',
-      '--target',
-      't1',
-      '--position',
-      '2',
+      '--to',
+      'id:t1',
+      '--at',
+      'parent[2]:id:p1',
       '--dry-run',
     ]);
 
@@ -44,10 +42,10 @@ describe('cli contract: write portal create', () => {
       '--json',
       'portal',
       'create',
-      '--parent',
-      'remnote://w/ws1/p1',
-      '--target',
+      '--to',
       'remnote://w/ws1/t1',
+      '--at',
+      'parent:remnote://w/ws1/p1',
       '--dry-run',
     ]);
 

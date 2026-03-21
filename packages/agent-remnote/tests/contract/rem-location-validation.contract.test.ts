@@ -9,14 +9,13 @@ function parseJsonLine(text: string): any {
 }
 
 describe('cli contract: rem create/move location validation', () => {
-  it('fails fast when multiple content placement groups are combined', async () => {
+  it('fails fast when --at is malformed', async () => {
     const res = await runCli([
       '--json',
       'rem',
       'create',
-      '--parent',
-      'p1',
-      '--standalone',
+      '--at',
+      'parent[]:id:p1',
       '--text',
       'hello',
       '--dry-run',
@@ -28,23 +27,22 @@ describe('cli contract: rem create/move location validation', () => {
     const env = parseJsonLine(res.stdout);
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INVALID_ARGS');
-    expect(String(env.error?.message ?? '')).toContain('placement');
+    expect(String(env.error?.message ?? '')).toContain('--at');
   });
 
-  it('fails fast when multiple portal placement groups are combined', async () => {
+  it('fails fast when portal strategy points at standalone', async () => {
     const res = await runCli([
       '--json',
       'rem',
       'create',
-      '--standalone',
+      '--at',
+      'standalone',
       '--title',
       'LangGraph',
       '--markdown',
       '- Overview',
-      '--portal-parent',
-      'p1',
-      '--portal-after',
-      'a1',
+      '--portal',
+      'at:standalone',
       '--dry-run',
     ]);
 
@@ -54,7 +52,7 @@ describe('cli contract: rem create/move location validation', () => {
     const env = parseJsonLine(res.stdout);
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INVALID_ARGS');
-    expect(String(env.error?.message ?? '')).toContain('portal placement');
+    expect(String(env.error?.message ?? '')).toContain('standalone');
   });
 
   it('fails fast when no destination placement is provided', async () => {
@@ -75,6 +73,6 @@ describe('cli contract: rem create/move location validation', () => {
     const env = parseJsonLine(res.stdout);
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INVALID_ARGS');
-    expect(String(env.error?.message ?? '')).toContain('placement');
+    expect(String(env.error?.message ?? '')).toContain('--at');
   });
 });

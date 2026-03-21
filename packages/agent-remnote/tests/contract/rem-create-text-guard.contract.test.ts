@@ -5,7 +5,7 @@ import { runCli } from '../helpers/runCli.js';
 describe('cli contract: rem create text guard', () => {
   it('rejects markdown-like content passed to --text', async () => {
     const res = await runCli(
-      ['--json', 'rem', 'create', '--parent', 'PARENT', '--text', '- root\n  - child', '--dry-run'],
+      ['--json', 'rem', 'create', '--at', 'parent:id:PARENT', '--text', '- root\n  - child', '--dry-run'],
       {
         env: { REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 15_000,
@@ -22,7 +22,7 @@ describe('cli contract: rem create text guard', () => {
 
   it('allows markdown-like text when --force-text is set', async () => {
     const res = await runCli(
-      ['--json', 'rem', 'create', '--parent', 'PARENT', '--text', '- root\n  - child', '--force-text', '--dry-run'],
+      ['--json', 'rem', 'create', '--at', 'parent:id:PARENT', '--text', '- root\n  - child', '--force-text', '--dry-run'],
       {
         env: { REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 15_000,
