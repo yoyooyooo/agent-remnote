@@ -18,7 +18,7 @@ type ContentSource =
   | {
       kind: 'targets'
       rem_ids: ReadonlyArray<string>
-      source_origin: 'explicit_targets' | 'selection'
+      source_origin: 'explicit_from' | 'selection'
     }
 ```
 
@@ -40,7 +40,8 @@ type ContentPlacement =
 
 规则：
 
-- `--parent` / `--before` / `--after` / `--standalone` 四选一
+- 对外 CLI 统一收口到 `--at <placement-spec>`
+- `placement-spec` 允许 `standalone` / `parent:<ref>` / `parent[<position>]:<ref>` / `before:<ref>` / `after:<ref>`
 - 缺省不允许，必须显式指定
 
 ### 3. portal 位置 `PortalPlacement`
@@ -57,13 +58,11 @@ type PortalPlacement =
 
 规则：
 
-- 显式 portal 放置三选一：
-  - `portal-parent`
-  - `portal-before`
-  - `portal-after`
+- 对外 CLI 统一收口到 `--portal`
+- 显式 portal 放置语义为 `--portal at:<placement-spec>`
 - shorthand：
-  - `leave-portal`
-  - `leave-portal-in-place`
+  - `rem move --portal in-place`
+  - `rem create --from-selection --portal in-place`
 
 ### 4. 标题策略 `TitleStrategy`
 

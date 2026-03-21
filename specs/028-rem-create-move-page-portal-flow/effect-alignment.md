@@ -15,7 +15,7 @@
 
 ### 2. intent normalization / validation
 
-- 复杂参数组合已经集中到 [\_promotion.ts](/Users/yoyo/Documents/code/personal/agent-remnote/packages/agent-remnote/src/commands/write/rem/_promotion.ts)
+- 复杂参数组合已经集中到 [`_promotion.ts`](../../packages/agent-remnote/src/commands/write/rem/_promotion.ts)
 - 这里统一处理：
   - source model
   - title policy

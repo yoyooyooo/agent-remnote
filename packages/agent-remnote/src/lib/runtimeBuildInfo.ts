@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type RuntimeBuildInfo = {
   readonly name: string;
@@ -78,8 +79,8 @@ function computeDefaultBuildInfo(): RuntimeBuildInfo {
   const srcDir = new URL('../', import.meta.url);
   const packageJson = new URL('../../package.json', import.meta.url);
   const sourceStamp = Math.max(
-    latestMtimeMs(srcDir.pathname),
-    fileMtimeMs(packageJson.pathname),
+    latestMtimeMs(fileURLToPath(srcDir)),
+    fileMtimeMs(fileURLToPath(packageJson)),
   );
   const buildIdInput = `${pkg.name}\n${pkg.version}\n${mode}\n${sourceStamp}`;
   const buildId = createHash('sha256').update(buildIdInput).digest('hex').slice(0, 12);
@@ -95,6 +96,11 @@ function computeDefaultBuildInfo(): RuntimeBuildInfo {
 
 let cached: RuntimeBuildInfo | undefined;
 
+function parseEnvNumber(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function currentRuntimeBuildInfo(): RuntimeBuildInfo {
   if (cached) return cached;
   const defaultInfo = computeDefaultBuildInfo();
@@ -102,8 +108,8 @@ export function currentRuntimeBuildInfo(): RuntimeBuildInfo {
     name: process.env.AGENT_REMNOTE_NAME?.trim() || defaultInfo.name,
     version: process.env.AGENT_REMNOTE_VERSION?.trim() || defaultInfo.version,
     build_id: process.env.AGENT_REMNOTE_BUILD_ID?.trim() || defaultInfo.build_id,
-    built_at: Number(process.env.AGENT_REMNOTE_BUILD_AT ?? defaultInfo.built_at),
-    source_stamp: Number(process.env.AGENT_REMNOTE_SOURCE_STAMP ?? defaultInfo.source_stamp),
+    built_at: parseEnvNumber(process.env.AGENT_REMNOTE_BUILD_AT, defaultInfo.built_at),
+    source_stamp: parseEnvNumber(process.env.AGENT_REMNOTE_SOURCE_STAMP, defaultInfo.source_stamp),
     mode:
       process.env.AGENT_REMNOTE_BUILD_MODE === 'src' ||
       process.env.AGENT_REMNOTE_BUILD_MODE === 'dist' ||

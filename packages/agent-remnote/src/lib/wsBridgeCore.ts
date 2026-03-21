@@ -25,6 +25,11 @@ import type {
 
 const STATE_WRITE_TIMER_ID = 'state-write';
 
+function normalizeRuntimeNumber(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
 function newClientState(params: {
   readonly connId: WsConnId;
   readonly now: number;
@@ -353,8 +358,8 @@ export function makeWsBridgeCore(params: {
                 name: typeof (msg.runtime as any).name === 'string' ? (msg.runtime as any).name : 'unknown',
                 version: typeof (msg.runtime as any).version === 'string' ? (msg.runtime as any).version : '0.0.0',
                 build_id: typeof (msg.runtime as any).build_id === 'string' ? (msg.runtime as any).build_id : 'unknown',
-                built_at: Number((msg.runtime as any).built_at ?? 0) || 0,
-                source_stamp: Number((msg.runtime as any).source_stamp ?? 0) || 0,
+                built_at: normalizeRuntimeNumber((msg.runtime as any).built_at),
+                source_stamp: normalizeRuntimeNumber((msg.runtime as any).source_stamp),
                 mode: typeof (msg.runtime as any).mode === 'string' ? (msg.runtime as any).mode : undefined,
               }
             : undefined;
