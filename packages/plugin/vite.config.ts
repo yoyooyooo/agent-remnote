@@ -34,10 +34,11 @@ function maxMtime(paths: string[]): number {
   for (const target of paths) {
     try {
       const st = statSync(target);
+      max = Math.max(max, Math.floor(st.mtimeMs));
       if (st.isDirectory()) {
-        max = Math.max(max, ...walkFiles(target).map((file) => Math.floor(statSync(file).mtimeMs)));
-      } else {
-        max = Math.max(max, Math.floor(st.mtimeMs));
+        for (const file of walkFiles(target)) {
+          max = Math.max(max, Math.floor(statSync(file).mtimeMs));
+        }
       }
     } catch {}
   }
@@ -209,57 +210,59 @@ const { inputs, widgetNames, widgetSource } = collectWidgetEntries();
 const baseWidgetNames = Array.from(
   new Set(widgetNames.map((n) => (n.endsWith(SANDBOX_SUFFIX) ? n.slice(0, -SANDBOX_SUFFIX.length) : n))),
 );
-const pkg = packageInfo();
-const sourceStamp = maxMtime([
-  path.resolve(__dirname, 'src'),
-  path.resolve(__dirname, 'package.json'),
-  path.resolve(__dirname, 'vite.config.ts'),
-]);
-const builtAt = Date.now();
-const buildInfo = {
-  name: pkg.name,
-  version: pkg.version,
-  build_id: `${pkg.version}:${String(sourceStamp)}`,
-  built_at: builtAt,
-  source_stamp: sourceStamp,
-  mode: 'dist',
-} as const;
+export default defineConfig(({ command }) => {
+  const pkg = packageInfo();
+  const sourceStamp = maxMtime([
+    path.resolve(__dirname, 'src'),
+    path.resolve(__dirname, 'package.json'),
+    path.resolve(__dirname, 'vite.config.ts'),
+  ]);
+  const builtAt = Date.now();
+  const buildInfo = {
+    name: pkg.name,
+    version: pkg.version,
+    build_id: `${pkg.version}:${String(sourceStamp)}`,
+    built_at: builtAt,
+    source_stamp: sourceStamp,
+    mode: command === 'build' ? 'dist' : 'src',
+  } as const;
 
-export default defineConfig({
-  base: '',
-  define: {
-    __REMNOTE_PLUGIN_BUILD_INFO__: JSON.stringify(buildInfo),
-  },
-  plugins: [
-    react(),
-    virtualWidgetEntriesPlugin(widgetSource),
-    devEntryShimPlugin(widgetSource),
-    injectImportMetaConstantPlugin(),
-    emitReadmePlugin(),
-    emitBuildInfoPlugin(buildInfo),
-    duplicateSandboxCssPlugin(baseWidgetNames),
-  ],
-  server: {
-    port: 8080,
-    strictPort: true,
-  },
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-    target: 'es2020',
-    cssCodeSplit: true,
-    assetsDir: '',
-    rollupOptions: {
-      input: inputs,
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: '[name]-[hash].js',
-        assetFileNames: (assetInfo) => {
-          const name = assetInfo.name ?? '';
-          if (name.endsWith('.css')) return name;
-          return '[name]-[hash][extname]';
+  return {
+    base: '',
+    define: {
+      __REMNOTE_PLUGIN_BUILD_INFO__: JSON.stringify(buildInfo),
+    },
+    plugins: [
+      react(),
+      virtualWidgetEntriesPlugin(widgetSource),
+      devEntryShimPlugin(widgetSource),
+      injectImportMetaConstantPlugin(),
+      emitReadmePlugin(),
+      emitBuildInfoPlugin(buildInfo),
+      duplicateSandboxCssPlugin(baseWidgetNames),
+    ],
+    server: {
+      port: 8080,
+      strictPort: true,
+    },
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      target: 'es2020',
+      cssCodeSplit: true,
+      assetsDir: '',
+      rollupOptions: {
+        input: inputs,
+        output: {
+          entryFileNames: '[name].js',
+          chunkFileNames: '[name]-[hash].js',
+          assetFileNames: (assetInfo) => {
+            const name = assetInfo.name ?? '';
+            if (name.endsWith('.css')) return name;
+            return '[name]-[hash][extname]';
+          },
         },
       },
     },
-  },
+  };
 });

@@ -43,7 +43,11 @@ export async function executeCreatePortal(plugin: ReactRNPlugin, op: OpDispatch)
   }
 
   try {
-    await target.addToPortal(portal._id);
+    // Older SDK builds may not expose addToPortal.
+    if (typeof (target as any).addToPortal !== 'function') {
+      throw new Error('addToPortal not available in SDK');
+    }
+    await (target as any).addToPortal(portal._id);
   } catch (e) {
     await rollbackPortal();
     throw e;
@@ -55,4 +59,3 @@ export async function executeCreatePortal(plugin: ReactRNPlugin, op: OpDispatch)
   }
   return result;
 }
-

@@ -180,6 +180,9 @@ export async function executeMoveRem(plugin: ReactRNPlugin, op: OpDispatch): Pro
       if (portal?._id) {
         try {
           await plugin.rem.moveRems([portal._id], sourceParentId, sourcePosition);
+          if (typeof (rem as any).addToPortal !== 'function') {
+            throw new Error('addToPortal not available in SDK');
+          }
           await (rem as any).addToPortal(portal._id);
           portalId = portal._id;
         } catch (error) {

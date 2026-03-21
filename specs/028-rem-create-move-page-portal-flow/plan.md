@@ -113,17 +113,17 @@ packages/agent-remnote/tests/contract/
 核心裁决：
 
 - `rem create` 新增 `--markdown`
-- `rem create` 新增 repeated `--target`
-- `text | markdown | targets[]` 是真正的 source model
-- `--from-selection` 只是 `targets[]` 的 sugar
+- `rem create` 新增 repeated `--from`
+- `text | markdown | from[]` 是真正的 source model
+- `--from-selection` 只是 `from[]` 的 sugar
 - `rem create --markdown` 强制 `--title`，但不强制 single-root markdown
-- 多 `--target` 强制 `--title`，单 `--target` 可默认沿用 source 文本
+- 多 `--from` 强制 `--title`，单 `--from` 可默认沿用 source 文本
 - `--from-selection` 仅在多 root 时强制 `--title`；单 root 可默认沿用源文本
-- 内容位置显式：`parent | before | after | standalone`
-- portal 位置显式：`portal-parent | portal-before | portal-after`
+- 内容位置统一走 `--at <placement-spec>`
+- portal 行为统一走 `--portal in-place | at:<placement-spec>`
 - shorthand：
-  - `rem move --leave-portal`
-  - `rem create --from-selection --leave-portal-in-place`
+- `rem move --portal in-place`
+- `rem create --from-selection --portal in-place`
 - 所有高层命令最终编译到 canonical internal plan surface
 
 ## Phase 1：Shared Intent Normalization
@@ -136,10 +136,10 @@ packages/agent-remnote/tests/contract/
 
 职责：
 
-- parse `text | markdown | targets[]`
-- resolve `--from-selection` -> `targets[]`
-- parse `parent | before | after | standalone`
-- parse `portal-parent | portal-before | portal-after | leave-portal*`
+- parse `text | markdown | from[]`
+- resolve `--from-selection` -> `from[]`
+- parse `--at <placement-spec>`
+- parse `--portal in-place | at:<placement-spec>`
 - fail-fast on invalid combinations
 - produce one normalized internal intent for create/move execution
 
@@ -164,9 +164,9 @@ packages/agent-remnote/tests/contract/
 
 目标：支持 markdown/text 创建 standalone destination，并可选 portal placement。
 
-### Workstream B：Existing Rem Targets
+### Workstream B：Existing Rem Sources
 
-目标：支持 repeated `--target` 创建新 destination，并把已有 Rem 移进去。
+目标：支持 repeated `--from` 创建新 destination，并把已有 Rem 移进去。
 
 ### Workstream C：Selection Source Sugar
 
@@ -180,7 +180,7 @@ packages/agent-remnote/tests/contract/
 
 - `move_rem` 需要支持 standalone destination semantics
 - `--is-document` 仍然显式，默认 false
-- `--leave-portal` 需要记录 source parent / source position
+- `--portal in-place` 需要记录 source parent / source position
 
 ## Phase 5：Runtime Composition & Receipts
 
@@ -209,7 +209,7 @@ Skill 侧额外要求：
 
 - 明确 `--is-document` 默认保持 `false`
 - 明确 `rem create` / `rem move` 的新参数组合与默认策略
-- 明确 `rem create --target` 与 `--from-selection` 的区别与默认标题策略
+- 明确 `rem create --from` 与 `--from-selection` 的区别与默认标题策略
 - 明确 DN playground -> standalone destination + portal 的推荐路由
 - 避免 Skill 继续沿用旧的“先写 DN，再手工拼 portal / move”路径
 
