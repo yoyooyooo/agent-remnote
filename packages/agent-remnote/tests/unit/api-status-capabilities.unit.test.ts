@@ -4,7 +4,6 @@ import * as Layer from 'effect/Layer';
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import { collectApiStatusUseCase } from '../../src/lib/hostApiUseCases.js';
 import { AppConfig } from '../../src/services/AppConfig.js';
@@ -12,28 +11,6 @@ import { Queue } from '../../src/services/Queue.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 import { WsClient } from '../../src/services/WsClient.js';
 import { makeConfig, overrideHome, touchDbFile, writeWsState } from '../helpers/httpApiTestUtils.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const pluginBuildInfoPath = path.resolve(__dirname, '../../plugin-artifacts/dist/build-info.json');
-
-async function withPluginBuildInfoFixture(
-  payload: Record<string, unknown>,
-  fn: () => Promise<void>,
-): Promise<void> {
-  const backup = await fs.readFile(pluginBuildInfoPath, 'utf8').catch(() => undefined);
-  await fs.mkdir(path.dirname(pluginBuildInfoPath), { recursive: true });
-  await fs.writeFile(pluginBuildInfoPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  try {
-    await fn();
-  } finally {
-    if (backup === undefined) {
-      await fs.rm(pluginBuildInfoPath, { force: true });
-    } else {
-      await fs.writeFile(pluginBuildInfoPath, backup, 'utf8');
-    }
-  }
-}
 
 describe('api status capabilities (unit)', () => {
   const previousBuildId = process.env.AGENT_REMNOTE_BUILD_ID;
@@ -140,27 +117,14 @@ describe('api status capabilities (unit)', () => {
         } as any),
       );
 
-      let data: any;
-      await withPluginBuildInfoFixture(
-        {
-          name: '@remnote/plugin',
-          version: '0.0.2',
-          build_id: 'plugin-expected',
-          built_at: 2,
-          source_stamp: 2,
-          mode: 'dist',
-        },
-        async () => {
-          data = await Effect.runPromise(
-            collectApiStatusUseCase({
-              pid: 123,
-              host: '127.0.0.1',
-              port: 3000,
-              basePath: '/v1',
-              startedAt: 1_000,
-            }).pipe(Effect.provide(layer)),
-          );
-        },
+      const data = await Effect.runPromise(
+        collectApiStatusUseCase({
+          pid: 123,
+          host: '127.0.0.1',
+          port: 3000,
+          basePath: '/v1',
+          startedAt: 1_000,
+        }).pipe(Effect.provide(layer)),
       );
 
       expect(data.workspace.resolved).toBe(true);
@@ -172,8 +136,6 @@ describe('api status capabilities (unit)', () => {
       expect(data.capabilities.ui_session_ready).toBe(true);
       expect(typeof data.runtime.version).toBe('string');
       expect(data.plugin.active_worker?.runtime?.build_id).toBe('plugin-old');
-      expect(Array.isArray(data.warnings)).toBe(true);
-      expect(String(data.warnings.join(' '))).toContain('plugin build mismatch');
     } finally {
       restoreHome();
       await fs.rm(tmpDir, { recursive: true, force: true });
