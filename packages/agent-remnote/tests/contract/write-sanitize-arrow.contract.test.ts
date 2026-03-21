@@ -12,7 +12,7 @@ describe('cli contract: sanitize queued write payloads', () => {
     const storePath = path.join(tmpDir, 'store.sqlite');
 
     try {
-      const res = await runCli(['--json', 'rem', 'create', '--parent', 'P', '--text', 'push dirty → effect pull'], {
+      const res = await runCli(['--json', 'rem', 'create', '--at', 'parent:id:P', '--text', 'push dirty → effect pull'], {
         env: { HOME: tmpDir, REMNOTE_STORE_DB: storePath, REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 30_000,
       });

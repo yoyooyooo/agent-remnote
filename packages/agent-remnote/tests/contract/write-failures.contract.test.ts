@@ -12,13 +12,13 @@ function parseJsonLine(text: string): any {
 }
 
 describe('cli contract: write failures are diagnosable', () => {
-  it('invalid --ref is rejected with a stable error.code + hint', async () => {
+  it('invalid --at placement spec is rejected with a stable error.code + hint', async () => {
     const res = await runCli([
       '--json',
       'rem',
       'create',
-      '--ref',
-      'not-a-ref',
+      '--at',
+      'parent:',
       '--text',
       'hello',
       '--no-notify',
@@ -32,7 +32,7 @@ describe('cli contract: write failures are diagnosable', () => {
     expect(env.ok).toBe(false);
     expect(env.error?.code).toBe('INVALID_ARGS');
     expect(Array.isArray(env.hint)).toBe(true);
-    expect(env.hint.some((h: string) => String(h).includes('Example: --ref'))).toBe(true);
+    expect(env.hint.some((h: string) => String(h).includes('Examples: --at parent:id:P1'))).toBe(true);
   });
 
   it('daemon unreachable still enqueues and returns actionable warnings/nextActions', async () => {

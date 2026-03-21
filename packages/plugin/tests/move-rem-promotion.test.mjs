@@ -57,4 +57,53 @@ describe('plugin move_rem promotion', () => {
       source_parent_id: 'p1',
     });
   });
+
+  it('warns when source position cannot be resolved but still completes the move', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const setParent = vi.fn(async () => {});
+    const positionAmongstSiblings = vi.fn(async () => {
+      throw new Error('position failed');
+    });
+    const addToPortal = vi.fn(async () => {});
+    const portalRemove = vi.fn(async () => {});
+    const moveRems = vi.fn(async () => {});
+
+    const rem = {
+      _id: 'r1',
+      parent: 'p1',
+      setParent,
+      positionAmongstSiblings,
+      addToPortal,
+    };
+
+    const portal = {
+      _id: 'portal-1',
+      remove: portalRemove,
+    };
+
+    const plugin = {
+      rem: {
+        findOne: vi.fn(async (id) => (id === 'r1' ? rem : null)),
+        createPortal: vi.fn(async () => portal),
+        moveRems,
+      },
+    };
+
+    const result = await executeMoveRem(plugin, {
+      payload: {
+        rem_id: 'r1',
+        standalone: true,
+        leave_portal: true,
+      },
+    });
+
+    expect(warn).toHaveBeenCalledWith('[agent-remnote][move] failed to get source position', expect.any(Object));
+    expect(moveRems).toHaveBeenCalledWith(['portal-1'], 'p1', 0);
+    expect(result).toMatchObject({
+      ok: true,
+      portal_created: true,
+    });
+
+    warn.mockRestore();
+  });
 });

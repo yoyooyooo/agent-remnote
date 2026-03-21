@@ -37,6 +37,22 @@ function invalidArgs(message: string, details?: Record<string, unknown>): CliErr
   });
 }
 
+function invalidPlacementSpec(optionName: string, raw: string): CliError {
+  return new CliError({
+    code: 'INVALID_ARGS',
+    message: `Invalid ${optionName} placement spec: ${raw}`,
+    exitCode: 2,
+    details: { option: optionName, value: raw },
+    hint: [
+      `Examples: ${optionName} standalone`,
+      `Examples: ${optionName} parent:id:P1`,
+      `Examples: ${optionName} parent[2]:id:P1`,
+      `Examples: ${optionName} before:id:R1`,
+      `Examples: ${optionName} after:id:R1`,
+    ],
+  });
+}
+
 export function parsePlacementSpec(
   raw: string,
   options?: { readonly optionName?: string | undefined; readonly allowStandalone?: boolean | undefined },
@@ -66,15 +82,11 @@ export function parsePlacementSpec(
       const positionText = parentMatch[1];
       const parentRef = normalizeRefValue(parentMatch[2] ?? '');
       if (!parentRef) {
-        return yield* Effect.fail(
-          invalidArgs(`Invalid ${optionName} placement spec: ${raw}`, { option: optionName, value: raw }),
-        );
+        return yield* Effect.fail(invalidPlacementSpec(optionName, raw));
       }
       const parsedPosition = positionText === undefined ? undefined : Number.parseInt(positionText, 10);
       if (positionText !== undefined && (parsedPosition === undefined || !Number.isFinite(parsedPosition) || parsedPosition < 0)) {
-        return yield* Effect.fail(
-          invalidArgs(`Invalid ${optionName} placement spec: ${raw}`, { option: optionName, value: raw }),
-        );
+        return yield* Effect.fail(invalidPlacementSpec(optionName, raw));
       }
       const position = parsedPosition;
 
@@ -89,9 +101,7 @@ export function parsePlacementSpec(
     if (beforeMatch) {
       const anchorRef = normalizeRefValue(beforeMatch[1] ?? '');
       if (!anchorRef) {
-        return yield* Effect.fail(
-          invalidArgs(`Invalid ${optionName} placement spec: ${raw}`, { option: optionName, value: raw }),
-        );
+        return yield* Effect.fail(invalidPlacementSpec(optionName, raw));
       }
       return { kind: 'before', anchorRef } satisfies PlacementSpec;
     }
@@ -100,16 +110,12 @@ export function parsePlacementSpec(
     if (afterMatch) {
       const anchorRef = normalizeRefValue(afterMatch[1] ?? '');
       if (!anchorRef) {
-        return yield* Effect.fail(
-          invalidArgs(`Invalid ${optionName} placement spec: ${raw}`, { option: optionName, value: raw }),
-        );
+        return yield* Effect.fail(invalidPlacementSpec(optionName, raw));
       }
       return { kind: 'after', anchorRef } satisfies PlacementSpec;
     }
 
-    return yield* Effect.fail(
-      invalidArgs(`Invalid ${optionName} placement spec: ${raw}`, { option: optionName, value: raw }),
-    );
+    return yield* Effect.fail(invalidPlacementSpec(optionName, raw));
   });
 }
 

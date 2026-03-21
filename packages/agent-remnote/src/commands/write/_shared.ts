@@ -45,6 +45,10 @@ export function normalizeOptionalText(raw: string | undefined): string | undefin
   return trimmed ? trimmed : undefined;
 }
 
+export function normalizeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export type StableSiblingRange = {
   readonly orderedRemIds: readonly string[];
   readonly parentId: string;
