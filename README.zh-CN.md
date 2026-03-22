@@ -168,9 +168,13 @@ agent-remnote plugin current --compact
 - 配置了 `apiBaseUrl` 之后，业务命令必须走宿主机 Host API。
 - `REMNOTE_API_BASE_URL` 与用户配置 `apiBaseUrl` 在语义上完全等价，只是优先级来源不同。
 - `apiBasePath` 只影响监听与状态输出里的 URL 组装；若 `apiBaseUrl` 已经自带路径前缀，则优先使用该前缀。
+- 哪些命令属于必须保持 local/remote 对等的 RemNote business commands，以
+  `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为唯一权威源。
 - 仍依赖本地 DB 或本地文件系统的命令会直接 fail fast，不再静默回落到本地读取。
+- 只是在 CLI 侧编译 `ops` 的 deferred 写命令，在 remote mode 下也必须走宿主机 Host API，不能把事务写到调用端本地 store。
 - 当前已支持远程模式的代表性命令包括 `search`、`queue wait`、`plugin current`、`rem outline`、`daily rem-id`、`daily write` 与 `rem children *`。
 - 远程模式下的结构化写入，使用 `daily write --markdown ...`、`rem children ...` 或 `apply --payload ...`。
+- `powerup todo ...` 是 Todo 命令族的 canonical 路径，顶层 `todo ...` 继续保留为高频 alias。
 
 需要临时覆盖时仍可使用：
 

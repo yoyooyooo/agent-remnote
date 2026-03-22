@@ -3,9 +3,8 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { collectSelectionCurrentUseCase } from '../../../lib/hostApiUseCases.js';
-import { AppConfig } from '../../../services/AppConfig.js';
-import { HostApiClient } from '../../../services/HostApiClient.js';
+import { invokeWave1Capability } from '../../../lib/business-semantics/modeParityRuntime.js';
+import { compactSelectionCurrent } from '../../../lib/business-semantics/selectionResolution.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -15,33 +14,14 @@ function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
 const stateFile = Options.text('state-file').pipe(Options.optional, Options.map(optionToUndefined));
 const staleMs = Options.integer('stale-ms').pipe(Options.optional, Options.map(optionToUndefined));
 
-function toCompact(data: any) {
-  return {
-    selection_kind: data?.selection_kind ?? '',
-    total_count: data?.total_count ?? 0,
-    truncated: data?.truncated === true,
-    current_id: typeof data?.current?.id === 'string' ? data.current.id : '',
-    current_title: typeof data?.current?.title === 'string' ? data.current.title : undefined,
-    page_id: typeof data?.page?.id === 'string' ? data.page.id : '',
-    page_title: typeof data?.page?.title === 'string' ? data.page.title : undefined,
-    focus_id: typeof data?.focus?.id === 'string' ? data.focus.id : '',
-    focus_title: typeof data?.focus?.title === 'string' ? data.focus.title : undefined,
-  };
-}
-
 export const readSelectionCurrentCommand = Command.make(
   'current',
   { stateFile, staleMs, compact: Options.boolean('compact') },
   ({ stateFile, staleMs, compact }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
+      const data: any = yield* invokeWave1Capability('selection.current', { stateFile, staleMs });
 
-      const data = cfg.apiBaseUrl
-        ? yield* hostApi.selectionCurrent({ baseUrl: cfg.apiBaseUrl, stateFile, staleMs })
-        : yield* collectSelectionCurrentUseCase({ stateFile, staleMs });
-
-      const compactData = compact ? toCompact(data) : undefined;
+      const compactData = compact ? compactSelectionCurrent(data) : undefined;
       const currentId = String((compactData?.current_id ?? data?.current?.id) || '').trim();
       const currentTitle = String((compactData?.current_title ?? data?.current?.title) || '').trim();
       const pageId = String((compactData?.page_id ?? data?.page?.id) || '').trim();

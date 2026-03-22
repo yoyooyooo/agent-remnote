@@ -3,14 +3,10 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { executeSearchQuery } from '../../adapters/core.js';
-
-import { AppConfig } from '../../services/AppConfig.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { CliError } from '../../services/Errors.js';
 import { Payload } from '../../services/Payload.js';
-import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
-import { cliErrorFromUnknown } from '../_tool.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -49,11 +45,6 @@ export const readQueryCommand = Command.make(
   { payload, text, tag, limit, offset, snippetLength, sort, sortDirection },
   ({ payload, text, tag, limit, offset, snippetLength, sort, sortDirection }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      yield* failInRemoteMode({
-        command: 'query',
-        reason: 'this command still executes structured queries against the local RemNote database',
-      });
       const payloadSvc = yield* Payload;
 
       const queryObj: any = {};
@@ -104,16 +95,11 @@ export const readQueryCommand = Command.make(
         };
       }
 
-      const { payload: result } = yield* Effect.tryPromise({
-        try: async () =>
-          await executeSearchQuery({
-            ...queryObj,
-            dbPath: cfg.remnoteDb,
-            limit: limit as any,
-            offset: offset as any,
-            snippetLength: snippetLength as any,
-          } as any),
-        catch: (e) => cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' }),
+      const result: any = yield* invokeWave1Capability('read.query', {
+        queryObj,
+        limit,
+        offset,
+        snippetLength,
       });
 
       yield* writeSuccess({

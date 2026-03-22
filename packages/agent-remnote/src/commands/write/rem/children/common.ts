@@ -1,13 +1,11 @@
 import * as Effect from 'effect/Effect';
 
+export { extractReplaceBackupSummary } from '../../../../lib/business-semantics/receiptBuilders.js';
+import { invokeWave1Capability } from '../../../../lib/business-semantics/modeParityRuntime.js';
 import { trimBoundaryBlankLines } from '../../../../lib/text.js';
-import { collectSelectionCurrentUseCase, executeWriteApplyUseCase } from '../../../../lib/hostApiUseCases.js';
-import { AppConfig } from '../../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../../services/Errors.js';
 import { FileInput } from '../../../../services/FileInput.js';
-import { HostApiClient } from '../../../../services/HostApiClient.js';
 import { Payload } from '../../../../services/Payload.js';
-import { Queue } from '../../../../services/Queue.js';
 import { RemDb } from '../../../../services/RemDb.js';
 import { WorkspaceBindings } from '../../../../services/WorkspaceBindings.js';
 import { readMarkdownTextFromInputSpec } from '../../../_shared.js';
@@ -21,7 +19,7 @@ export function normalizeRemIdInput(raw: string): string {
 
 export function resolveSubjectRemId(
   raw: string,
-): Effect.Effect<string, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+): Effect.Effect<string, CliError, RefResolver | WorkspaceBindings | any> {
   return resolveRefValue(raw);
 }
 
@@ -108,7 +106,7 @@ export function buildActionEnvelope(params: {
 export function resolveCurrentSelectionRemId(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
-}): Effect.Effect<ResolvedSelectionRemId, CliError, AppConfig | HostApiClient | RemDb | WorkspaceBindings> {
+}): Effect.Effect<ResolvedSelectionRemId, CliError, RemDb | WorkspaceBindings | any> {
   return Effect.gen(function* () {
     const resolved = yield* resolveCurrentSelectionRemIds(params);
     if (resolved.rem_ids.length !== 1) {
@@ -133,13 +131,12 @@ export function resolveCurrentSelectionRemId(params: {
 export function resolveCurrentSelectionRemIds(params: {
   readonly stateFile?: string | undefined;
   readonly staleMs?: number | undefined;
-}): Effect.Effect<ResolvedSelectionRemIds, CliError, AppConfig | HostApiClient | RemDb | WorkspaceBindings> {
+}): Effect.Effect<ResolvedSelectionRemIds, CliError, RemDb | WorkspaceBindings | any> {
   return Effect.gen(function* () {
-    const cfg = yield* AppConfig;
-    const hostApi = yield* HostApiClient;
-    const data = cfg.apiBaseUrl
-      ? yield* hostApi.selectionCurrent({ baseUrl: cfg.apiBaseUrl, stateFile: params.stateFile, staleMs: params.staleMs })
-      : yield* collectSelectionCurrentUseCase({ stateFile: params.stateFile, staleMs: params.staleMs });
+    const data: any = yield* invokeWave1Capability('selection.current', {
+      stateFile: params.stateFile,
+      staleMs: params.staleMs,
+    });
 
     const totalCountRaw = Number(data?.total_count ?? 0);
     const totalCount = Number.isFinite(totalCountRaw) && totalCountRaw >= 0 ? Math.floor(totalCountRaw) : 0;
@@ -184,7 +181,7 @@ export function dryRunEnvelope(
 ): Effect.Effect<
   { readonly kind: string; readonly ops: unknown; readonly aliasMap?: unknown },
   CliError,
-  AppConfig | Payload | RefResolver | WorkspaceBindings
+  Payload | RefResolver | WorkspaceBindings | any
 > {
   return Effect.gen(function* () {
     const payloadSvc = yield* Payload;
@@ -213,28 +210,10 @@ export function submitActionEnvelope(params: {
   readonly wait: boolean;
   readonly timeoutMs?: number | undefined;
   readonly pollMs?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | HostApiClient | Payload | FileInput | any> {
+}): Effect.Effect<any, CliError, Payload | FileInput | any> {
   return Effect.gen(function* () {
-    const cfg = yield* AppConfig;
-    const hostApi = yield* HostApiClient;
-
-    if (cfg.apiBaseUrl) {
-      const data = yield* hostApi.writeApply({
-        baseUrl: cfg.apiBaseUrl,
-        body: params.body,
-      });
-      if (!params.wait) return data;
-      const waited = yield* hostApi.queueWait({
-        baseUrl: cfg.apiBaseUrl,
-        txnId: String(data.txn_id),
-        timeoutMs: params.timeoutMs,
-        pollMs: params.pollMs,
-      });
-      return { ...data, ...waited };
-    }
-
-    return yield* executeWriteApplyUseCase({
-      raw: params.body,
+    return yield* invokeWave1Capability('write.apply', {
+      body: params.body,
       wait: params.wait,
       timeoutMs: params.timeoutMs,
       pollMs: params.pollMs,
@@ -244,54 +223,8 @@ export function submitActionEnvelope(params: {
 
 export function loadTxnDetail(params: {
   readonly txnId: string;
-}): Effect.Effect<any, CliError, AppConfig | HostApiClient | Queue> {
+}): Effect.Effect<any, CliError, any> {
   return Effect.gen(function* () {
-    const cfg = yield* AppConfig;
-    const hostApi = yield* HostApiClient;
-    const queue = yield* Queue;
-    return cfg.apiBaseUrl
-      ? yield* hostApi.queueTxn({ baseUrl: cfg.apiBaseUrl, txnId: params.txnId })
-      : yield* queue.inspect({ dbPath: cfg.storeDb, txnId: params.txnId });
+    return yield* invokeWave1Capability('queue.txn', { txnId: params.txnId });
   });
-}
-
-function parseResultJson(raw: any): any {
-  const resultJson = raw?.result_json;
-  if (typeof resultJson === 'string' && resultJson.trim()) {
-    try {
-      return JSON.parse(resultJson);
-    } catch {}
-  }
-  return null;
-}
-
-export function extractReplaceBackupSummary(txnDetail: any):
-  | {
-      readonly policy: string;
-      readonly deleted: boolean;
-      readonly rem_id: string | null;
-      readonly hidden?: boolean | undefined;
-      readonly cleanup_state?: string | undefined;
-    }
-  | undefined {
-  const ops = Array.isArray(txnDetail?.ops) ? txnDetail.ops : [];
-  const replaceOp = ops.find((op: any) =>
-    ['replace_children_with_markdown', 'replace_selection_with_markdown'].includes(String(op?.type ?? '').trim()),
-  );
-  if (!replaceOp) return undefined;
-
-  const result = parseResultJson(replaceOp.result);
-  if (!result || typeof result !== 'object') return undefined;
-
-  return {
-    policy:
-      typeof result.backup_policy === 'string' && result.backup_policy.trim() ? result.backup_policy.trim() : 'none',
-    deleted: result.backup_deleted !== false,
-    rem_id:
-      typeof result.backup_rem_id === 'string' && result.backup_rem_id.trim() ? result.backup_rem_id.trim() : null,
-    ...(result.backup_hidden === true ? { hidden: true } : {}),
-    ...(typeof result.backup_cleanup_state === 'string' && result.backup_cleanup_state.trim()
-      ? { cleanup_state: result.backup_cleanup_state.trim() }
-      : {}),
-  };
 }

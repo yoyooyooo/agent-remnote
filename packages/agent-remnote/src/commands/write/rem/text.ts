@@ -5,13 +5,12 @@ import * as Effect from 'effect/Effect';
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { trimBoundaryBlankLines } from '../../../lib/text.js';
-import { enqueueOps, normalizeOp } from '../../_enqueue.js';
-import { failInRemoteMode } from '../../_remoteMode.js';
+import { normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
-import { waitForTxn } from '../../_waitTxn.js';
 
 import { writeCommonOptions } from '../_shared.js';
 import { resolveRefValue } from '../_refValue.js';
+import { ensureWaitArgs, submitActionEnvelope } from './children/common.js';
 
 export const writeRemSetTextCommand = Command.make(
   'set-text',
@@ -33,29 +32,7 @@ export const writeRemSetTextCommand = Command.make(
   },
   ({ subject, text, notify, ensureDaemon, wait, timeoutMs, pollMs, dryRun, priority, clientId, idempotencyKey, meta }) =>
     Effect.gen(function* () {
-      if (!wait && (timeoutMs !== undefined || pollMs !== undefined)) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: 'Use --wait to enable --timeout-ms/--poll-ms',
-            exitCode: 2,
-          }),
-        );
-      }
-      if (dryRun && wait) {
-        return yield* Effect.fail(
-          new CliError({
-            code: 'INVALID_ARGS',
-            message: '--wait is not compatible with --dry-run',
-            exitCode: 2,
-          }),
-        );
-      }
-
-      yield* failInRemoteMode({
-        command: 'rem set-text',
-        reason: 'this command enqueues writes to the local queue/store without a HostApiClient branch',
-      });
+      yield* ensureWaitArgs({ wait, timeoutMs, pollMs, dryRun });
 
       const payloadSvc = yield* Payload;
 
@@ -85,28 +62,32 @@ export const writeRemSetTextCommand = Command.make(
         return;
       }
 
-      const data = yield* enqueueOps({
-        ops: [op],
-        priority,
-        clientId,
-        idempotencyKey,
-        meta: metaValue,
-        notify,
-        ensureDaemon,
+      const out = yield* submitActionEnvelope({
+        body: {
+          version: 1,
+          kind: 'ops',
+          ops: [op],
+          ...(priority !== undefined ? { priority } : {}),
+          ...(clientId ? { client_id: clientId } : {}),
+          ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+          ...(metaValue !== undefined ? { meta: metaValue } : {}),
+          notify,
+          ensure_daemon: ensureDaemon,
+        },
+        wait,
+        timeoutMs,
+        pollMs,
       });
-
-      const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
-      const out = waited ? ({ ...data, ...waited } as any) : data;
 
       yield* writeSuccess({
         data: out,
-        ids: [data.txn_id, ...data.op_ids],
+        ids: [(out as any).txn_id, ...((out as any).op_ids ?? [])],
         md: [
-          `- txn_id: ${data.txn_id}`,
-          `- op_ids: ${data.op_ids.length}`,
-          `- notified: ${data.notified}`,
-          `- sent: ${data.sent ?? ''}`,
-          ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          `- txn_id: ${(out as any).txn_id}`,
+          `- op_ids: ${Array.isArray((out as any).op_ids) ? (out as any).op_ids.length : ''}`,
+          `- notified: ${(out as any).notified}`,
+          `- sent: ${(out as any).sent ?? ''}`,
+          ...((out as any).status ? [`- status: ${(out as any).status}`, `- elapsed_ms: ${(out as any).elapsed_ms}`] : []),
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),

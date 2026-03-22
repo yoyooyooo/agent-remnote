@@ -1,19 +1,16 @@
 import * as Effect from 'effect/Effect';
 
 import { looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../../lib/text.js';
-import { resolveWorkspaceSnapshot } from '../../../lib/workspaceResolver.js';
-import { AppConfig } from '../../../services/AppConfig.js';
+import { readSingleRemTitle } from '../../../lib/business-semantics/titleInference.js';
 import { CliError } from '../../../services/Errors.js';
 import type { FileInput } from '../../../services/FileInput.js';
-import { HostApiClient } from '../../../services/HostApiClient.js';
-import { RemDb } from '../../../services/RemDb.js';
 import { RefResolver } from '../../../services/RefResolver.js';
 import { WorkspaceBindings } from '../../../services/WorkspaceBindings.js';
 
 import { type PlacementSpec, fetchRemLayouts, listSiblingOrder, parsePlacementSpec, resolveLocalDbPath, resolvePlacementSpec } from '../_placementSpec.js';
 import { type PortalStrategy, parsePortalStrategy } from '../_portalStrategy.js';
 import { resolveRefValue } from '../_refValue.js';
-import { invalidArgs, normalizeOptionalText, normalizeString, requireStableSiblingRange, resolveCreateDestinationTitle } from '../_shared.js';
+import { invalidArgs, normalizeOptionalText, requireStableSiblingRange, resolveCreateDestinationTitle } from '../_shared.js';
 import { readMarkdownArg, resolveCurrentSelectionRemIds } from './children/common.js';
 
 export const DURABLE_TARGET_ALIAS = 'durable_target';
@@ -85,76 +82,6 @@ export type NormalizedMovePromotionIntent = {
   readonly portalPlacement: MovePortalPlacement;
 };
 
-function truncateText(value: string, maxLength: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) return '';
-  if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, maxLength)}...`;
-}
-
-function pickTitle(kt: unknown, ke: unknown, r: unknown): string {
-  const combined = [kt, ke].map(normalizeString).filter(Boolean).join(' | ');
-  const raw = combined || normalizeString(r);
-  if (!raw) return '';
-  const normalized = raw.replace(/\s+/g, ' ').trim();
-  const title = normalized.split(/\n| - |——|。|！|？|\.|: /)[0]?.trim() || normalized;
-  return truncateText(title, 80);
-}
-
-function fetchRemTitleMap(db: any, ids: readonly string[]): Map<string, string> {
-  const unique = Array.from(new Set(ids.map((id) => String(id ?? '').trim()).filter(Boolean)));
-  if (unique.length === 0) return new Map();
-
-  const placeholders = unique.map(() => '?').join(',');
-  const stmt = db.prepare(
-    `SELECT id,
-            json_extract(doc, '$.kt') AS kt,
-            json_extract(doc, '$.ke') AS ke,
-            json_extract(doc, '$.r') AS r
-       FROM remsSearchInfos
-      WHERE id IN (${placeholders})`,
-  );
-  const rows = stmt.all(...unique) as Array<{ id: string; kt: unknown; ke: unknown; r: unknown }>;
-
-  const map = new Map<string, string>();
-  for (const row of rows) {
-    const id = String(row.id ?? '').trim();
-    if (!id) continue;
-    map.set(id, pickTitle(row.kt, row.ke, row.r));
-  }
-  return map;
-}
-
-function readSingleRemTitle(params: {
-  readonly ids: readonly string[];
-  readonly selectionTitle?: string | undefined;
-}): Effect.Effect<string | undefined, CliError, AppConfig | RemDb | WorkspaceBindings> {
-  return Effect.gen(function* () {
-    const ids = Array.from(new Set(params.ids.map((id) => String(id ?? '').trim()).filter(Boolean)));
-    if (ids.length !== 1) return undefined;
-
-    const selectionTitle = normalizeOptionalText(params.selectionTitle);
-    if (selectionTitle) return selectionTitle;
-
-    const cfg = yield* AppConfig;
-    if (cfg.apiBaseUrl) return undefined;
-
-    const remDb = yield* RemDb;
-    const workspace = cfg.remnoteDb
-      ? undefined
-      : yield* resolveWorkspaceSnapshot({}).pipe(Effect.catchAll(() => Effect.succeed(undefined)));
-    const dbPath = cfg.remnoteDb ?? (workspace?.resolved ? workspace.dbPath : undefined);
-    if (!dbPath) return undefined;
-
-    const titleMap = yield* remDb.withDb(dbPath, async (db) => fetchRemTitleMap(db, ids)).pipe(
-      Effect.map((value) => value.result),
-      Effect.catchAll(() => Effect.succeed(new Map<string, string>())),
-    );
-
-    return normalizeOptionalText(titleMap.get(ids[0]!));
-  });
-}
-
 function convertPortalAtPlacement(strategy: PortalStrategy): Effect.Effect<Exclude<PromotionPortalPlacement, { kind: 'none' } | { kind: 'in_place_selection_range' }>, CliError> {
   return Effect.gen(function* () {
     if (strategy.kind !== 'at' || strategy.placement.kind === 'standalone') {
@@ -184,7 +111,11 @@ function convertMovePortalPlacement(strategy: PortalStrategy): Effect.Effect<Mov
 function normalizeExplicitFromSource(params: {
   readonly remIds: readonly string[];
   readonly requireInPlaceRange: boolean;
-}): Effect.Effect<{ readonly orderedRemIds: readonly string[]; readonly inPlaceRange?: StableSiblingRange | undefined }, CliError, AppConfig | RemDb | WorkspaceBindings> {
+}): Effect.Effect<
+  { readonly orderedRemIds: readonly string[]; readonly inPlaceRange?: StableSiblingRange | undefined },
+  CliError,
+  any
+> {
   return Effect.gen(function* () {
     const uniqueRemIds = Array.from(new Set(params.remIds.map((id) => String(id ?? '').trim()).filter(Boolean)));
     if (uniqueRemIds.length === 0) {
@@ -233,11 +164,7 @@ function addResolvedPlacementToInput(input: Record<string, unknown>, placement: 
 
 export function normalizeCreatePromotionIntent(
   args: CreatePromotionArgs,
-): Effect.Effect<
-  NormalizedCreatePromotionIntent,
-  CliError,
-  FileInput | AppConfig | RemDb | WorkspaceBindings | HostApiClient | RefResolver
-> {
+): Effect.Effect<NormalizedCreatePromotionIntent, CliError, any> {
   return Effect.gen(function* () {
     const contentPlacement = yield* Effect.gen(function* () {
       return yield* parsePlacementSpec(args.at, { optionName: '--at' });
@@ -408,7 +335,7 @@ export function normalizeCreatePromotionIntent(
 
 export function buildCreatePromotionActions(
   intent: NormalizedCreatePromotionIntent,
-): Effect.Effect<readonly Record<string, unknown>[], CliError, AppConfig | RefResolver | RemDb | WorkspaceBindings> {
+): Effect.Effect<readonly Record<string, unknown>[], CliError, any> {
   return Effect.gen(function* () {
     const resolvedContentPlacement = yield* resolvePlacementSpec(intent.contentPlacement);
     const destinationInput: Record<string, unknown> = {
@@ -522,7 +449,7 @@ export function buildCreatePromotionActions(
 
 export function normalizeMovePromotionIntent(
   args: MovePromotionArgs,
-): Effect.Effect<NormalizedMovePromotionIntent, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+): Effect.Effect<NormalizedMovePromotionIntent, CliError, any> {
   return Effect.gen(function* () {
     const contentPlacement = yield* Effect.gen(function* () {
       return yield* parsePlacementSpec(args.at, { optionName: '--at' });
@@ -540,7 +467,7 @@ export function normalizeMovePromotionIntent(
 
 export function buildMovePromotionActions(
   intent: NormalizedMovePromotionIntent,
-): Effect.Effect<readonly Record<string, unknown>[], CliError, AppConfig | RefResolver | RemDb | WorkspaceBindings> {
+): Effect.Effect<readonly Record<string, unknown>[], CliError, any> {
   return Effect.gen(function* () {
     const resolvedContentPlacement = yield* resolvePlacementSpec(intent.contentPlacement);
     const moveInput: Record<string, unknown> = {

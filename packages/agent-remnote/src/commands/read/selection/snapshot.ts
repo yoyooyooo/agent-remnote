@@ -3,10 +3,9 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { AppConfig } from '../../../services/AppConfig.js';
-import { HostApiClient } from '../../../services/HostApiClient.js';
+import { invokeWave1Capability } from '../../../lib/business-semantics/modeParityRuntime.js';
+import type { BridgeSelectionSnapshot } from './_shared.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
-import { loadBridgeSelectionSnapshot } from './_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -17,11 +16,10 @@ const staleMs = Options.integer('stale-ms').pipe(Options.optional, Options.map(o
 
 export const readSelectionSnapshotCommand = Command.make('snapshot', { stateFile, staleMs }, ({ stateFile, staleMs }) =>
   Effect.gen(function* () {
-    const cfg = yield* AppConfig;
-    const hostApi = yield* HostApiClient;
-    const snapshot = cfg.apiBaseUrl
-      ? yield* hostApi.selectionSnapshot({ baseUrl: cfg.apiBaseUrl, stateFile, staleMs })
-      : loadBridgeSelectionSnapshot({ stateFile, staleMs });
+    const snapshot = (yield* invokeWave1Capability('selection.snapshot', {
+      stateFile,
+      staleMs,
+    })) as BridgeSelectionSnapshot;
     const selection = snapshot.selection;
     const kind = selection?.kind ?? 'none';
     const selectionType = selection && 'selectionType' in selection ? (selection.selectionType ?? '') : '';

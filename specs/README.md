@@ -4,6 +4,12 @@
 
 全局对齐裁决点见：`specs/CONCEPTS.md`（三平面：Control/Data/UX；WS 协议 v2；queue 迁移；id_map/幂等/冲突键等）。
 
+额外治理要求：
+
+- 只要 spec 触及 RemNote business commands，必须显式区分 business command 与 operational command。
+- RemNote business commands 必须在 local/remote 两种模式下保持同一业务契约；`apiBaseUrl` 只能切换 transport，不能切换业务语义。
+- 任何依赖宿主事实的业务解析必须收口为 host-authoritative 逻辑，并在 spec / plan / tasks 中写明 parity strategy、gap inventory 与 remote-first integration verification。
+
 每个 spec 目录通常包含：
 
 - `spec.md`：目标/约束/验收场景（裁决点）

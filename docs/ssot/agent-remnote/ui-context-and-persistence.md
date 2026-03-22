@@ -1,5 +1,13 @@
 # UI 上下文与持久化规范（SSoT）
 
+parity note：
+
+- `plugin current`、`plugin ui-context *`、`plugin selection *` 等命令若被
+  authoritative inventory 归为 business commands，则 local/remote mode 必须复用
+  同一套 UI-context / selection 业务语义，而不是维持双真相源。
+- 对于 Wave 1 parity-mandatory commands，这类语义应通过 `ModeParityRuntime`
+  暴露的 capability 被消费，command files 不应各自决定 local / remote 分支。
+
 ## 目标与边界
 
 - 目标：让 Agent 在本地环境中**实时感知**用户在 RemNote 客户端里的“当前所处状态”，并能据此进行只读查询与安全写入（写入仍必须走队列 + 插件执行链路）。
@@ -46,6 +54,9 @@
   - `clients[].uiContext`：用户 UI 上下文（用于 agent 感知“当前页面/焦点 Rem”等）。
   - `updatedAt`：写入该快照的时间戳。
 - 过期策略：读取方必须做 staleness 判定（例如默认 `60s`）；过期视为“不可信实时 UI”，但仍可用于提示/回退策略。
+- 若已选中 client 但该 client 尚未上报 `uiContext`，归一化后的 snapshot status
+  必须是 `no_ui_context`；相关 business command 需 fail-fast，不能把空字符串页面/
+  焦点字段当成 `ok` 快照继续执行。
 
 ### 3) SQLite（持久态）
 

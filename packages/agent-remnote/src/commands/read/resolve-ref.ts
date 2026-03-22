@@ -3,12 +3,8 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { executeResolveRemReference } from '../../adapters/core.js';
-
-import { AppConfig } from '../../services/AppConfig.js';
-import { failInRemoteMode } from '../_remoteMode.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
-import { cliErrorFromUnknown } from '../_tool.js';
 
 const ids = Options.text('ids').pipe(Options.repeated);
 
@@ -28,21 +24,11 @@ export const readResolveRefCommand = Command.make(
   },
   ({ ids, expandReferences, maxReferenceDepth, detail }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      yield* failInRemoteMode({
-        command: 'rem resolve-ref',
-        reason: 'this command still resolves references from the local RemNote database',
-      });
-      const result = yield* Effect.tryPromise({
-        try: async () =>
-          await executeResolveRemReference({
-            ids,
-            dbPath: cfg.remnoteDb,
-            expandReferences: expandReferences === false ? false : undefined,
-            maxReferenceDepth: maxReferenceDepth as any,
-            detail,
-          } as any),
-        catch: (e) => cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' }),
+      const result: any = yield* invokeWave1Capability('read.resolve-ref', {
+        ids,
+        expandReferences: expandReferences === false ? false : undefined,
+        maxReferenceDepth,
+        detail,
       });
       yield* writeSuccess({ data: result, md: (result as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),

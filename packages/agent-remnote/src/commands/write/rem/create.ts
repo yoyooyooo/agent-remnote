@@ -2,6 +2,7 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
+import { buildPartialCreateReceipt, findRemoteId, parseResultJson } from '../../../lib/business-semantics/receiptBuilders.js';
 import { CliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
@@ -14,23 +15,6 @@ import {
   type NormalizedCreatePromotionIntent,
 } from './_promotion.js';
 import { dryRunEnvelope, ensureWaitArgs, loadTxnDetail, submitActionEnvelope } from './children/common.js';
-
-function findRemoteId(idMap: unknown, clientTempId: string | undefined): string | undefined {
-  if (!clientTempId || !Array.isArray(idMap)) return undefined;
-  const match = idMap.find((entry: any) => String(entry?.client_temp_id ?? '') === clientTempId);
-  const remoteId = typeof match?.remote_id === 'string' ? match.remote_id.trim() : '';
-  return remoteId || undefined;
-}
-
-function parseResultJson(raw: any): any {
-  const resultJson = raw?.result_json;
-  if (typeof resultJson === 'string' && resultJson.trim()) {
-    try {
-      return JSON.parse(resultJson);
-    } catch {}
-  }
-  return null;
-}
 
 function replaceStringRecursive(value: unknown, from: string, to: string): unknown {
   if (typeof value === 'string') return value === from ? to : value;
@@ -61,59 +45,6 @@ function remapDurableTargetTempId(params: {
       ...aliasMap,
       [DURABLE_TARGET_ALIAS]: nextTempId,
     },
-  };
-}
-
-function buildPartialCreateReceipt(params: {
-  readonly txnId: string;
-  readonly detail: any;
-  readonly remClientTempId?: string;
-  readonly portalClientTempId?: string;
-  readonly intent: NormalizedCreatePromotionIntent;
-}): any | undefined {
-  const idMap = Array.isArray(params.detail?.id_map) ? params.detail.id_map : [];
-  const remId = findRemoteId(idMap, params.remClientTempId);
-  if (!remId) return undefined;
-
-  const ops = Array.isArray(params.detail?.ops) ? params.detail.ops : [];
-  const nonPortalFailed = ops.some((op: any) => String(op?.type ?? '') !== 'create_portal' && String(op?.status ?? '') !== 'succeeded');
-  const portalOp = ops.find((op: any) => String(op?.type ?? '') === 'create_portal');
-  const portalFailed = portalOp && String(portalOp?.status ?? '') !== 'succeeded';
-  if (nonPortalFailed || !portalFailed) return undefined;
-
-  const portalResult = parseResultJson(portalOp?.result);
-  const portalError =
-    normalizeString(portalResult?.error) ||
-    normalizeString(portalOp?.result?.error_message) ||
-    'portal insertion failed after durable target creation';
-  const portalRemId = findRemoteId(idMap, params.portalClientTempId);
-
-  return {
-    partial_success: true,
-    txn_id: params.txnId,
-    op_ids: ops.map((op: any) => String(op?.op_id ?? '')).filter(Boolean),
-    status: 'partial_success',
-    id_map: idMap,
-    ...(params.remClientTempId ? { rem_client_temp_id: params.remClientTempId } : {}),
-    ...(params.portalClientTempId ? { portal_client_temp_id: params.portalClientTempId } : {}),
-    rem_id: remId,
-    durable_target: {
-      rem_id: remId,
-      is_document: params.intent.isDocument,
-      placement_kind: params.intent.contentPlacement.kind,
-    },
-    source_context: {
-      source_kind: params.intent.source.kind,
-      ...(params.intent.source.kind === 'targets' ? { source_origin: params.intent.source.sourceOrigin } : {}),
-    },
-    portal: {
-      requested: params.intent.portalPlacement.kind !== 'none',
-      created: false,
-      ...(portalRemId ? { rem_id: portalRemId } : {}),
-      ...(params.intent.portalPlacement.kind !== 'none' ? { placement_kind: params.intent.portalPlacement.kind } : {}),
-    },
-    warnings: [portalError],
-    nextActions: [`agent-remnote queue inspect --txn ${params.txnId}`],
   };
 }
 

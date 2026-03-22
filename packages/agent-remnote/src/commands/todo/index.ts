@@ -6,12 +6,14 @@ import { writePowerupTodoDoneCommand } from '../write/powerup/todo/todoDone.js';
 import { writePowerupTodoRemoveCommand } from '../write/powerup/todo/todoRemove.js';
 import { writePowerupTodoUndoneCommand } from '../write/powerup/todo/todoUndone.js';
 
-export const todoCommand = Command.make('todo', {}).pipe(
-  Command.withSubcommands([
-    todosListCommand,
-    writePowerupTodoAddCommand,
-    writePowerupTodoDoneCommand,
-    writePowerupTodoUndoneCommand,
-    writePowerupTodoRemoveCommand,
-  ]),
-);
+export const todoSubcommands = [
+  todosListCommand,
+  writePowerupTodoAddCommand,
+  writePowerupTodoDoneCommand,
+  writePowerupTodoUndoneCommand,
+  writePowerupTodoRemoveCommand,
+] as const;
+
+export const todoCommand = Command.make('todo', {}).pipe(Command.withSubcommands(todoSubcommands));
+
+export const powerupTodoCommand = Command.make('todo', {}).pipe(Command.withSubcommands(todoSubcommands));

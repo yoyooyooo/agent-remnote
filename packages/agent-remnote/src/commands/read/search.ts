@@ -3,10 +3,7 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { AppConfig } from '../../services/AppConfig.js';
-import { HostApiClient } from '../../services/HostApiClient.js';
-import { CliError } from '../../services/Errors.js';
-import { executeDbSearchUseCase } from '../../lib/hostApiUseCases.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -38,32 +35,18 @@ export const readSearchCommand = Command.make(
   },
   ({ query, timeRange, parentId, pagesOnly, excludePages, limit, offset, timeoutMs }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
       const effectiveTimeoutMs = clampInt(timeoutMs, 1, 30_000);
 
-      const result = cfg.apiBaseUrl
-        ? yield* hostApi.searchDb({
-            baseUrl: cfg.apiBaseUrl,
-            query,
-            timeRange,
-            parentId,
-            pagesOnly,
-            excludePages,
-            limit,
-            offset,
-            timeoutMs: effectiveTimeoutMs,
-          })
-        : yield* executeDbSearchUseCase({
-            query,
-            timeRange,
-            parentId,
-            pagesOnly,
-            excludePages,
-            limit,
-            offset,
-            timeoutMs: effectiveTimeoutMs,
-          });
+      const result: any = yield* invokeWave1Capability('search.db', {
+        query,
+        timeRange,
+        parentId,
+        pagesOnly,
+        excludePages,
+        limit,
+        offset,
+        timeoutMs: effectiveTimeoutMs,
+      });
       yield* writeSuccess({ data: result, md: (result as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),
 );

@@ -5,12 +5,10 @@ import * as Option from 'effect/Option';
 
 import { compileApplyEnvelope, parseApplyEnvelope } from '../_applyEnvelope.js';
 import { readMarkdownTextFromInputSpec, writeFailure, writeSuccess } from '../_shared.js';
-import { executeWriteApplyUseCase } from '../../lib/hostApiUseCases.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { isSingleRootOutlineMarkdown, looksLikeStructuredMarkdown, trimBoundaryBlankLines } from '../../lib/text.js';
 import { decideOutlineWriteShape } from '../../kernel/write-plan/index.js';
-import { AppConfig } from '../../services/AppConfig.js';
 import { CliError, isCliError } from '../../services/Errors.js';
-import { HostApiClient } from '../../services/HostApiClient.js';
 import { Payload } from '../../services/Payload.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -166,8 +164,6 @@ export const dailyWriteCommand = Command.make(
       }
 
       const payloadSvc = yield* Payload;
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
 
       const markdownRaw =
         markdownInput !== undefined ? yield* readMarkdownTextFromInputSpec(markdownInput) : undefined;
@@ -271,19 +267,12 @@ export const dailyWriteCommand = Command.make(
         return;
       }
 
-      const out = cfg.apiBaseUrl
-        ? yield* Effect.gen(function* () {
-            const data = yield* hostApi.writeApply({ baseUrl: cfg.apiBaseUrl!, body });
-            if (!wait) return data;
-            const waited = yield* hostApi.queueWait({
-              baseUrl: cfg.apiBaseUrl!,
-              txnId: String(data.txn_id),
-              timeoutMs,
-              pollMs,
-            });
-            return { ...data, ...waited };
-          })
-        : yield* executeWriteApplyUseCase({ raw: body, wait, timeoutMs, pollMs });
+      const out: any = yield* invokeWave1Capability('write.apply', {
+        body,
+        wait,
+        timeoutMs,
+        pollMs,
+      });
 
       yield* writeSuccess({
         data: out,

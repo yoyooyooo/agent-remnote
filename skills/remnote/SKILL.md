@@ -538,6 +538,9 @@ remote mode 下也保持同样原则：
 说明：
 
 - 这些命令在 `apiBaseUrl` 存在时应优先走 Host API。
+- 哪些命令属于 parity-mandatory 的 RemNote business commands，以
+  `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为唯一权威源；
+  本 skill 只负责路由，不单独定义命令分类。
 - `table/powerup option add/remove` 虽然依赖本地 DB 校验，但这个“本地”指宿主机；调用方仍然可以透明远程调用。
 
 ### 2. 当前仍然 host-only，但本质上是未实现成 Host API

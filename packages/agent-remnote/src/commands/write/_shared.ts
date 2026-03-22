@@ -2,12 +2,8 @@ import * as Options from '@effect/cli/Options';
 import * as Option from 'effect/Option';
 import * as Effect from 'effect/Effect';
 
-import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
-import { RemDb } from '../../services/RemDb.js';
-import { WorkspaceBindings } from '../../services/WorkspaceBindings.js';
-
-import { fetchRemLayouts, listSiblingOrder, resolveLocalDbPath } from './_placementSpec.js';
+export { requireStableSiblingRange, type StableSiblingRange } from '../../lib/business-semantics/selectionResolution.js';
 
 export function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -47,74 +43,6 @@ export function normalizeOptionalText(raw: string | undefined): string | undefin
 
 export function normalizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-export type StableSiblingRange = {
-  readonly orderedRemIds: readonly string[];
-  readonly parentId: string;
-  readonly position: number;
-};
-
-export function requireStableSiblingRange(params: {
-  readonly remIds: readonly string[];
-  readonly missingMessage: string;
-  readonly mismatchMessage: string;
-}): Effect.Effect<StableSiblingRange, CliError, AppConfig | RemDb | WorkspaceBindings> {
-  return Effect.gen(function* () {
-    const remDb = yield* RemDb;
-    const dbPath = yield* resolveLocalDbPath();
-    const layouts = yield* remDb.withDb(dbPath, async (db) => fetchRemLayouts(db, params.remIds)).pipe(
-      Effect.map((result) => result.result),
-    );
-
-    const entries = params.remIds.map((id) => layouts.get(id)).filter((value): value is NonNullable<typeof value> => Boolean(value));
-    if (entries.length !== params.remIds.length) {
-      return yield* Effect.fail(
-        invalidArgs(params.missingMessage, {
-          expected: params.remIds.length,
-          resolved: entries.length,
-        }),
-      );
-    }
-
-    const parentIds = Array.from(new Set(entries.map((entry) => entry.parentId).filter((value): value is string => Boolean(value))));
-    if (parentIds.length !== 1) {
-      return yield* Effect.fail(
-        invalidArgs(params.mismatchMessage, {
-          parent_count: parentIds.length,
-        }),
-      );
-    }
-
-    const siblingOrder = yield* remDb.withDb(dbPath, async (db) => listSiblingOrder(db, parentIds[0]!)).pipe(
-      Effect.map((result) => result.result),
-    );
-    const indexed = entries
-      .map((entry) => ({ id: entry.id, index: siblingOrder.indexOf(entry.id) }))
-      .sort((a, b) => a.index - b.index);
-
-    const first = indexed[0];
-    if (!first || first.index < 0) {
-      return yield* Effect.fail(invalidArgs('Failed to resolve sibling placement'));
-    }
-
-    for (let offset = 0; offset < indexed.length; offset += 1) {
-      const current = indexed[offset]!;
-      if (current.index !== first.index + offset) {
-        return yield* Effect.fail(
-          invalidArgs(params.mismatchMessage, {
-            actual_positions: indexed.map((item) => item.index),
-          }),
-        );
-      }
-    }
-
-    return {
-      orderedRemIds: indexed.map((item) => item.id),
-      parentId: parentIds[0]!,
-      position: first.index,
-    };
-  });
 }
 
 export function resolveCreateDestinationTitle(params: {

@@ -3,9 +3,9 @@ import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import { loadBridgeSelectionSnapshot } from '../../commands/read/selection/_shared.js';
+import { loadBridgeSelectionSnapshot } from '../../lib/business-semantics/selectionResolution.js';
 import { waitForTxn } from '../../commands/_waitTxn.js';
-import { loadBridgeUiContextSnapshot } from '../../commands/read/uiContext/_shared.js';
+import { loadBridgeUiContextSnapshot } from '../../lib/business-semantics/uiContextResolution.js';
 import {
   collectApiHealthUseCase,
   executeDailyRemIdUseCase,
@@ -19,10 +19,18 @@ import {
   collectUiContextFocusedRemUseCase,
   collectUiContextPageUseCase,
   collectUiContextSnapshotUseCase,
+  executeByReferenceUseCase,
   executeDbSearchUseCase,
   executePluginSearchUseCase,
   executeQueueTxnUseCase,
+  executeReadPageIdUseCase,
   executeReadOutlineUseCase,
+  executeReferencesUseCase,
+  executeResolvePlacementUseCase,
+  executeResolveRefValueUseCase,
+  executeResolveStableSiblingRangeUseCase,
+  executeQueryUseCase,
+  executeResolveRefUseCase,
   executeTriggerSyncUseCase,
   executeWriteApplyUseCase,
 } from '../../lib/hostApiUseCases.js';
@@ -129,6 +137,83 @@ function readJsonBody(req: IncomingMessage): Effect.Effect<any, CliError> {
   });
 }
 
+function invalidPayload(message: string, details?: Record<string, unknown>): CliError {
+  return new CliError({
+    code: 'INVALID_PAYLOAD',
+    message,
+    exitCode: 2,
+    details,
+  });
+}
+
+function requireJsonObject(value: unknown, routePath: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw invalidPayload('Expected JSON object body', { route: routePath });
+  }
+  return value as Record<string, unknown>;
+}
+
+function readRequiredString(body: Record<string, unknown>, key: string, routePath: string): string {
+  const value = body[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw invalidPayload(`Field "${key}" must be a non-empty string`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readOptionalString(body: Record<string, unknown>, key: string, routePath: string): string | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw invalidPayload(`Field "${key}" must be a string`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readOptionalNumber(body: Record<string, unknown>, key: string, routePath: string): number | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw invalidPayload(`Field "${key}" must be a finite number`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readOptionalBoolean(body: Record<string, unknown>, key: string, routePath: string): boolean | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') {
+    throw invalidPayload(`Field "${key}" must be a boolean`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readOptionalStringArray(body: Record<string, unknown>, key: string, routePath: string): readonly string[] | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw invalidPayload(`Field "${key}" must be an array of strings`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readRequiredStringArray(body: Record<string, unknown>, key: string, routePath: string): readonly string[] {
+  const value = readOptionalStringArray(body, key, routePath);
+  if (!value) {
+    throw invalidPayload(`Field "${key}" must be an array of strings`, { route: routePath, field: key });
+  }
+  return value;
+}
+
+function readOptionalObject(body: Record<string, unknown>, key: string, routePath: string): Record<string, unknown> | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw invalidPayload(`Field "${key}" must be an object`, { route: routePath, field: key });
+  }
+  return value as Record<string, unknown>;
+}
+
 export function runHttpApiRuntime(params?: {
   readonly host?: string | undefined;
   readonly port?: number | undefined;
@@ -231,6 +316,73 @@ export function runHttpApiRuntime(params?: {
             });
           }),
         );
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/ref/resolve') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeResolveRefValueUseCase({
+                ref: readRequiredString(body, 'ref', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/placement/resolve') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            const spec = readOptionalObject(body, 'spec', routePath);
+            const specKind = spec?.kind;
+            if (!spec || (specKind !== 'before' && specKind !== 'after')) {
+              throw invalidPayload('Field "spec.kind" must be "before" or "after"', { route: routePath, field: 'spec.kind' });
+            }
+            await run(
+              executeResolvePlacementUseCase({
+                spec: {
+                  kind: specKind,
+                  anchorRef: readRequiredString(spec, 'anchorRef', routePath),
+                },
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/selection/stable-sibling-range') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeResolveStableSiblingRangeUseCase({
+                remIds: readRequiredStringArray(body, 'remIds', routePath),
+                missingMessage: readOptionalString(body, 'missingMessage', routePath),
+                mismatchMessage: readOptionalString(body, 'mismatchMessage', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
         return;
       }
 
@@ -353,22 +505,137 @@ export function runHttpApiRuntime(params?: {
         return;
       }
 
+      if (method === 'POST' && routePath === '/read/page-id') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            const ref = readOptionalString(body, 'ref', routePath);
+            const ids = readOptionalStringArray(body, 'ids', routePath);
+            await run(
+              executeReadPageIdUseCase({
+                ref,
+                ids,
+                maxHops: readOptionalNumber(body, 'maxHops', routePath),
+                detail: readOptionalBoolean(body, 'detail', routePath) === true,
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/read/resolve-ref') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeResolveRefUseCase({
+                ids: readRequiredStringArray(body, 'ids', routePath),
+                expandReferences: readOptionalBoolean(body, 'expandReferences', routePath),
+                maxReferenceDepth: readOptionalNumber(body, 'maxReferenceDepth', routePath),
+                detail: readOptionalBoolean(body, 'detail', routePath) === true,
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/read/by-reference') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeByReferenceUseCase({
+                reference: readRequiredStringArray(body, 'reference', routePath),
+                timeRange: readOptionalString(body, 'timeRange', routePath),
+                maxDepth: readOptionalNumber(body, 'maxDepth', routePath),
+                limit: readOptionalNumber(body, 'limit', routePath),
+                offset: readOptionalNumber(body, 'offset', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/read/references') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeReferencesUseCase({
+                id: readRequiredString(body, 'id', routePath),
+                includeDescendants: readOptionalBoolean(body, 'includeDescendants', routePath) === true,
+                maxDepth: readOptionalNumber(body, 'maxDepth', routePath),
+                includeOccurrences: readOptionalBoolean(body, 'includeOccurrences', routePath) === true,
+                resolveText: readOptionalBoolean(body, 'resolveText', routePath),
+                includeInbound: readOptionalBoolean(body, 'includeInbound', routePath) === true,
+                inboundMaxDepth: readOptionalNumber(body, 'inboundMaxDepth', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/read/query') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeQueryUseCase({
+                queryObj: readOptionalObject(body, 'queryObj', routePath) ?? {},
+                limit: readOptionalNumber(body, 'limit', routePath),
+                offset: readOptionalNumber(body, 'offset', routePath),
+                snippetLength: readOptionalNumber(body, 'snippetLength', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
       if (method === 'POST' && routePath === '/plugin/selection/outline') {
         void (async () => {
           try {
-            const body = await Effect.runPromise(readJsonBody(req));
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
             await run(
               collectSelectionOutlineUseCase({
-                stateFile: typeof body?.stateFile === 'string' ? body.stateFile : undefined,
-                staleMs: typeof body?.staleMs === 'number' ? body.staleMs : undefined,
-                maxDepth: typeof body?.maxDepth === 'number' ? body.maxDepth : undefined,
-                maxNodes: typeof body?.maxNodes === 'number' ? body.maxNodes : undefined,
-                excludeProperties: body?.excludeProperties === true,
-                includeEmpty: body?.includeEmpty === true,
-                expandReferences:
-                  body?.expandReferences === true ? true : body?.expandReferences === false ? false : undefined,
-                maxReferenceDepth: typeof body?.maxReferenceDepth === 'number' ? body.maxReferenceDepth : undefined,
-                detail: body?.detail === true,
+                stateFile: readOptionalString(body, 'stateFile', routePath),
+                staleMs: readOptionalNumber(body, 'staleMs', routePath),
+                maxDepth: readOptionalNumber(body, 'maxDepth', routePath),
+                maxNodes: readOptionalNumber(body, 'maxNodes', routePath),
+                excludeProperties: readOptionalBoolean(body, 'excludeProperties', routePath) === true,
+                includeEmpty: readOptionalBoolean(body, 'includeEmpty', routePath) === true,
+                expandReferences: readOptionalBoolean(body, 'expandReferences', routePath),
+                maxReferenceDepth: readOptionalNumber(body, 'maxReferenceDepth', routePath),
+                detail: readOptionalBoolean(body, 'detail', routePath) === true,
               }),
             );
           } catch (error) {
@@ -389,27 +656,24 @@ export function runHttpApiRuntime(params?: {
       if (method === 'POST' && routePath === '/search/db') {
         void (async () => {
           try {
-            const body = await Effect.runPromise(readJsonBody(req));
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
             await run(
               executeDbSearchUseCase({
-                query: String(body?.query ?? ''),
-                timeRange: typeof body?.timeRange === 'string' ? body.timeRange : undefined,
-                parentId: typeof body?.parentId === 'string' ? body.parentId : undefined,
-                pagesOnly: body?.pagesOnly === true,
-                excludePages: body?.excludePages === true,
-                limit: typeof body?.limit === 'number' ? body.limit : undefined,
-                offset: typeof body?.offset === 'number' ? body.offset : undefined,
-                timeoutMs: typeof body?.timeoutMs === 'number' ? body.timeoutMs : undefined,
+                query: readRequiredString(body, 'query', routePath),
+                timeRange: readOptionalString(body, 'timeRange', routePath),
+                parentId: readOptionalString(body, 'parentId', routePath),
+                pagesOnly: readOptionalBoolean(body, 'pagesOnly', routePath) === true,
+                excludePages: readOptionalBoolean(body, 'excludePages', routePath) === true,
+                limit: readOptionalNumber(body, 'limit', routePath),
+                offset: readOptionalNumber(body, 'offset', routePath),
+                timeoutMs: readOptionalNumber(body, 'timeoutMs', routePath),
               }),
             );
           } catch (error) {
-            const cliError = new CliError({
-              code: 'INVALID_PAYLOAD',
-              message: 'Invalid JSON body',
-              exitCode: 2,
-              details: { error: String((error as any)?.message || error) },
-            });
-            sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
           }
         })();
         return;
@@ -418,20 +682,24 @@ export function runHttpApiRuntime(params?: {
       if (method === 'POST' && routePath === '/read/outline') {
         void (async () => {
           try {
-            const body = await Effect.runPromise(readJsonBody(req));
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            const format = readOptionalString(body, 'format', routePath);
+            if (format !== undefined && format !== 'json' && format !== 'md') {
+              throw invalidPayload('Field "format" must be "md" or "json"', { route: routePath, field: 'format' });
+            }
             await run(
               executeReadOutlineUseCase({
-                id: typeof body?.id === 'string' ? body.id : undefined,
-                ref: typeof body?.ref === 'string' ? body.ref : undefined,
-                depth: typeof body?.depth === 'number' ? body.depth : undefined,
-                offset: typeof body?.offset === 'number' ? body.offset : undefined,
-                nodes: typeof body?.nodes === 'number' ? body.nodes : undefined,
-                format: body?.format === 'json' ? 'json' : body?.format === 'md' ? 'md' : undefined,
-                excludeProperties: body?.excludeProperties === true,
-                includeEmpty: body?.includeEmpty === true,
-                expandReferences: body?.expandReferences === true ? true : body?.expandReferences === false ? false : undefined,
-                maxReferenceDepth: typeof body?.maxReferenceDepth === 'number' ? body.maxReferenceDepth : undefined,
-                detail: body?.detail === true,
+                id: readOptionalString(body, 'id', routePath),
+                ref: readOptionalString(body, 'ref', routePath),
+                depth: readOptionalNumber(body, 'depth', routePath),
+                offset: readOptionalNumber(body, 'offset', routePath),
+                nodes: readOptionalNumber(body, 'nodes', routePath),
+                format: format as 'md' | 'json' | undefined,
+                excludeProperties: readOptionalBoolean(body, 'excludeProperties', routePath) === true,
+                includeEmpty: readOptionalBoolean(body, 'includeEmpty', routePath) === true,
+                expandReferences: readOptionalBoolean(body, 'expandReferences', routePath),
+                maxReferenceDepth: readOptionalNumber(body, 'maxReferenceDepth', routePath),
+                detail: readOptionalBoolean(body, 'detail', routePath) === true,
               }),
             );
           } catch (error) {
@@ -452,24 +720,21 @@ export function runHttpApiRuntime(params?: {
       if (method === 'POST' && routePath === '/search/plugin') {
         void (async () => {
           try {
-            const body = await Effect.runPromise(readJsonBody(req));
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
             await run(
               executePluginSearchUseCase({
-                query: String(body?.query ?? ''),
-                searchContextRemId: typeof body?.searchContextRemId === 'string' ? body.searchContextRemId : undefined,
-                limit: typeof body?.limit === 'number' ? body.limit : undefined,
-                timeoutMs: typeof body?.timeoutMs === 'number' ? body.timeoutMs : undefined,
-                ensureDaemon: body?.ensureDaemon !== false,
+                query: readRequiredString(body, 'query', routePath),
+                searchContextRemId: readOptionalString(body, 'searchContextRemId', routePath),
+                limit: readOptionalNumber(body, 'limit', routePath),
+                timeoutMs: readOptionalNumber(body, 'timeoutMs', routePath),
+                ensureDaemon: readOptionalBoolean(body, 'ensureDaemon', routePath) !== false,
               }),
             );
           } catch (error) {
-            const cliError = new CliError({
-              code: 'INVALID_PAYLOAD',
-              message: 'Invalid JSON body',
-              exitCode: 2,
-              details: { error: String((error as any)?.message || error) },
-            });
-            sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
           }
         })();
         return;
@@ -509,18 +774,19 @@ export function runHttpApiRuntime(params?: {
       if (method === 'POST' && routePath === '/queue/wait') {
         void (async () => {
           try {
-            const body = await Effect.runPromise(readJsonBody(req));
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
             await run(
-              waitForTxn({ txnId: String(body?.txnId ?? ''), timeoutMs: body?.timeoutMs, pollMs: body?.pollMs }),
+              waitForTxn({
+                txnId: readRequiredString(body, 'txnId', routePath),
+                timeoutMs: readOptionalNumber(body, 'timeoutMs', routePath),
+                pollMs: readOptionalNumber(body, 'pollMs', routePath),
+              }),
             );
           } catch (error) {
-            const cliError = new CliError({
-              code: 'INVALID_PAYLOAD',
-              message: 'Invalid JSON body',
-              exitCode: 2,
-              details: { error: String((error as any)?.message || error) },
-            });
-            sendJson(res, 400, fail(toJsonError(cliError), cliError.hint));
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
           }
         })();
         return;

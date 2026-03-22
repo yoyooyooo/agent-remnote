@@ -3,10 +3,8 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { AppConfig } from '../../services/AppConfig.js';
 import { CliError } from '../../services/Errors.js';
-import { HostApiClient } from '../../services/HostApiClient.js';
-import { executeReadOutlineUseCase } from '../../lib/hostApiUseCases.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -49,9 +47,6 @@ export const readOutlineCommand = Command.make(
     detail,
     }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
-
       if (id && ref) {
         return yield* Effect.fail(
           new CliError({ code: 'INVALID_ARGS', message: 'Choose only one of --id or --ref', exitCode: 2 }),
@@ -63,33 +58,13 @@ export const readOutlineCommand = Command.make(
         );
       }
 
-      if (cfg.apiBaseUrl) {
-        const data = yield* hostApi.readOutline({
-          baseUrl: cfg.apiBaseUrl,
-          body: {
-            id,
-            ref,
-            depth,
-            offset,
-            nodes,
-            format: format === 'json' ? 'json' : format === 'md' ? 'md' : undefined,
-            excludeProperties,
-            includeEmpty,
-            expandReferences,
-            maxReferenceDepth,
-            detail,
-          },
-        });
-        yield* writeSuccess({ data, md: (data as any).markdown ?? '' });
-        return;
-      }
-      const result = yield* executeReadOutlineUseCase({
+      const result: any = yield* invokeWave1Capability('read.outline', {
         id,
         ref,
         depth,
         offset,
         nodes,
-        format,
+        format: format === 'json' ? 'json' : format === 'md' ? 'md' : undefined,
         excludeProperties,
         includeEmpty,
         expandReferences,

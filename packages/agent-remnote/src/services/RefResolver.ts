@@ -8,7 +8,7 @@ import { executeSearchRemOverview } from '../adapters/core.js';
 
 import { AppConfig } from './AppConfig.js';
 import { CliError } from './Errors.js';
-import { remoteModeUnsupportedError } from '../commands/_remoteMode.js';
+import { HostApiClient } from './HostApiClient.js';
 import { tryParseRemnoteLink } from '../lib/remnote.js';
 import { resolveWorkspaceSnapshot } from '../lib/workspaceResolver.js';
 import { WorkspaceBindings } from './WorkspaceBindings.js';
@@ -17,7 +17,7 @@ export interface RefResolverService {
   readonly resolve: (
     ref: string,
     options?: { readonly dbPath?: string | undefined },
-  ) => Effect.Effect<string, CliError, AppConfig | WorkspaceBindings>;
+  ) => Effect.Effect<string, CliError, AppConfig | WorkspaceBindings | HostApiClient>;
 }
 
 export class RefResolver extends Context.Tag('RefResolver')<RefResolver, RefResolverService>() {}
@@ -120,17 +120,22 @@ export const RefResolverLive = Layer.succeed(RefResolver, {
       });
 
       if (cfg.apiBaseUrl && parsed.kind !== 'id') {
-        return yield* Effect.fail(
-          remoteModeUnsupportedError({
-            command: `ref resolution (${ref})`,
-            reason: 'this path still resolves refs by reading the local RemNote database',
-            hints: [
-              'Use a remote-capable command that accepts --ref and forwards it to the host API.',
-              'If no remote endpoint exists yet, run the command on the host.',
-            ],
-            apiBaseUrl: cfg.apiBaseUrl,
-          }),
-        );
+        const hostApi = yield* HostApiClient;
+        const resolved = yield* hostApi.resolveRefValue({
+          baseUrl: cfg.apiBaseUrl,
+          body: { ref: `${parsed.kind}:${parsed.value}` },
+        });
+        const remId = typeof resolved?.remId === 'string' ? resolved.remId.trim() : '';
+        if (!remId) {
+          return yield* Effect.fail(
+            new CliError({
+              code: 'INVALID_ARGS',
+              message: `No Rem found for ref: ${ref}`,
+              exitCode: 2,
+            }),
+          );
+        }
+        return remId;
       }
 
       if (parsed.kind === 'id') return parsed.value;
