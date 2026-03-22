@@ -3,9 +3,7 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { AppConfig } from '../../services/AppConfig.js';
-import { HostApiClient } from '../../services/HostApiClient.js';
-import { waitForTxn } from '../_waitTxn.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -21,11 +19,7 @@ export const queueWaitCommand = Command.make(
   },
   ({ txn, timeoutMs, pollMs }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
-      const data = cfg.apiBaseUrl
-        ? yield* hostApi.queueWait({ baseUrl: cfg.apiBaseUrl, txnId: txn, timeoutMs, pollMs })
-        : yield* waitForTxn({ txnId: txn, timeoutMs, pollMs });
+      const data: any = yield* invokeWave1Capability('queue.wait', { txnId: txn, timeoutMs, pollMs });
       yield* writeSuccess({
         data,
         md: [

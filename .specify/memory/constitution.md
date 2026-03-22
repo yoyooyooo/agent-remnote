@@ -1,13 +1,10 @@
 <!--
 Sync Impact Report
-- Version change: unversioned -> 1.1.0
+- Version change: 1.1.0 -> 1.2.0
 - Modified principles:
-  - Write-first（补充与 Agent-first CLI surface 的边界关系）
-  - Agent Skill Sync（强调 Skill 承接上层场景编排）
+  - none
 - Added sections:
-  - Metadata
-  - CLI Agent-First（最小完备原子能力）
-  - Governance
+  - RemNote Business Command Mode Parity
 - Removed sections:
   - none
 - Templates requiring updates:
@@ -21,9 +18,9 @@ Sync Impact Report
 
 > 本文件是 Spec Kit 工作流的“硬约束”清单：每个 feature 的 `plan.md` 必须在 Constitution Check 中逐条映射并给出结论；若必须违反，需在 `plan.md` 的 Complexity Tracking 中显式说明理由与被拒绝的更简单替代方案。
 
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Ratified**: 2026-02-10
-- **Last Amended**: 2026-03-19
+- **Last Amended**: 2026-03-22
 
 ## Non-negotiables
 
@@ -59,6 +56,13 @@ Sync Impact Report
     - `plan.md` 只要涉及 CLI、HTTP API、tool schema、Host API 或 agent-facing payload 变更，Constitution Check 都必须显式回答：这是否仍然保持了最小完备原子能力，是否把上层场景错误地下沉到了 CLI。
 
 14) **Agent Skill 同步**：当 CLI 写入链路、读取链路、命令面、默认值、诊断字段或 machine-readable contract 发生变更时，必须在 feature 收尾同步更新 `$remnote`（repo-local `skills/remnote/SKILL.md`，必要时再同步到外部镜像）的最短 recipes 与命令选择标准。Skill 必须承担上层场景编排，避免 Agent 选到低效路径或把场景逻辑误下沉进 CLI。
+
+15) **RemNote Business Command Mode Parity**：凡是直接读取或写入 RemNote 知识状态、Rem 图谱、表/属性记录、当前 UI/selection 业务上下文的 Agent-facing 命令，都属于 “RemNote business commands”，必须在 local mode 与 remote mode 下保持同一业务契约。
+    - 配置 `apiBaseUrl` 只能切换执行传输面，不能改变命令形状、参数语义、校验规则、输出字段、错误码或 receipt 语义。
+    - 任何依赖宿主事实的业务语义，包括 ref 解析、workspace binding、placement 解析、selection 解析、contiguous range 判定、title inference、capability gating、receipt enrichment，都必须收口为 host-authoritative 逻辑，并由 local/remote 两个薄适配层复用。
+    - 对 RemNote business commands，禁止长期保留“本地一套业务判断 + remote 一套业务判断”的双实现；允许存在的差异仅限 transport、超时与服务可达性诊断。
+    - 无法满足该原则的命令，必须在全局文档与 SSoT 中显式重新分类为 host-only operational command，不能继续算作 RemNote business command。
+    - 任何新增或重构 RemNote business command 的 spec / plan / tasks，都必须显式给出 parity strategy、gap inventory 与 remote-first integration verification。
 
 ## Default Quality Gates
 

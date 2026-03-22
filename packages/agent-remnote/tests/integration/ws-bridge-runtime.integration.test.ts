@@ -188,6 +188,23 @@ async function waitForStateFile(filePath: string, predicate: (json: any) => bool
   throw new Error(`timeout waiting for state file (${timeoutMs}ms): ${filePath}`);
 }
 
+async function removeDirWithRetry(dirPath: string, timeoutMs = 3000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown = undefined;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      await fs.rm(dirPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(50);
+    }
+  }
+
+  if (lastError) throw lastError;
+}
+
 describe('WsBridgeRuntime (integration)', () => {
   it('handles handshake + TriggerStartSync + SearchRequest forwarding + state file snapshot', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-bridge-'));
@@ -336,7 +353,7 @@ describe('WsBridgeRuntime (integration)', () => {
 
       await Effect.runPromise(Effect.scoped(program));
     } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true });
+      await removeDirWithRetry(tmpDir);
     }
   });
 
@@ -520,7 +537,7 @@ describe('WsBridgeRuntime (integration)', () => {
 
       await Effect.runPromise(Effect.scoped(program));
     } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true });
+      await removeDirWithRetry(tmpDir);
     }
   });
 

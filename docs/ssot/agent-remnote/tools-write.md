@@ -2,6 +2,20 @@
 
 > 通过 CLI（agent-remnote）将写入/修改操作入队，由 RemNote 插件通过 WS 拉取并执行。
 
+inventory authority：
+
+- 哪些写入命令属于 parity-mandatory 的 RemNote business commands，以
+  `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为唯一权威源。
+- 本文件只描述写入语义，不额外维护命令分类真相源。
+
+Wave 1 execution note：
+
+- 对于 Wave 1 parity-mandatory 写命令，代码侧允许有一个 executable registry：
+  `packages/agent-remnote/src/lib/business-semantics/commandContracts.ts`
+- 该 registry 只描述 Wave 1 写命令如何绑定 runtime capability，不决定命令是否
+  属于 Wave 1
+- Wave 1 写命令的 mode switch 应收口在 `ModeParityRuntime`
+
 ## 术语
 - op.type：操作类型。支持“标准类型”（下划线）与“点式别名”（namespace.action）。
 - payload：操作参数。可用 camelCase 或 snake_case，服务端会标准化为 snake_case。
@@ -13,7 +27,7 @@
 
 ## 命令一览
 - Agent-primary primitives
-  - `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
+- `agent-remnote apply`：统一写入入口；支持 `kind=actions|ops` 的 apply envelope（write-first）。
   - `agent-remnote rem replace`：规范化替换命令族。目标选择器负责表达“替换谁”，`--surface children|self` 负责表达“替换哪一层”。
   - `agent-remnote rem children append/prepend/replace/clear`：围绕单个 Rem 的 direct children 做 Markdown 结构写入（对应 `create_tree_with_markdown` / `replace_children_with_markdown`）。显式目标统一用 `--subject <ref>`；其中 `rem children replace` 保留为兼容性包装器；规范化路径优先用 `rem replace --surface children`。
   - `agent-remnote daily write`：写入 Daily Note（支持 bundle；结构化内容统一使用 `--markdown <input-spec>`；对应 `daily_note_write`）。
@@ -89,6 +103,8 @@
   - literal leading `@`：`"@@/tmp/demo.md"` 会保留为字面文本 `@/tmp/demo.md`
 - 默认行为：入队后触发一次同步（notify=true，ensure-daemon=true）；可用 `--no-notify` / `--no-ensure-daemon` 关闭。
 - `actions` 适用于 agent 友好的结构化写入；`ops` 适用于 advanced/debug。
+- Wave 1 runtime spine 必须保留这条统一写入链路：
+  `apply envelope -> actions -> WritePlanV1 -> ops -> enqueue`
 - `portal.create` 是 canonical portal atomic action；`input.parent_id` 与 `input.target_rem_id` 都允许引用 earlier `@alias`。
 - 标准类型（部分示例）
   - rem 基础：`create_rem`/`create_portal`/`create_single_rem_with_markdown`/`create_tree_with_markdown`/`replace_selection_with_markdown`/`create_link_rem`/`update_text`/`move_rem`/`delete_rem`

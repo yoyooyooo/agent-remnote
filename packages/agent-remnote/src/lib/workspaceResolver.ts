@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 import * as Effect from 'effect/Effect';
 
-import { loadBridgeUiContextSnapshot } from '../commands/read/uiContext/_shared.js';
+import { loadBridgeUiContextSnapshot } from './business-semantics/uiContextResolution.js';
 import { AppConfig } from '../services/AppConfig.js';
 import { CliError } from '../services/Errors.js';
 import {

@@ -5,6 +5,7 @@ import * as Option from 'effect/Option';
 
 import { AppConfig } from '../../../services/AppConfig.js';
 import { RemDb } from '../../../services/RemDb.js';
+import { failInRemoteMode } from '../../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
@@ -76,6 +77,10 @@ export const readPowerupListCommand = Command.make('list', { query, limit, offse
     const effectiveOffset = offset ?? 0;
 
     const cfg = yield* AppConfig;
+    yield* failInRemoteMode({
+      command: 'powerup list',
+      reason: 'this command still derives powerup inventory from the local RemNote database',
+    });
     const remDb = yield* RemDb;
 
     const { result, info } = yield* remDb.withDb(cfg.remnoteDb, (db) => {

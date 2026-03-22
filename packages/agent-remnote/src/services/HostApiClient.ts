@@ -150,6 +150,21 @@ function requestJson<A>(params: {
 }
 
 export interface HostApiClientService {
+  readonly resolveRefValue: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly resolvePlacement: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly resolveStableSiblingRange: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
   readonly health: (params: { readonly baseUrl: string; readonly timeoutMs?: number }) => Effect.Effect<any, CliError>;
   readonly status: (params: { readonly baseUrl: string; readonly timeoutMs?: number }) => Effect.Effect<any, CliError>;
   readonly uiContextSnapshot: (params: {
@@ -244,6 +259,31 @@ export interface HostApiClientService {
     readonly body: unknown;
     readonly timeoutMs?: number;
   }) => Effect.Effect<any, CliError>;
+  readonly readPageId: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly resolveRef: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly byReference: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly references: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
+  readonly query: (params: {
+    readonly baseUrl: string;
+    readonly body: unknown;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
   readonly dailyRemId: (params: {
     readonly baseUrl: string;
     readonly date?: string | undefined;
@@ -283,6 +323,12 @@ export const HostApiClientLive = Layer.effect(
     }) => requestJson<A>({ ...params, basePath });
 
     return {
+      resolveRefValue: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/ref/resolve', method: 'POST', body, timeoutMs }),
+      resolvePlacement: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/placement/resolve', method: 'POST', body, timeoutMs }),
+      resolveStableSiblingRange: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/selection/stable-sibling-range', method: 'POST', body, timeoutMs }),
       health: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/health', method: 'GET', timeoutMs }),
       status: ({ baseUrl, timeoutMs }) => request({ baseUrl, path: '/status', method: 'GET', timeoutMs }),
       uiContextSnapshot: ({ baseUrl, stateFile, staleMs, timeoutMs }) =>
@@ -351,6 +397,15 @@ export const HostApiClientLive = Layer.effect(
         request({ baseUrl, path: '/write/apply', method: 'POST', body, timeoutMs }),
       readOutline: ({ baseUrl, body, timeoutMs }) =>
         request({ baseUrl, path: '/read/outline', method: 'POST', body, timeoutMs }),
+      readPageId: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/read/page-id', method: 'POST', body, timeoutMs }),
+      resolveRef: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/read/resolve-ref', method: 'POST', body, timeoutMs }),
+      byReference: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/read/by-reference', method: 'POST', body, timeoutMs }),
+      references: ({ baseUrl, body, timeoutMs }) =>
+        request({ baseUrl, path: '/read/references', method: 'POST', body, timeoutMs }),
+      query: ({ baseUrl, body, timeoutMs }) => request({ baseUrl, path: '/read/query', method: 'POST', body, timeoutMs }),
       dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>
         request({
           baseUrl,

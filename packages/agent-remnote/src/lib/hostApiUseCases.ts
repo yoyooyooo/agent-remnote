@@ -1,22 +1,33 @@
 import * as Effect from 'effect/Effect';
 
 import {
+  executeFindRemsByReference,
   executeOutlineRemSubtree,
+  executeListRemReferences,
+  executeResolveRemPage,
+  executeResolveRemReference,
+  executeSearchQuery,
   executeSearchRemOverview,
   formatDateWithPattern,
   getDateFormatting,
   type BetterSqliteInstance,
 } from '../adapters/core.js';
 import { listBackupArtifacts, openStoreDb } from '../internal/public.js';
-import { loadBridgeSelectionSnapshot, requireOkRemSelection } from '../commands/read/selection/_shared.js';
-import { loadBridgeUiContextSnapshot, requireOkUiContext } from '../commands/read/uiContext/_shared.js';
+import {
+  loadBridgeSelectionSnapshot,
+  requireOkRemSelection,
+  requireStableSiblingRangeLocal,
+} from './business-semantics/selectionResolution.js';
+import { loadBridgeUiContextSnapshot, requireOkUiContext } from './business-semantics/uiContextResolution.js';
 import { compileApplyEnvelope, parseApplyEnvelope } from '../commands/_applyEnvelope.js';
 import { enqueueOps, normalizeOp } from '../commands/_enqueue.js';
 import { validateOptionMutationOps } from '../commands/write/_optionRuntimeGuard.js';
+import { resolveAnchorPlacement } from './business-semantics/placementResolution.js';
 import { waitForTxn } from '../commands/_waitTxn.js';
 import { WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from '../commands/ws/_shared.js';
 import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
+import type { HostApiClient } from '../services/HostApiClient.js';
 import { Payload } from '../services/Payload.js';
 import { RemDb } from '../services/RemDb.js';
 import { Queue } from '../services/Queue.js';
@@ -148,7 +159,7 @@ export function executeReadOutlineUseCase(params: {
   readonly expandReferences?: boolean | undefined;
   readonly maxReferenceDepth?: number | undefined;
   readonly detail?: boolean | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | RefResolver | WorkspaceBindings> {
   return Effect.gen(function* () {
     const refs = yield* RefResolver;
     const cfg = yield* AppConfig;
@@ -228,6 +239,225 @@ export function executeReadOutlineUseCase(params: {
   });
 }
 
+export function executeReadPageIdUseCase(params: {
+  readonly ref?: string | undefined;
+  readonly ids?: readonly string[] | undefined;
+  readonly maxHops?: number | undefined;
+  readonly detail?: boolean | undefined;
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | RefResolver | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const refs = yield* RefResolver;
+    const cfg = yield* AppConfig;
+
+    const ref = typeof params.ref === 'string' && params.ref.trim() ? params.ref.trim() : undefined;
+    const ids = Array.isArray(params.ids) ? params.ids.map((value) => String(value).trim()).filter(Boolean) : [];
+    if ((ref ? 1 : 0) + (ids.length > 0 ? 1 : 0) !== 1) {
+      return yield* Effect.fail(
+        new CliError({
+          code: 'INVALID_ARGS',
+          message: 'You must provide exactly one input: --ref or --id (repeatable)',
+          exitCode: 2,
+          hint: [
+            'Example: agent-remnote rem page-id --id <remId>',
+            'Example: agent-remnote rem page-id --ref "id:<remId>"',
+          ],
+        }),
+      );
+    }
+
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({ ref });
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
+    const resolvedIds = ref ? [yield* refs.resolve(ref, { dbPath })] : ids;
+    if (resolvedIds.length === 0) {
+      return yield* Effect.fail(
+        new CliError({ code: 'INVALID_ARGS', message: 'Provide at least one Rem ID via --id', exitCode: 2 }),
+      );
+    }
+
+    return yield* Effect.tryPromise({
+      try: async () =>
+        await executeResolveRemPage({
+          ids: resolvedIds,
+          dbPath,
+          maxHops: params.maxHops as any,
+          detail: params.detail,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+  });
+}
+
+export function executeResolveRefUseCase(params: {
+  readonly ids: readonly string[];
+  readonly expandReferences?: boolean | undefined;
+  readonly maxReferenceDepth?: number | undefined;
+  readonly detail?: boolean | undefined;
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const ids = params.ids.map((value) => String(value).trim()).filter(Boolean);
+    if (ids.length === 0) {
+      return yield* Effect.fail(
+        new CliError({
+          code: 'INVALID_ARGS',
+          message: 'Provide at least one Rem ID via --ids',
+          exitCode: 2,
+        }),
+      );
+    }
+
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
+
+    return yield* Effect.tryPromise({
+      try: async () =>
+        await executeResolveRemReference({
+          ids,
+          dbPath,
+          expandReferences: params.expandReferences === false ? false : undefined,
+          maxReferenceDepth: params.maxReferenceDepth as any,
+          detail: params.detail,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+  });
+}
+
+export function executeResolveRefValueUseCase(params: {
+  readonly ref: string;
+}): Effect.Effect<{ readonly remId: string }, CliError, AppConfig | HostApiClient | RefResolver | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const refs = yield* RefResolver;
+    const remId = yield* refs.resolve(params.ref);
+    return { remId };
+  });
+}
+
+export function executeResolvePlacementUseCase(params: {
+  readonly spec: { readonly kind: 'before' | 'after'; readonly anchorRef: string };
+}): Effect.Effect<{ readonly kind: 'before' | 'after'; readonly parentId: string; readonly position: number }, CliError, AppConfig | HostApiClient | RefResolver | RemDb | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const resolved =
+      params.spec.kind === 'before'
+        ? yield* resolveAnchorPlacement({ anchorRef: params.spec.anchorRef, offset: 0 })
+        : yield* resolveAnchorPlacement({ anchorRef: params.spec.anchorRef, offset: 1 });
+
+    return {
+      kind: params.spec.kind,
+      parentId: resolved.parentId,
+      position: resolved.position,
+    } as const;
+  });
+}
+
+export function executeResolveStableSiblingRangeUseCase(params: {
+  readonly remIds: readonly string[];
+  readonly missingMessage?: string | undefined;
+  readonly mismatchMessage?: string | undefined;
+}): Effect.Effect<
+  { readonly orderedRemIds: readonly string[]; readonly parentId: string; readonly position: number },
+  CliError,
+  AppConfig | RemDb | WorkspaceBindings
+> {
+  return requireStableSiblingRangeLocal({
+    remIds: params.remIds,
+    missingMessage: params.missingMessage?.trim() || 'Selection refs could not be fully resolved from the local RemNote DB',
+    mismatchMessage:
+      params.mismatchMessage?.trim() ||
+      'Selection refs must resolve to contiguous sibling Rems under the same parent',
+  });
+}
+
+export function executeByReferenceUseCase(params: {
+  readonly reference: readonly string[];
+  readonly timeRange?: string | undefined;
+  readonly maxDepth?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const references = params.reference.map((value) => String(value).trim()).filter(Boolean);
+    if (references.length === 0) {
+      return yield* Effect.fail(
+        new CliError({ code: 'INVALID_ARGS', message: 'Provide at least one Rem ID via --reference', exitCode: 2 }),
+      );
+    }
+
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
+
+    return yield* Effect.tryPromise({
+      try: async () =>
+        await executeFindRemsByReference({
+          targetIds: references,
+          dbPath,
+          timeRange: params.timeRange as any,
+          maxDepth: params.maxDepth as any,
+          limit: params.limit as any,
+          offset: params.offset as any,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+  });
+}
+
+export function executeReferencesUseCase(params: {
+  readonly id: string;
+  readonly includeDescendants?: boolean | undefined;
+  readonly maxDepth?: number | undefined;
+  readonly includeOccurrences?: boolean | undefined;
+  readonly resolveText?: boolean | undefined;
+  readonly includeInbound?: boolean | undefined;
+  readonly inboundMaxDepth?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
+    const { payload } = yield* Effect.tryPromise({
+      try: async () =>
+        await executeListRemReferences({
+          id: params.id,
+          dbPath,
+          includeDescendants: params.includeDescendants,
+          maxDepth: params.maxDepth as any,
+          includeOccurrences: params.includeOccurrences,
+          resolveText: params.resolveText === false ? false : undefined,
+          includeInbound: params.includeInbound,
+          inboundMaxDepth: params.inboundMaxDepth as any,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+    return payload;
+  });
+}
+
+export function executeQueryUseCase(params: {
+  readonly queryObj: Record<string, unknown>;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
+  readonly snippetLength?: number | undefined;
+}): Effect.Effect<any, CliError, AppConfig | WorkspaceBindings> {
+  return Effect.gen(function* () {
+    const cfg = yield* AppConfig;
+    const workspace = cfg.remnoteDb ? undefined : yield* requireResolvedWorkspace({});
+    const dbPath = cfg.remnoteDb ?? workspace!.dbPath;
+    const { payload } = yield* Effect.tryPromise({
+      try: async () =>
+        await executeSearchQuery({
+          ...params.queryObj,
+          dbPath,
+          limit: params.limit as any,
+          offset: params.offset as any,
+          snippetLength: params.snippetLength as any,
+        } as any),
+      catch: (error) => cliErrorFromUnknown(error, { code: 'DB_UNAVAILABLE' }),
+    });
+    return payload;
+  });
+}
+
 function filterOutlineTreeByHiddenBackupSubtrees(
   tree: readonly any[],
   hiddenIds: ReadonlySet<string>,
@@ -279,7 +509,7 @@ function simplifyOutlineTree(nodes: readonly any[]) {
 export function executeDailyRemIdUseCase(params: {
   readonly date?: string | undefined;
   readonly offsetDays?: number | undefined;
-}): Effect.Effect<any, CliError, AppConfig | RefResolver | RemDb | WorkspaceBindings> {
+}): Effect.Effect<any, CliError, AppConfig | HostApiClient | RefResolver | RemDb | WorkspaceBindings> {
   return Effect.gen(function* () {
     if (params.date && params.offsetDays !== undefined) {
       return yield* Effect.fail(

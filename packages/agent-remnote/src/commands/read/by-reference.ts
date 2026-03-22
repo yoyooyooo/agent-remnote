@@ -3,13 +3,9 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { executeFindRemsByReference } from '../../adapters/core.js';
-
-import { AppConfig } from '../../services/AppConfig.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { CliError } from '../../services/Errors.js';
-import { failInRemoteMode } from '../_remoteMode.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
-import { cliErrorFromUnknown } from '../_tool.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -32,22 +28,12 @@ export const readByReferenceCommand = Command.make(
         );
       }
 
-      const cfg = yield* AppConfig;
-      yield* failInRemoteMode({
-        command: 'rem by-reference',
-        reason: 'this command still walks the local RemNote database to expand references',
-      });
-      const result = yield* Effect.tryPromise({
-        try: async () =>
-          await executeFindRemsByReference({
-            targetIds: reference,
-            dbPath: cfg.remnoteDb,
-            timeRange: timeRange as any,
-            maxDepth: maxDepth as any,
-            limit: limit as any,
-            offset: offset as any,
-          } as any),
-        catch: (e) => cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' }),
+      const result: any = yield* invokeWave1Capability('read.by-reference', {
+        reference,
+        timeRange,
+        maxDepth,
+        limit,
+        offset,
       });
       yield* writeSuccess({ data: result, md: (result as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),

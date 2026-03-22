@@ -2,29 +2,13 @@ import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 
+import { buildMovePromotionReceipt } from '../../../lib/business-semantics/receiptBuilders.js';
 import { CliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
 import { readOptionalText, writeCommonOptions } from '../_shared.js';
 import { PORTAL_REM_ALIAS, buildMovePromotionActions, normalizeMovePromotionIntent } from './_promotion.js';
 import { dryRunEnvelope, ensureWaitArgs, loadTxnDetail, submitActionEnvelope } from './children/common.js';
-
-function parseResultJson(raw: any): any {
-  const resultJson = raw?.result_json;
-  if (typeof resultJson === 'string' && resultJson.trim()) {
-    try {
-      return JSON.parse(resultJson);
-    } catch {}
-  }
-  return null;
-}
-
-function findRemoteId(idMap: unknown, clientTempId: string | undefined): string | undefined {
-  if (!clientTempId || !Array.isArray(idMap)) return undefined;
-  const match = idMap.find((entry: any) => String(entry?.client_temp_id ?? '') === clientTempId);
-  const remoteId = typeof match?.remote_id === 'string' ? match.remote_id.trim() : '';
-  return remoteId || undefined;
-}
 
 export const writeRemMoveCommand = Command.make(
   'move',
@@ -123,60 +107,12 @@ export const writeRemMoveCommand = Command.make(
             ? ((out as any).alias_map as Record<string, string>)
             : undefined;
       const portalClientTempId = aliasMap?.[PORTAL_REM_ALIAS];
-      const idMap = Array.isArray((detail as any)?.id_map)
-        ? (detail as any).id_map
-        : Array.isArray((out as any)?.id_map)
-          ? (out as any).id_map
-          : [];
-      const portalRemId = findRemoteId(idMap, portalClientTempId);
-      const moveOp = Array.isArray((detail as any)?.ops)
-        ? (detail as any).ops.find((op: any) => String(op?.type ?? '').trim() === 'move_rem')
-        : Array.isArray((out as any)?.ops)
-          ? (out as any).ops.find((op: any) => String(op?.type ?? '').trim() === 'move_rem')
-        : null;
-      const moveResult = parseResultJson(moveOp?.result);
-
-      const warnings = [
-        ...((Array.isArray((out as any)?.warnings) ? (out as any).warnings : []) as string[]),
-        ...((Array.isArray(moveResult?.warnings) ? moveResult.warnings : []) as string[]),
-      ];
-      const nextActions = [
-        ...((Array.isArray((out as any)?.nextActions) ? (out as any).nextActions : []) as string[]),
-        ...((Array.isArray(moveResult?.nextActions) ? moveResult.nextActions : []) as string[]),
-      ];
-
-      const inPlacePortalId =
-        typeof moveResult?.portal_id === 'string' && moveResult.portal_id.trim() ? moveResult.portal_id.trim() : undefined;
-      const portalPlacementKind = intent.portalPlacement.kind === 'none' ? undefined : intent.portalPlacement.kind;
-      const portalCreated =
-        intent.portalPlacement.kind === 'in_place_single_rem' ? moveResult?.portal_created === true : Boolean(portalRemId);
-      const effectivePortalRemId =
-        intent.portalPlacement.kind === 'in_place_single_rem' ? inPlacePortalId : portalRemId;
-
-      const enriched = {
-        ...(out as any),
-        rem_id: intent.remId,
-        durable_target: {
-          rem_id: intent.remId,
-          is_document: intent.isDocument,
-          placement_kind: intent.contentPlacement.kind,
-        },
-        source_context: {
-          source_kind: 'targets',
-          source_origin: 'move_single_rem',
-          ...(typeof moveResult?.source_parent_id === 'string' && moveResult.source_parent_id.trim()
-            ? { parent_id: moveResult.source_parent_id.trim() }
-            : {}),
-        },
-        portal: {
-          requested: intent.portalPlacement.kind !== 'none',
-          created: portalCreated,
-          ...(effectivePortalRemId ? { rem_id: effectivePortalRemId } : {}),
-          ...(portalPlacementKind ? { placement_kind: portalPlacementKind } : {}),
-        },
-        ...(warnings.length > 0 ? { warnings } : {}),
-        ...(nextActions.length > 0 ? { nextActions } : {}),
-      };
+      const enriched = buildMovePromotionReceipt({
+        out,
+        detail,
+        intent,
+        portalClientTempId,
+      });
 
       yield* writeSuccess({
         data: enriched,

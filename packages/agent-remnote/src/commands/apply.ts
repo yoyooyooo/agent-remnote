@@ -3,11 +3,9 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
-import { HostApiClient } from '../services/HostApiClient.js';
 import { Payload } from '../services/Payload.js';
-import { executeWriteApplyUseCase } from '../lib/hostApiUseCases.js';
+import { invokeWave1Capability } from '../lib/business-semantics/modeParityRuntime.js';
 import { compileApplyEnvelope, normalizeAndExpandApplyEnvelope, parseApplyEnvelope } from './_applyEnvelope.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { validateOptionMutationOps } from './write/_optionRuntimeGuard.js';
@@ -70,8 +68,6 @@ export const applyCommand = Command.make(
         );
       }
 
-      const cfg = yield* AppConfig;
-      const hostApi = yield* HostApiClient;
       const payloadSvc = yield* Payload;
 
       const raw = yield* payloadSvc.readJson(payload);
@@ -110,39 +106,21 @@ export const applyCommand = Command.make(
         return;
       }
 
-      const data = cfg.apiBaseUrl
-        ? yield* hostApi.writeApply({
-            baseUrl: cfg.apiBaseUrl,
-            body: {
-              ...(expanded as Record<string, unknown>),
-              priority: resolvedPriority,
-              clientId: resolvedClientId,
-              idempotencyKey: resolvedIdempotencyKey,
-              meta: metaValue,
-              notify,
-              ensureDaemon,
-              wait,
-              timeoutMs,
-              pollMs,
-            },
-          })
-        : yield* Effect.gen(function* () {
-            yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
-            return yield* executeWriteApplyUseCase({
-              raw: {
-                ...(expanded as Record<string, unknown>),
-                priority: resolvedPriority,
-                clientId: resolvedClientId,
-                idempotencyKey: resolvedIdempotencyKey,
-                meta: metaValue,
-                notify: notify ?? compiled.notify ?? true,
-                ensureDaemon: ensureDaemon ?? compiled.ensureDaemon ?? true,
-              },
-              wait,
-              timeoutMs,
-              pollMs,
-            });
-          });
+      yield* validateOptionMutationOps({ scopeLabel: 'generic', ops: compiled.ops });
+      const data: any = yield* invokeWave1Capability('write.apply', {
+        body: {
+          ...(expanded as Record<string, unknown>),
+          priority: resolvedPriority,
+          clientId: resolvedClientId,
+          idempotencyKey: resolvedIdempotencyKey,
+          meta: metaValue,
+          notify: notify ?? compiled.notify ?? true,
+          ensureDaemon: ensureDaemon ?? compiled.ensureDaemon ?? true,
+        },
+        wait,
+        timeoutMs,
+        pollMs,
+      });
 
       const out =
         compiled.kind === 'actions'

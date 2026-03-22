@@ -5,15 +5,15 @@ import * as Effect from 'effect/Effect';
 import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError, isCliError } from '../../../services/Errors.js';
 import { Payload } from '../../../services/Payload.js';
-import { Queue } from '../../../services/Queue.js';
 import { RefResolver } from '../../../services/RefResolver.js';
 import { tryParseRemnoteLink } from '../../../lib/remnote.js';
-import { enqueueOps, normalizeOp } from '../../_enqueue.js';
+import { normalizeOp } from '../../_enqueue.js';
 import { writeFailure, writeSuccess } from '../../_shared.js';
-import { waitForTxn } from '../../_waitTxn.js';
 import { makeTempId } from '../../_tempId.js';
+import { findRemoteId } from '../../../lib/business-semantics/receiptBuilders.js';
 
 import { optionToUndefined, writeCommonOptions } from '../_shared.js';
+import { dispatchOps } from '../_dispatchOps.js';
 
 function normalizeRemIdInput(raw: string): string {
   const trimmed = raw.trim();
@@ -173,7 +173,7 @@ export const writeTableCreateCommand = Command.make(
         return;
       }
 
-      const data = yield* enqueueOps({
+      const dispatched = yield* dispatchOps({
         ops: [op],
         priority,
         clientId,
@@ -181,38 +181,33 @@ export const writeTableCreateCommand = Command.make(
         meta: metaValue,
         notify,
         ensureDaemon,
+        wait,
+        timeoutMs,
+        pollMs,
       });
 
-      const waited = wait ? yield* waitForTxn({ txnId: data.txn_id, timeoutMs, pollMs }) : null;
-      const queue = yield* Queue;
+      const createdTableId =
+        wait && (dispatched as any).is_success === true
+          ? findRemoteId((dispatched as any).id_map, tableClientTempId)
+          : undefined;
 
-      const created =
-        waited && (waited as any).is_success === true
-          ? yield* queue.inspect({ dbPath: cfg.storeDb, txnId: data.txn_id }).pipe(
-              Effect.map((inspected) => {
-                const idMap = Array.isArray((inspected as any)?.id_map) ? ((inspected as any).id_map as any[]) : [];
-                const match = idMap.find((r) => String(r?.client_temp_id ?? '') === tableClientTempId);
-                const remoteId = match?.remote_id ? String(match.remote_id) : '';
-                return remoteId ? { table_rem_id: remoteId } : {};
-              }),
-              Effect.catchAll(() => Effect.succeed({})),
-            )
-          : {};
-
-      const out = waited
-        ? ({ ...data, ...waited, table_client_temp_id: tableClientTempId, ...created } as any)
-        : ({ ...data, table_client_temp_id: tableClientTempId } as any);
+      const out = {
+        ...(dispatched as any),
+        table_client_temp_id: tableClientTempId,
+        ...(createdTableId ? { table_rem_id: createdTableId } : {}),
+      } as any;
 
       yield* writeSuccess({
         data: out,
-        ids: [data.txn_id, ...data.op_ids],
+        ids: [(out as any).txn_id, ...((out as any).op_ids ?? [])],
         md: [
-          `- txn_id: ${data.txn_id}`,
-          `- op_ids: ${data.op_ids.length}`,
-          `- notified: ${data.notified}`,
-          `- sent: ${data.sent ?? ''}`,
+          `- txn_id: ${(out as any).txn_id}`,
+          `- op_ids: ${Array.isArray((out as any).op_ids) ? (out as any).op_ids.length : 0}`,
+          `- notified: ${(out as any).notified}`,
+          `- sent: ${(out as any).sent ?? ''}`,
           `- table_client_temp_id: ${tableClientTempId}`,
-          ...(waited ? [`- status: ${(waited as any).status}`, `- elapsed_ms: ${(waited as any).elapsed_ms}`] : []),
+          ...(createdTableId ? [`- table_rem_id: ${createdTableId}`] : []),
+          ...(wait ? [`- status: ${(out as any).status}`, `- elapsed_ms: ${(out as any).elapsed_ms}`] : []),
         ].join('\n'),
       });
     }).pipe(Effect.catchAll(writeFailure)),

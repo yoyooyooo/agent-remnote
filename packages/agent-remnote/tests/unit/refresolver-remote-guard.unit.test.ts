@@ -4,6 +4,7 @@ import * as Layer from 'effect/Layer';
 
 import { AppConfig } from '../../src/services/AppConfig.js';
 import type { ResolvedConfig } from '../../src/services/Config.js';
+import { HostApiClient } from '../../src/services/HostApiClient.js';
 import { RefResolver, RefResolverLive } from '../../src/services/RefResolver.js';
 import { WorkspaceBindingsLive } from '../../src/services/WorkspaceBindings.js';
 
@@ -41,31 +42,42 @@ function makeConfig(apiBaseUrl?: string): ResolvedConfig {
 describe('RefResolver remote guard (unit)', () => {
   it('allows pure id refs when apiBaseUrl is configured', async () => {
     const cfgLayer = Layer.succeed(AppConfig, makeConfig('http://host.docker.internal:3310'));
+    const hostApiLayer = Layer.succeed(HostApiClient, {
+      resolveRefValue: ({ body }: any) => Effect.succeed({ remId: body?.ref === 'daily:today' ? 'D1' : 'RID-X' }),
+    } as any);
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolver;
         return yield* refs.resolve('id:RID-1');
-      }).pipe(Effect.provide([cfgLayer, WorkspaceBindingsLive, RefResolverLive])),
+      }).pipe(
+        Effect.provide(hostApiLayer),
+        Effect.provide(RefResolverLive),
+        Effect.provide(WorkspaceBindingsLive),
+        Effect.provide(cfgLayer),
+      ),
     );
 
     expect(result).toBe('RID-1');
   });
 
-  it('fails fast for db-backed refs when apiBaseUrl is configured', async () => {
+  it('routes db-backed refs through host api when apiBaseUrl is configured', async () => {
     const cfgLayer = Layer.succeed(AppConfig, makeConfig('http://host.docker.internal:3310'));
+    const hostApiLayer = Layer.succeed(HostApiClient, {
+      resolveRefValue: ({ body }: any) => Effect.succeed({ remId: body?.ref === 'daily:today' ? 'D1' : 'RID-X' }),
+    } as any);
+
     const result = await Effect.runPromise(
-      Effect.either(
-        Effect.gen(function* () {
-          const refs = yield* RefResolver;
-          return yield* refs.resolve('daily:today');
-        }).pipe(Effect.provide([cfgLayer, WorkspaceBindingsLive, RefResolverLive])),
+      Effect.gen(function* () {
+        const refs = yield* RefResolver;
+        return yield* refs.resolve('daily:today');
+      }).pipe(
+        Effect.provide(hostApiLayer),
+        Effect.provide(RefResolverLive),
+        Effect.provide(WorkspaceBindingsLive),
+        Effect.provide(cfgLayer),
       ),
     );
 
-    expect(result._tag).toBe('Left');
-    if (result._tag === 'Left') {
-      expect(result.left.code).toBe('INVALID_ARGS');
-      expect(result.left.message).toContain('apiBaseUrl');
-    }
+    expect(result).toBe('D1');
   });
 });

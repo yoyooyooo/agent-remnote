@@ -2,10 +2,8 @@ import * as Effect from 'effect/Effect';
 
 import { idFieldPathsForOpType } from '../kernel/op-catalog/index.js';
 import { collectLeafValues, mapLeafValuesInPlace, parsePathTokens } from '../kernel/op-catalog/pathWalk.js';
-import type { AppConfig } from '../services/AppConfig.js';
+import { resolveRefValue } from '../lib/business-semantics/refResolution.js';
 import { CliError } from '../services/Errors.js';
-import { RefResolver } from '../services/RefResolver.js';
-import type { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 
 function shouldResolveRef(value: string): boolean {
   const s = value.trim();
@@ -21,9 +19,8 @@ function shouldResolveRef(value: string): boolean {
 export function resolveRefsInPayload(params: {
   readonly opType: string;
   readonly payload: Record<string, unknown>;
-}): Effect.Effect<Record<string, unknown>, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+}): Effect.Effect<Record<string, unknown>, CliError, any> {
   return Effect.gen(function* () {
-    const refs = yield* RefResolver;
     const out: Record<string, unknown> = structuredClone(params.payload);
     const resolvedRefCache = new Map<string, string>();
 
@@ -46,7 +43,7 @@ export function resolveRefsInPayload(params: {
             const cached = resolvedRefCache.get(refValue);
             if (cached) return cached;
 
-            const resolved = yield* refs.resolve(refValue);
+            const resolved = yield* resolveRefValue(refValue);
             resolvedRefCache.set(refValue, resolved);
             return resolved;
           }),

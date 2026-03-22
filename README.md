@@ -168,9 +168,13 @@ Strict remote mode rule:
 - When `apiBaseUrl` is configured, business commands must use the host API.
 - `REMNOTE_API_BASE_URL` and user config `apiBaseUrl` are equivalent inputs in the same precedence chain.
 - `apiBasePath` only affects listener/status URL assembly. If `apiBaseUrl` already includes a path prefix, that prefix wins.
+- The authoritative inventory for parity-mandatory business commands lives in
+  `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md`.
 - Commands that still depend on direct local DB/filesystem access now fail fast instead of silently falling back to local reads.
+- Deferred write commands that only compile `ops` must also use the host API in remote mode instead of enqueueing to the caller-side local store.
 - Remote-capable examples now include `search`, `queue wait`, `plugin current`, `rem outline`, `daily rem-id`, `daily write`, and `rem children *`.
 - For structured writes in remote mode, use `daily write --markdown ...`, `rem children ...`, or `apply --payload ...`.
+- `powerup todo ...` is the canonical Todo command family; top-level `todo ...` remains as a high-frequency alias.
 
 Overrides are still available when needed:
 

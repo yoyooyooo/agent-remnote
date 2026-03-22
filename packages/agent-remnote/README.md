@@ -62,6 +62,9 @@ agent-remnote search --query "keyword"
 agent-remnote plugin current --compact
 ```
 
+The authoritative inventory for parity-mandatory business commands lives in
+`docs/ssot/agent-remnote/runtime-mode-and-command-parity.md`.
+
 For local RemNote plugin loading, serve the embedded plugin artifacts at the default URL:
 
 ```bash

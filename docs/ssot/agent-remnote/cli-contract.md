@@ -2,6 +2,21 @@
 
 本文件定义 agent-remnote 的 CLI 对外契约（A 类不变量）。实现与测试必须以此为准。
 
+command inventory authority：
+
+- 哪些命令属于 RemNote business commands，以及它们的 wave / parity target，
+  以 `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为唯一权威源。
+- 本文件定义 CLI contract；不单独再维护一份命令分类真相源。
+
+Wave 1 execution authority：
+
+- `packages/agent-remnote/src/lib/business-semantics/commandContracts.ts`
+  可以声明 Wave 1 executable contract
+- `packages/agent-remnote/src/lib/business-semantics/modeParityRuntime.ts`
+  定义的 `ModeParityRuntime` 是 Wave 1 business command 唯一允许切换
+  local / remote mode 的层
+- Wave 1 business command files 应保持 thin adapter 形态
+
 ## 1) 两个 surface，一个核心不变量
 
 - **Machine surface**：当用户传入 `--json` 时，把 CLI 当作“协议/API”消费。
@@ -22,6 +37,12 @@
   - `0`：成功
   - `2`：参数/用法错误（含 `@effect/cli` ValidationError、严格 argv 预检失败）
   - `1`：其他失败（运行时失败、依赖不可用、未知 defect）
+
+补充约束：
+
+- 对于 Wave 1 parity-mandatory business commands，`--json` 的业务结果应来自同一套
+  runtime capability 与 normalizer
+- command file 不应因为 `apiBaseUrl` 是否存在而自行切换业务语义
 
 ### Envelope shape
 
@@ -78,6 +99,13 @@ export type JsonEnvelope =
 - raw ops 仅允许作为 debug/escape hatch 暴露在 `apply`（结构化批量入口同样统一到 `apply` 的 `kind=actions`）
 - `apply kind=actions` 的 atomic vocabulary 必须保持低熵；portal 写入的 canonical action 为 `portal.create`，通过参数与 `@alias` 组合，不再引入 workflow-specific command noun
 
+Wave 1 runtime shape：
+
+- 写路径继续保留 `apply envelope -> WritePlanV1 -> ops`
+- 读路径与 UI-context 路径统一消费 runtime capabilities
+- command files 负责 argv、help、output
+- runtime 负责 mode switch、capability gating、结果归一化
+
 ### `rem replace`
 
 - `rem` 下的规范化替换命令族
@@ -131,6 +159,19 @@ export type JsonEnvelope =
 - direct CLI surface 必须把 repeated `--tag` 与 repeated `--to` 展开为多条关系边
 - 旧的 `--subject` 与 `--rem` 在 `tag add/remove` 上都必须拒绝
 - `rem tag add/remove` 只是命令树别名，参数面必须与 `tag add/remove` 完全一致
+
+### `powerup todo` / `todo`
+
+- authoritative inventory 里的 canonical ids 记为 `powerup.todo.*`
+- `powerup todo` 是 canonical command family
+- 顶层 `todo` 只保留为高频 alias
+- `todo` 与 `powerup todo` 的子命令集合必须保持一致：
+  - `list`
+  - `add`
+  - `done`
+  - `undone`
+  - `remove`
+- `todo list` 的长期方向是 `query` preset；在命令面保留 alias 不等于保留第二套查询内核
 
 ### Promotion receipt
 

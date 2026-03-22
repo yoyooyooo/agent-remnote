@@ -4,6 +4,7 @@ import { executeOutlineRemSubtree } from '../../../adapters/core.js';
 
 import { AppConfig } from '../../../services/AppConfig.js';
 import { CliError } from '../../../services/Errors.js';
+import type { HostApiClient } from '../../../services/HostApiClient.js';
 import { RefResolver } from '../../../services/RefResolver.js';
 import type { WorkspaceBindings } from '../../../services/WorkspaceBindings.js';
 import { failInRemoteMode } from '../../_remoteMode.js';
@@ -25,7 +26,7 @@ export function resolveReplaceTarget(params: {
   readonly staleMs?: number | undefined;
   readonly ref?: string | undefined;
   readonly ids: readonly string[];
-}): Effect.Effect<ReplaceTarget, CliError, AppConfig | RefResolver | WorkspaceBindings> {
+}): Effect.Effect<ReplaceTarget, CliError, AppConfig | HostApiClient | RefResolver | WorkspaceBindings> {
   return Effect.gen(function* () {
     const _cfg = yield* AppConfig;
     yield* failInRemoteMode({

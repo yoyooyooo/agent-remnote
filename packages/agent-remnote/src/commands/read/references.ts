@@ -3,12 +3,8 @@ import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
-import { executeListRemReferences } from '../../adapters/core.js';
-
-import { AppConfig } from '../../services/AppConfig.js';
-import { failInRemoteMode } from '../_remoteMode.js';
+import { invokeWave1Capability } from '../../lib/business-semantics/modeParityRuntime.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
-import { cliErrorFromUnknown } from '../_tool.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
@@ -30,26 +26,14 @@ export const readReferencesCommand = Command.make(
   },
   ({ id, includeDescendants, maxDepth, includeOccurrences, resolveText, includeInbound, inboundMaxDepth }) =>
     Effect.gen(function* () {
-      const cfg = yield* AppConfig;
-      yield* failInRemoteMode({
-        command: 'rem references',
-        reason: 'this command still reads local reference graphs from the RemNote database',
-      });
-      const payload = yield* Effect.tryPromise({
-        try: async () => {
-          const { payload } = await executeListRemReferences({
-            id,
-            dbPath: cfg.remnoteDb,
-            includeDescendants,
-            maxDepth: maxDepth as any,
-            includeOccurrences,
-            resolveText: resolveText === false ? false : undefined,
-            includeInbound,
-            inboundMaxDepth: inboundMaxDepth as any,
-          } as any);
-          return payload;
-        },
-        catch: (e) => cliErrorFromUnknown(e, { code: 'DB_UNAVAILABLE' }),
+      const payload: any = yield* invokeWave1Capability('read.references', {
+        id,
+        includeDescendants,
+        maxDepth,
+        includeOccurrences,
+        resolveText: resolveText === false ? false : undefined,
+        includeInbound,
+        inboundMaxDepth,
       });
       yield* writeSuccess({ data: payload, md: (payload as any).markdown ?? '' });
     }).pipe(Effect.catchAll(writeFailure)),

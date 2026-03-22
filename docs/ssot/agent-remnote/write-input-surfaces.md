@@ -1,5 +1,13 @@
 # agent-remnote 写入输入面矩阵（SSoT）
 
+inventory note：
+
+- 本文件描述参数输入面，不单独决定命令分类。
+- 某条写入命令是否属于 parity-mandatory 的 RemNote business command，以
+  `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为唯一权威源。
+- 本文件也不决定 Wave 1 command 的执行面。对于 Wave 1 parity-mandatory business
+  commands，执行面切换应交给 `ModeParityRuntime` 与 local / remote adapters。
+
 本文件定义写入命令的参数输入面，回答三个问题：
 
 1. 哪些参数是标量 ref / placement / strategy

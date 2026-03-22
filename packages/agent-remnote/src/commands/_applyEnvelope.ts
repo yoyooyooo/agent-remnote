@@ -2,12 +2,9 @@ import * as Effect from 'effect/Effect';
 
 import { compileWritePlanV1 } from '../kernel/write-plan/index.js';
 import { trimBoundaryBlankLines } from '../lib/text.js';
-import { AppConfig } from '../services/AppConfig.js';
 import { CliError, isCliError } from '../services/Errors.js';
 import type { FileInput } from '../services/FileInput.js';
 import { Payload } from '../services/Payload.js';
-import { RefResolver } from '../services/RefResolver.js';
-import type { WorkspaceBindings } from '../services/WorkspaceBindings.js';
 
 import { readMarkdownTextFromInputSpec } from './_shared.js';
 import { normalizeOp, normalizeOps } from './_enqueue.js';
@@ -222,7 +219,7 @@ export function parseApplyEnvelope(raw: unknown): ParsedApplyEnvelope {
 
 export function compileApplyEnvelope(
   parsed: ParsedApplyEnvelope,
-): Effect.Effect<CompiledApplyEnvelope, CliError, AppConfig | Payload | RefResolver | WorkspaceBindings> {
+): Effect.Effect<CompiledApplyEnvelope, CliError, Payload | FileInput | any> {
   return Effect.gen(function* () {
     const payloadSvc = yield* Payload;
 
