@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { executeMoveRem } from '../src/bridge/ops/handlers/remCrudOps.ts';
+import { executeMoveRem, executeMoveRemBulk } from '../src/bridge/ops/handlers/remCrudOps.ts';
 
 describe('plugin move_rem promotion', () => {
   it('moves a Rem to standalone and leaves a portal at the original location', async () => {
@@ -105,5 +105,32 @@ describe('plugin move_rem promotion', () => {
     });
 
     warn.mockRestore();
+  });
+
+  it('moves multiple Rems through one bulk op while preserving item order', async () => {
+    const moveRems = vi.fn(async () => {});
+
+    const plugin = {
+      rem: {
+        moveRems,
+      },
+    };
+
+    const result = await executeMoveRemBulk(plugin, {
+      payload: {
+        rem_ids: ['r1', 'r2', 'r3'],
+        new_parent_id: 'p2',
+      },
+    });
+
+    expect(moveRems).toHaveBeenNthCalledWith(1, ['r1'], 'p2', 0);
+    expect(moveRems).toHaveBeenNthCalledWith(2, ['r2'], 'p2', 1);
+    expect(moveRems).toHaveBeenNthCalledWith(3, ['r3'], 'p2', 2);
+    expect(result).toEqual({
+      ok: true,
+      rem_ids: ['r1', 'r2', 'r3'],
+      new_parent_id: 'p2',
+      moved_count: 3,
+    });
   });
 });

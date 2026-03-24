@@ -8,13 +8,39 @@ import {
   sortModeSchema,
   type SortMode,
 } from './searchQueryTypes.js';
-import { withResolvedDatabase, safeJsonParse, parseOrThrow, type BetterSqliteInstance } from './shared.js';
+import {
+  formatDateWithPattern,
+  getDateFormatting,
+  withResolvedDatabase,
+  safeJsonParse,
+  parseOrThrow,
+  type BetterSqliteInstance,
+} from './shared.js';
 import { coalesceText, createPreview, stringifyAncestor } from './searchUtils.js';
+
+const queryScopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('all') }),
+  z.object({ kind: z.literal('ids'), ids: z.array(z.string().min(1)).min(1) }),
+  z.object({ kind: z.literal('descendants'), ids: z.array(z.string().min(1)).min(1) }),
+  z.object({ kind: z.literal('ancestors'), ids: z.array(z.string().min(1)).min(1) }),
+  z.object({
+    kind: z.literal('daily_range'),
+    from_offset_days: z.number().int(),
+    to_offset_days: z.number().int(),
+  }),
+]);
+
+const queryShapeSchema = z.object({
+  roots_only: z.boolean().optional(),
+});
 
 export const executeSearchQuerySchema = z.object({
   query: z
     .object({
+      version: z.literal(2).default(2),
       root: queryNodeSchema.describe('Query AST root node (supports text/tag/rem/attribute/page and and/or/not)'),
+      scope: queryScopeSchema.optional().describe('Optional runtime-ready scope restriction'),
+      shape: queryShapeSchema.optional().describe('Optional selector shape modifiers'),
       limitHint: z.number().int().min(1).max(500).optional().describe('Hint for max results (used by execution)'),
       pageSizeHint: z.number().int().min(5).max(200).optional().describe('Hint for page size (used by execution)'),
       sort: sortModeSchema.optional().describe('Sort strategy: rank/updatedAt/createdAt/attribute'),
@@ -65,6 +91,7 @@ type RemMetadata = {
 
 const TEXT_WEIGHT = 8;
 const TAG_WEIGHT = 5;
+const POWERUP_WEIGHT = 6;
 const REM_WEIGHT = 12;
 const ATTRIBUTE_WEIGHT = 7;
 
@@ -142,7 +169,10 @@ type LeafEvaluation = {
 async function executeQueryInternal(params: {
   db: BetterSqliteInstance;
   query: {
+    version?: 2;
     root: QueryNode;
+    scope?: z.infer<typeof queryScopeSchema>;
+    shape?: z.infer<typeof queryShapeSchema>;
     sort?: SortMode;
   };
   limit: number;
@@ -159,11 +189,15 @@ async function executeQueryInternal(params: {
 
   const universe = buildUniverse(leafEvaluations);
   const rootResult = evaluateNode(query.root, leafEvaluations, universe);
-  const matchedIds = Array.from(rootResult.ids);
+  let matchedIds = Array.from(rootResult.ids);
+  if (query.scope) {
+    const scopeIds = await buildScopeIds(db, query.scope);
+    matchedIds = matchedIds.filter((id) => scopeIds.has(id));
+  }
 
   const sortMode = query.sort ?? { mode: 'rank' as const };
   const metadata = fetchMetadata(db, matchedIds);
-  const scoreMap = rootResult.scores;
+  const scoreMap = new Map<string, number>(matchedIds.map((id) => [id, rootResult.scores.get(id) ?? 0]));
 
   if (query.sort?.mode === 'attribute') {
     const sortValues = fetchAttributeSortValues(db, matchedIds, query.sort.attributeId);
@@ -173,6 +207,14 @@ async function executeQueryInternal(params: {
         meta.sortValue = value ?? undefined;
       }
     }
+  }
+
+  if (query.shape?.roots_only) {
+    const matchedIdSet = new Set(matchedIds);
+    matchedIds = matchedIds.filter((id) => {
+      const parentId = metadata.get(id)?.parentId;
+      return !parentId || !matchedIdSet.has(parentId);
+    });
   }
 
   const sortedIds = sortResults(matchedIds, sortMode, metadata, scoreMap);
@@ -237,6 +279,8 @@ function evaluateLeaf(db: BetterSqliteInstance, node: QueryLeaf, maxLeafResults:
       return searchText(db, node.value, node.mode ?? 'contains', maxLeafResults);
     case 'tag':
       return searchTag(db, node.id, maxLeafResults);
+    case 'powerup':
+      return searchPowerup(db, node.powerup.by, node.powerup.value, maxLeafResults);
     case 'rem':
       return searchSpecificRem(node.id);
     case 'page':
@@ -449,6 +493,152 @@ function searchTag(db: BetterSqliteInstance, tagId: string, max: number): LeafRe
     scores.set(row._id, (scores.get(row._id) ?? 0) + TAG_WEIGHT);
   }
   return { ids, scores };
+}
+
+function searchPowerup(
+  db: BetterSqliteInstance,
+  by: 'id' | 'rcrt',
+  value: string,
+  max: number,
+): LeafResult {
+  const matchingPowerupIds =
+    by === 'id'
+      ? new Set<string>([value])
+      : new Set<string>(
+          (
+            db.prepare(
+              `SELECT _id
+                 FROM quanta
+                WHERE json_extract(doc, '$.rcrt') = @value`,
+            ).all({ value }) as Array<{ _id: string }>
+          ).map((row) => row._id),
+        );
+  if (matchingPowerupIds.size === 0) {
+    return { ids: new Set(), scores: new Map() };
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT _id, doc
+         FROM quanta
+        WHERE doc LIKE '%"tp"%'`,
+    )
+    .all() as Array<{ _id: string; doc: string }>;
+  const ids = new Set<string>();
+  const scores = new Map<string, number>();
+
+  for (const row of rows) {
+    const doc = safeJsonParse<Record<string, unknown>>(row.doc);
+    const tp = isRecord(doc?.tp) ? (doc.tp as Record<string, unknown>) : null;
+    if (!tp) continue;
+    const matched = Object.keys(tp).some((powerupId) => matchingPowerupIds.has(powerupId));
+    if (!matched) continue;
+    ids.add(row._id);
+    scores.set(row._id, (scores.get(row._id) ?? 0) + POWERUP_WEIGHT);
+  }
+
+  return { ids, scores };
+}
+
+async function buildScopeIds(
+  db: BetterSqliteInstance,
+  scope: z.infer<typeof queryScopeSchema>,
+): Promise<Set<string>> {
+  switch (scope.kind) {
+    case 'all':
+      return fetchAllIds(db);
+    case 'ids':
+      return new Set(scope.ids);
+    case 'descendants':
+      return expandDescendants(fetchParentMap(db), scope.ids);
+    case 'ancestors':
+      return expandAncestors(fetchParentMap(db), scope.ids);
+    case 'daily_range':
+      return await expandDailyRangeScope(db, scope.from_offset_days, scope.to_offset_days);
+  }
+}
+
+function fetchAllIds(db: BetterSqliteInstance): Set<string> {
+  const rows = db.prepare('SELECT _id FROM quanta').all() as Array<{ _id: string }>;
+  return new Set(rows.map((row) => row._id));
+}
+
+function fetchParentMap(db: BetterSqliteInstance): Map<string, string | null> {
+  const rows = db
+    .prepare(`SELECT _id, json_extract(doc, '$.parent') AS parentId FROM quanta`)
+    .all() as Array<{ _id: string; parentId: string | null }>;
+  return new Map(rows.map((row) => [row._id, row.parentId ?? null] as const));
+}
+
+function expandDescendants(parentMap: Map<string, string | null>, roots: readonly string[]): Set<string> {
+  const targets = new Set(roots);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [id, parentId] of parentMap.entries()) {
+      if (!parentId || !targets.has(parentId) || targets.has(id)) continue;
+      targets.add(id);
+      changed = true;
+    }
+  }
+  return targets;
+}
+
+function expandAncestors(parentMap: Map<string, string | null>, roots: readonly string[]): Set<string> {
+  const targets = new Set(roots);
+  for (const root of roots) {
+    let current = parentMap.get(root) ?? null;
+    while (current) {
+      if (targets.has(current)) break;
+      targets.add(current);
+      current = parentMap.get(current) ?? null;
+    }
+  }
+  return targets;
+}
+
+async function expandDailyRangeScope(
+  db: BetterSqliteInstance,
+  fromOffsetDays: number,
+  toOffsetDays: number,
+): Promise<Set<string>> {
+  const format = (await getDateFormatting(db)) ?? 'yyyy/MM/dd';
+  const titles = new Set<string>();
+  const min = Math.min(fromOffsetDays, toOffsetDays);
+  const max = Math.max(fromOffsetDays, toOffsetDays);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let offset = min; offset <= max; offset++) {
+    const target = new Date(today);
+    target.setDate(target.getDate() + offset);
+    titles.add(formatDateWithPattern(target, format));
+    titles.add(formatDateWithPattern(target, 'yyyy/MM/dd'));
+  }
+
+  const rows = db.prepare(`SELECT _id, doc FROM quanta`).all() as Array<{ _id: string; doc: string }>;
+  const dailyIds = rows
+    .filter((row) => {
+      const doc = safeJsonParse<Record<string, unknown>>(row.doc);
+      const title = summarizeTitle(doc);
+      return title ? titles.has(title) : false;
+    })
+    .map((row) => row._id);
+  if (dailyIds.length === 0) return new Set();
+  return expandDescendants(fetchParentMap(db), dailyIds);
+}
+
+function summarizeTitle(doc: Record<string, unknown> | null | undefined): string {
+  const key = doc?.key;
+  if (!Array.isArray(key) || key.length === 0) return '';
+  const first = key[0];
+  if (typeof first === 'string') return first;
+  if (first && typeof first === 'object' && typeof (first as any).text === 'string') return (first as any).text;
+  return '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function searchSpecificRem(remId: string): LeafResult {

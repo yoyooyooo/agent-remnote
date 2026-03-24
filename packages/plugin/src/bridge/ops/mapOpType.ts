@@ -5,12 +5,14 @@ export function mapOpType(input: string): string {
     // Rem basics
     'rem.create': 'create_rem',
     'rem.createPortal': 'create_portal',
+    'portal.createMany': 'create_portal_bulk',
     'rem.createSingleWithMarkdown': 'create_single_rem_with_markdown',
     'rem.createTreeWithMarkdown': 'create_tree_with_markdown',
     'rem.replaceChildrenWithMarkdown': 'replace_children_with_markdown',
     'rem.createLink': 'create_link_rem',
     'rem.updateText': 'update_text',
     'rem.move': 'move_rem',
+    'rem.moveMany': 'move_rem_bulk',
     'rem.delete': 'delete_rem',
     'backup.deleteArtifact': 'delete_backup_artifact',
     // Portals
@@ -18,6 +20,8 @@ export function mapOpType(input: string): string {
     // Tags / attributes
     'tag.add': 'add_tag',
     'tag.remove': 'remove_tag',
+    'tag.addMany': 'add_tag_bulk',
+    'tag.removeMany': 'remove_tag_bulk',
     'attribute.set': 'set_attribute',
     // Tables / properties
     'table.create': 'create_table',
@@ -37,7 +41,10 @@ export function mapOpType(input: string): string {
     // Misc
     'source.add': 'add_source',
     'source.remove': 'remove_source',
+    'source.addMany': 'add_source_bulk',
+    'source.removeMany': 'remove_source_bulk',
     'todo.setStatus': 'set_todo_status',
+    'todo.setStatusMany': 'set_todo_status_bulk',
   };
   if (alias[t]) return alias[t];
   return t;

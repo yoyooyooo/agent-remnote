@@ -3,7 +3,7 @@ import { activityAt, electActiveWorker, normalizeSelectionForUiContext } from '.
 
 import { queueStats, recoverExpiredLeases } from '../internal/queue/index.js';
 
-import { handleOpAckMessage } from './wsBridgeCoreAck.js';
+import { handleOpAckBatchMessage, handleOpAckMessage } from './wsBridgeCoreAck.js';
 import { selectOpsForDispatch } from './wsBridgeCoreDispatch.js';
 import { handleLeaseExtendMessage } from './wsBridgeCoreLease.js';
 import {
@@ -701,6 +701,19 @@ export function makeWsBridgeCore(params: {
 
       case 'OpAck': {
         const res = handleOpAckMessage({ now: event.now, db, connId: event.connId, msg });
+        actions.push(...res.actions);
+        if (res.touchAckTimestamp) {
+          state.lastAckAt = event.now;
+          actions.push(...scheduleStateWrite(event.now));
+        }
+        if (res.invalidateStatusLineReason) {
+          actions.push({ _tag: 'InvalidateStatusLine', reason: res.invalidateStatusLineReason });
+        }
+        return actions;
+      }
+
+      case 'OpAckBatch': {
+        const res = handleOpAckBatchMessage({ now: event.now, db, connId: event.connId, msg });
         actions.push(...res.actions);
         if (res.touchAckTimestamp) {
           state.lastAckAt = event.now;

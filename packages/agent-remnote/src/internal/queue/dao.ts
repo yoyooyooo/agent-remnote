@@ -7,6 +7,7 @@ import { deriveConflictKeys } from '../../kernel/conflicts/index.js';
 export type OpType =
   | 'create_rem'
   | 'create_portal'
+  | 'create_portal_bulk'
   | 'create_single_rem_with_markdown'
   | 'create_tree_with_markdown'
   | 'replace_selection_with_markdown'
@@ -26,13 +27,19 @@ export type OpType =
   | 'set_cell_date'
   | 'update_text'
   | 'move_rem'
+  | 'move_rem_bulk'
   | 'add_tag'
+  | 'add_tag_bulk'
   | 'remove_tag'
+  | 'remove_tag_bulk'
   | 'set_attribute'
   | 'table_cell_write'
   | 'add_source'
+  | 'add_source_bulk'
   | 'remove_source'
+  | 'remove_source_bulk'
   | 'set_todo_status'
+  | 'set_todo_status_bulk'
   | 'delete_rem'
   | 'delete_backup_artifact';
 
@@ -67,6 +74,17 @@ export type OpRow = {
   dead_reason: string | null;
   created_at: number;
   updated_at: number;
+};
+
+export type BatchClaimCandidate = {
+  readonly op_id: string;
+  readonly txn_id: string;
+  readonly op_seq: number;
+  readonly txn_dispatch_mode?: string | null;
+  readonly type: string;
+  readonly payload_json: string;
+  readonly idempotency_key: string | null;
+  readonly leaseMs?: number | undefined;
 };
 
 export function nowMs() {
@@ -424,6 +442,90 @@ export function claimOpById(db: QueueDB, opId: string, lockedBy: string, leaseMs
   });
 
   return { ...(row as OpRow), attempt_id, status: 'in_flight', locked_by: lockedBy, locked_at: t, lease_expires_at };
+}
+
+export function claimSelectedOpsBatch(
+  db: QueueDB,
+  params: {
+    readonly lockedBy: string;
+    readonly selected: readonly BatchClaimCandidate[];
+    readonly defaultLeaseMs?: number | undefined;
+  },
+): readonly OpRow[] {
+  const t = nowMs();
+  const lockedBy = params.lockedBy;
+  const defaultLeaseMs = params.defaultLeaseMs ?? 30_000;
+
+  const trx = db.transaction(() => {
+    const claimed: OpRow[] = [];
+    const updateOp = db.prepare(
+      `UPDATE queue_ops
+       SET status='in_flight',
+           attempt_id=@attempt_id,
+           locked_by=@locked_by,
+           locked_at=@t,
+           lease_expires_at=@lease_expires_at,
+           updated_at=@t
+       WHERE op_id=@op_id AND status='pending'`,
+    );
+    const updateTxn = db.prepare(
+      `UPDATE queue_txns SET status='in_progress', updated_at=@t WHERE txn_id=@txn_id AND status!='in_progress'`,
+    );
+
+    for (const candidate of params.selected) {
+      const attempt_id = randomUUID();
+      const leaseMs =
+        typeof candidate.leaseMs === 'number' && Number.isFinite(candidate.leaseMs) && candidate.leaseMs > 0
+          ? Math.floor(candidate.leaseMs)
+          : defaultLeaseMs;
+      const lease_expires_at = t + leaseMs;
+      const res = updateOp.run({
+        attempt_id,
+        locked_by: lockedBy,
+        t,
+        lease_expires_at,
+        op_id: candidate.op_id,
+      });
+      if (res.changes === 0) continue;
+
+      updateTxn.run({ t, txn_id: candidate.txn_id });
+
+      upsertOpAttempt(db, {
+        opId: candidate.op_id,
+        attemptId: attempt_id,
+        connId: lockedBy,
+        status: 'claimed',
+        detail: { lease_ms: leaseMs, claimed_at: t, mode: 'batch' },
+      });
+
+      claimed.push({
+        op_id: candidate.op_id,
+        txn_id: candidate.txn_id,
+        op_seq: candidate.op_seq,
+        txn_dispatch_mode: candidate.txn_dispatch_mode ?? null,
+        type: candidate.type,
+        payload_json: candidate.payload_json,
+        status: 'in_flight',
+        idempotency_key: candidate.idempotency_key,
+        op_hash: '',
+        attempt_id,
+        attempt_count: 0,
+        max_attempts: 0,
+        deliver_after: 0,
+        next_attempt_at: 0,
+        locked_by: lockedBy,
+        locked_at: t,
+        lease_expires_at,
+        dead_reason: null,
+        created_at: t,
+        updated_at: t,
+      });
+    }
+
+    return claimed;
+  });
+
+  return trx();
 }
 
 export function listInFlightOps(db: QueueDB, limit = 200): readonly OpRow[] {

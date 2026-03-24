@@ -18,6 +18,7 @@ import { queryCommand } from './query.js';
 import { queueCommand } from './queue/index.js';
 import { remCommand } from './rem/index.js';
 import { replaceCommand } from './replace/index.js';
+import { scenarioCommand } from './scenario/index.js';
 import { searchCommand } from './search.js';
 import { tableCommand } from './table/index.js';
 import { tagCommand } from './tag/index.js';
@@ -136,6 +137,7 @@ export const rootCommand = Command.make('agent-remnote', {
     pluginCommand,
     searchCommand,
     queryCommand,
+    scenarioCommand,
     remCommand,
     dailyCommand,
     backupCommand,

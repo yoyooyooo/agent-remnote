@@ -6,6 +6,7 @@ import { migration as m0005 } from './0005-prefix-queue-tables.js';
 import { migration as m0006 } from './0006-add-workspace-bindings.js';
 import { migration as m0008 } from './0008-add-automation-skeleton.js';
 import { migration as m0009 } from './0009-add-task-run-fk-indexes.js';
+import { migration as m0010 } from './0010-add-queue-hot-path-indexes.js';
 import type { StoreDB } from '../db.js';
 
 export type MigrationSpec = {
@@ -52,4 +53,4 @@ const m0007: MigrationSpec = {
   },
 };
 
-export const migrationSpecs: readonly MigrationSpec[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009];
+export const migrationSpecs: readonly MigrationSpec[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007, m0008, m0009, m0010];

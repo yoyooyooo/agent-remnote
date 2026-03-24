@@ -110,6 +110,11 @@ describe('cli contract: reference graph remote api mode', () => {
       expect(api.requests).toHaveLength(1);
       expect(api.requests[0]?.url).toBe('/v1/read/query');
       expect(api.requests[0]?.body.limit).toBe(5);
+      expect(api.requests[0]?.body?.query).toMatchObject({
+        version: 2,
+        root: { type: 'text', value: 'hello', mode: 'contains' },
+      });
+      expect(api.requests[0]?.body?.queryObj).toBeUndefined();
     } finally {
       await api.close();
     }

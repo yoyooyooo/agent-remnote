@@ -8,6 +8,7 @@
   "files": [
     "cli.js",
     "dist",
+    "builtin-scenarios",
     "plugin-artifacts",
     "LICENSE",
     "README.md",

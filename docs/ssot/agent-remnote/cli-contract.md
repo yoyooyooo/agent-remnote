@@ -93,6 +93,8 @@ export type JsonEnvelope =
 为降低 Agent “选错入口”的概率，命令树归属做如下裁决：
 
 - 顶层命令集合固定为：`daemon` / `queue` / `apply` / `plugin` / `search` / `query` / `rem` / `daily` / `todo` / `topic` / `powerup` / `table` / `tag` / `portal` / `replace` / `db` / `config` / `doctor` / `ops`
+- `scenario` 可在 031 worktree 内作为 feature-local planned namespace 存在，用于 `scenario schema *`、`scenario builtin list|install` 与 branch-local `scenario run` 试点；在 promotion preconditions 完成前，它不属于 current public stable inventory
+- `playbook` 可在 032 worktree 内作为 feature-local planned namespace 存在，用于 `playbook explain|dry-run|run` 的 orchestration 试点；在 promotion preconditions 完成前，它不属于 current public stable inventory
 - `plugin/*`：依赖 RemNote UI/插件/WS bridge state 的能力，或直接服务插件运行时工件（例如候选集搜索、selection、ui-context、local static plugin server）
 - 其余 **只读** 能力优先直挂顶层实体子命令（例如 `search` / `query` / `db ...` / `powerup list/schema` / `todo list` / `rem outline`）
 - 所有 **写入副作用** 必须通过“动词子命令”显式表达（create/move/text/delete/apply/add/remove/record/property/option/replace/...），并最终走 enqueue → WS → plugin SDK
@@ -172,6 +174,55 @@ Wave 1 runtime shape：
   - `undone`
   - `remove`
 - `todo list` 的长期方向是 `query` preset；在命令面保留 alias 不等于保留第二套查询内核
+- 当前分支里的最小兼容桥为：
+  - `query --preset todos.list --status <unfinished|finished|all> --sort <dueAsc|dueDesc|updatedAtAsc|updatedAtDesc|createdAtAsc|createdAtDesc> --limit <n> --offset <n>`
+  - `todo list` 与这条 preset surface 在本地模式下保持结果等价
+  - `query --preset todos.list` 在 `apiBaseUrl` 模式下继续返回稳定拒绝，直到 preset parity promotion 条件满足
+- `query --powerup <name>` 可以存在，但只属于 authoring sugar：
+  - 必须先走宿主权威 metadata path
+  - 规范化后的 canonical Query V2 只接受 `powerup.by=id|rcrt`
+  - 自由文本名字不得进入 canonical body 或 remote parity compare
+
+### `scenario`
+
+- 031 试点内允许的 planned namespace 包含：
+  - `scenario schema validate|normalize|explain --spec <spec>`
+  - `scenario schema generate --hint <spec>`
+  - `scenario builtin list`
+  - `scenario builtin install <builtin-id>... | --all [--dir <path>] [--if-missing]`
+  - `scenario run <spec> --var key=value`
+- user-private scenario store 的默认路径为：
+  - `~/.agent-remnote/scenarios/*.json`
+- `scenario run <spec>` 在 031 试点内接受：
+  - `builtin:<id>`
+  - `user:<id>`
+  - `@./scenario.json`
+  - 非 builtin 的裸 id，会从 `~/.agent-remnote/scenarios/<id>.json` 解析
+- `--package <spec>` 继续保留为兼容 alias；若同时提供位置参数与 `--package`，两者必须一致
+- builtin scenario 继续以 repo 内 canonical package 为权威源；`scenario builtin install` 只是显式注入 helper，不是新的 canonical source
+- `scenario builtin install` 默认不覆盖已存在文件；用户若要保留既有文件，使用 `--if-missing`
+
+### `playbook`
+
+- 032 规划内允许的 planned namespace 候选包含：
+  - `playbook explain <spec> [--var key=value]... [--input <spec>]`
+  - `playbook dry-run <spec> [--var key=value]... [--input <spec>]`
+  - `playbook run <spec> [--var key=value]... [--input <spec>]`
+- 第一版 `playbook` 继续保持：
+  - dynamic orchestration layer
+  - 调用方执行 playbook JS
+  - 宿主机承接 capability calls
+- `playbook` 不替代：
+  - `scenario schema *`
+  - `scenario run`
+  - `apply`
+- `playbook` 进入 current public inventory 前，必须补齐：
+  - authoritative inventory
+  - `commandInventory` mirror
+  - verification-case registry
+  - root help/docs drift
+  - local / remote parity contract
+  - dist smoke / packaging rules
 
 ### Promotion receipt
 

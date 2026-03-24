@@ -63,22 +63,46 @@ export const writeTagAddCommand = Command.make(
 
       const tagIds = yield* Effect.forEach(tag, (value) => resolveRefValue(value));
       const remIds = yield* Effect.forEach(to, (value) => resolveRefValue(value));
-      const ops = yield* Effect.forEach(tagIds, (tagId) =>
-        Effect.forEach(remIds, (remId) =>
-          Effect.try({
-            try: () => normalizeOp({ type: 'add_tag', payload: { remId, tagId } }, payloadSvc.normalizeKeys),
-            catch: (e) =>
-              isCliError(e)
-                ? e
-                : new CliError({
-                    code: 'INVALID_PAYLOAD',
-                    message: 'Failed to generate op',
-                    exitCode: 2,
-                    details: { error: String((e as any)?.message || e) },
-                  }),
-          }),
-        ),
-      ).pipe(Effect.map((rows) => rows.flat()));
+      const pairs = tagIds.flatMap((tagId) => remIds.map((remId) => ({ remId, tagId })));
+      const ops =
+        pairs.length <= 1
+          ? yield* Effect.forEach(pairs, ({ remId, tagId }) =>
+              Effect.try({
+                try: () => normalizeOp({ type: 'add_tag', payload: { remId, tagId } }, payloadSvc.normalizeKeys),
+                catch: (e) =>
+                  isCliError(e)
+                    ? e
+                    : new CliError({
+                        code: 'INVALID_PAYLOAD',
+                        message: 'Failed to generate op',
+                        exitCode: 2,
+                        details: { error: String((e as any)?.message || e) },
+                      }),
+              }),
+            )
+          : yield* Effect.try({
+              try: () =>
+                [
+                  normalizeOp(
+                    {
+                      type: 'add_tag_bulk',
+                      payload: {
+                        items: pairs.map(({ remId, tagId }) => ({ remId, tagId })),
+                      },
+                    },
+                    payloadSvc.normalizeKeys,
+                  ),
+                ] as const,
+              catch: (e) =>
+                isCliError(e)
+                  ? e
+                  : new CliError({
+                      code: 'INVALID_PAYLOAD',
+                      message: 'Failed to generate op',
+                      exitCode: 2,
+                      details: { error: String((e as any)?.message || e) },
+                    }),
+            });
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
 
@@ -184,25 +208,50 @@ export const writeTagRemoveCommand = Command.make(
 
       const tagIds = yield* Effect.forEach(tag, (value) => resolveRefValue(value));
       const remIds = yield* Effect.forEach(to, (value) => resolveRefValue(value));
-      const ops = yield* Effect.forEach(tagIds, (tagId) =>
-        Effect.forEach(remIds, (remId) => {
-          const payload: Record<string, unknown> = { remId, tagId };
-          if (removeProperties !== undefined) payload.removeProperties = removeProperties;
+      const pairs = tagIds.flatMap((tagId) => remIds.map((remId) => ({ remId, tagId })));
+      const ops =
+        pairs.length <= 1
+          ? yield* Effect.forEach(pairs, ({ remId, tagId }) => {
+              const payload: Record<string, unknown> = { remId, tagId };
+              if (removeProperties !== undefined) payload.removeProperties = removeProperties;
 
-          return Effect.try({
-            try: () => normalizeOp({ type: 'remove_tag', payload }, payloadSvc.normalizeKeys),
-            catch: (e) =>
-              isCliError(e)
-                ? e
-                : new CliError({
-                    code: 'INVALID_PAYLOAD',
-                    message: 'Failed to generate op',
-                    exitCode: 2,
-                    details: { error: String((e as any)?.message || e) },
-                  }),
-          });
-        }),
-      ).pipe(Effect.map((rows) => rows.flat()));
+              return Effect.try({
+                try: () => normalizeOp({ type: 'remove_tag', payload }, payloadSvc.normalizeKeys),
+                catch: (e) =>
+                  isCliError(e)
+                    ? e
+                    : new CliError({
+                        code: 'INVALID_PAYLOAD',
+                        message: 'Failed to generate op',
+                        exitCode: 2,
+                        details: { error: String((e as any)?.message || e) },
+                      }),
+              });
+            })
+          : yield* Effect.try({
+              try: () =>
+                [
+                  normalizeOp(
+                    {
+                      type: 'remove_tag_bulk',
+                      payload: {
+                        items: pairs.map(({ remId, tagId }) => ({ remId, tagId })),
+                        ...(removeProperties !== undefined ? { removeProperties } : {}),
+                      },
+                    },
+                    payloadSvc.normalizeKeys,
+                  ),
+                ] as const,
+              catch: (e) =>
+                isCliError(e)
+                  ? e
+                  : new CliError({
+                      code: 'INVALID_PAYLOAD',
+                      message: 'Failed to generate op',
+                      exitCode: 2,
+                      details: { error: String((e as any)?.message || e) },
+                    }),
+            });
 
       const metaValue = meta ? yield* payloadSvc.readJson(meta) : undefined;
 

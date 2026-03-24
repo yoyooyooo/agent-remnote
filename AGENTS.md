@@ -209,6 +209,42 @@ RemNote 官方资料：
 - agent-remnote tests：`npm test --workspace agent-remnote`
 - agent-remnote typecheck：`npm run typecheck --workspace agent-remnote`
 
+## 本机调试
+
+### shim / worktree 注意事项
+
+- 本机默认通过 `agent-remnote` 这个 shim 进入仓库。
+- 若当前在 git worktree 中调试，必须确认 shim 指向的是当前 worktree 的 repo 入口地址。
+- 若 shim 仍指向主工作区或其他 worktree，调试结果会落到错误的仓库上下文。
+- 开始本机调试前，先检查“当前 shell 所在 worktree”和“shim 实际指向的 repo 入口”是否一致。
+
+### 修改插件逻辑后的桌面端重载
+
+- 若改动了 `packages/plugin/**`、WS 桥接接线、或任何依赖 RemNote 插件重新加载才能生效的逻辑，调试时要重载 RemNote 桌面端，让插件重新连接。
+- 推荐直接用下面这段脚本：
+
+```bash
+osascript <<'APPLESCRIPT'
+try
+  quit app id "io.remnote"
+end try
+APPLESCRIPT
+sleep 2
+open -a /Applications/RemNote.app
+for i in {1..20}; do
+  if pgrep -x "RemNote" >/dev/null 2>&1; then
+    echo "REMNOTE_RESTARTED"
+    exit 0
+  fi
+  sleep 1
+done
+echo "REMNOTE_NOT_DETECTED"
+exit 1
+```
+
+- 看到 `REMNOTE_RESTARTED` 才表示桌面端已经重新拉起。
+- 若输出 `REMNOTE_NOT_DETECTED`，本轮重载不算成功，后续插件调试结论也不应采信。
+
 ## 对接本仓库的 agent 应该记住什么
 
 - 这是一个“协议驱动 + SSoT 驱动”的仓库，不是先改代码再补文档的仓库

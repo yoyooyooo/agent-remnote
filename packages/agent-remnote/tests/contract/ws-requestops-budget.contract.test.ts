@@ -229,6 +229,55 @@ function findTextLenForBudget(maxBytes: number): number {
   return 0;
 }
 
+function findTextLensForPacking(maxBytes: number): { big: number; small: number } {
+  const UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+  const LEASE_EXPIRES_AT_PLACEHOLDER = 1700000000000;
+  const safetyMarginBytes = 256;
+
+  const budget = {
+    maxOpsRequested: 2,
+    maxOpsEffective: 2,
+    maxBytesRequested: maxBytes,
+    maxBytesEffective: maxBytes,
+    maxOpBytesRequested: maxBytes,
+    maxOpBytesEffective: maxBytes,
+    approxBytes: 0,
+    scanLimit: 50,
+  };
+  const skipped = { overBudget: 0, oversizeOp: 0, conflict: 0, txnBusy: 0, depsMissing: 0 };
+
+  const opBytesForLen = (remId: string, len: number) => {
+    const op = {
+      op_id: UUID_PLACEHOLDER,
+      attempt_id: UUID_PLACEHOLDER,
+      txn_id: UUID_PLACEHOLDER,
+      op_seq: 1,
+      op_type: 'update_text',
+      payload: { rem_id: remId, text: 'a'.repeat(len) },
+      idempotency_key: null,
+      lease_expires_at: LEASE_EXPIRES_AT_PLACEHOLDER,
+    };
+    return Buffer.byteLength(JSON.stringify(op), 'utf8');
+  };
+
+  for (let big = 200; big <= 5000; big += 25) {
+    const bigBytes = opBytesForLen('A', big);
+    const oneBig = estimateBatchBytes({ opBytesSum: bigBytes, opCount: 1, budget, skipped });
+    if (oneBig + safetyMarginBytes > maxBytes) continue;
+
+    for (let small = 50; small < big; small += 25) {
+      const smallBytes = opBytesForLen('B', small);
+      const twoSmall = estimateBatchBytes({ opBytesSum: smallBytes * 2, opCount: 2, budget, skipped });
+      const bigPlusSmall = estimateBatchBytes({ opBytesSum: bigBytes + smallBytes, opCount: 2, budget, skipped });
+      if (twoSmall + safetyMarginBytes <= maxBytes && bigPlusSmall + safetyMarginBytes > maxBytes) {
+        return { big, small };
+      }
+    }
+  }
+
+  return { big: 0, small: 0 };
+}
+
 describe('ws protocol contract: RequestOps budget boxing', () => {
   it('caps OpDispatchBatch within maxBytes and reports overBudget skips', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-budget-'));
@@ -316,6 +365,291 @@ describe('ws protocol contract: RequestOps budget boxing', () => {
             expect(Number(batch.budget?.approxBytes ?? 0)).toBeLessThanOrEqual(cfg.wsDispatchMaxBytes);
 
             expect(Number(batch.skipped?.overBudget ?? 0)).toBeGreaterThan(0);
+          } finally {
+            q.close();
+            try {
+              ws.terminate();
+            } catch {}
+          }
+        });
+      }).pipe(Effect.provide(live));
+
+      await Effect.runPromise(Effect.scoped(program));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('prefers a fuller non-conflicting batch within the lookahead window under byte pressure', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-budget-pack-'));
+    try {
+      const port = await getFreePort();
+      const wsUrl = `ws://127.0.0.1:${port}/ws`;
+      const storeDbPath = path.join(tmpDir, 'store.sqlite');
+      const cfg = makeTestConfig({
+        storeDb: storeDbPath,
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+      });
+
+      const lens = findTextLensForPacking(cfg.wsDispatchMaxBytes);
+      expect(lens.big).toBeGreaterThan(0);
+      expect(lens.small).toBeGreaterThan(0);
+
+      const seedDb = openQueueDb(cfg.storeDb);
+      try {
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'A', text: 'a'.repeat(lens.big) } }]);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'B', text: 'a'.repeat(lens.small) } }]);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'C', text: 'a'.repeat(lens.small) } }]);
+      } finally {
+        seedDb.close();
+      }
+
+      const cfgLayer = Layer.succeed(AppConfig, cfg);
+      const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
+
+      const program = Effect.gen(function* () {
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
+
+        yield* Effect.promise(async () => {
+          const ws = await connectWsWithRetry(wsUrl, 3000);
+          const q = createJsonQueue(ws);
+
+          try {
+            ws.send(JSON.stringify({ type: 'Hello' }));
+            await q.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+
+            ws.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'packing-test',
+                capabilities: { control: true, worker: true, readRpc: false, batchPull: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'Registered');
+
+            ws.send(JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }));
+            await q.next((m) => m?.type === 'SelectionAck');
+
+            ws.send(
+              JSON.stringify({
+                type: 'RequestOps',
+                leaseMs: 5000,
+                maxOps: 2,
+                maxBytes: cfg.wsDispatchMaxBytes,
+                maxOpBytes: cfg.wsDispatchMaxOpBytes,
+              }),
+            );
+
+            const batch = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length > 0,
+            );
+            expect(batch.ops).toHaveLength(2);
+            expect([...batch.ops.map((op: any) => op?.payload?.rem_id)].sort()).toEqual(['B', 'C']);
+          } finally {
+            q.close();
+            try {
+              ws.terminate();
+            } catch {}
+          }
+        });
+      }).pipe(Effect.provide(live));
+
+      await Effect.runPromise(Effect.scoped(program));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('keeps earlier candidates when multiple equally full batches fit within budget', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-budget-fifo-'));
+    try {
+      const port = await getFreePort();
+      const wsUrl = `ws://127.0.0.1:${port}/ws`;
+      const storeDbPath = path.join(tmpDir, 'store.sqlite');
+      const cfg = makeTestConfig({
+        storeDb: storeDbPath,
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+      });
+
+      const seedDb = openQueueDb(cfg.storeDb);
+      try {
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'A', text: 'a'.repeat(200) } }]);
+        await sleep(2);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'B', text: 'a'.repeat(200) } }]);
+        await sleep(2);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'C', text: 'a'.repeat(200) } }]);
+      } finally {
+        seedDb.close();
+      }
+
+      const cfgLayer = Layer.succeed(AppConfig, cfg);
+      const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
+
+      const program = Effect.gen(function* () {
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
+
+        yield* Effect.promise(async () => {
+          const ws = await connectWsWithRetry(wsUrl, 3000);
+          const q = createJsonQueue(ws);
+
+          try {
+            ws.send(JSON.stringify({ type: 'Hello' }));
+            await q.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+
+            ws.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'fifo-test',
+                capabilities: { control: true, worker: true, readRpc: false, batchPull: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'Registered');
+
+            ws.send(JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }));
+            await q.next((m) => m?.type === 'SelectionAck');
+
+            ws.send(
+              JSON.stringify({
+                type: 'RequestOps',
+                leaseMs: 5000,
+                maxOps: 2,
+                maxBytes: cfg.wsDispatchMaxBytes,
+                maxOpBytes: cfg.wsDispatchMaxOpBytes,
+              }),
+            );
+
+            const batch = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length > 0,
+            );
+            expect(batch.ops).toHaveLength(2);
+            expect(batch.ops.map((op: any) => op?.payload?.rem_id)).toEqual(['A', 'B']);
+          } finally {
+            q.close();
+            try {
+              ws.terminate();
+            } catch {}
+          }
+        });
+      }).pipe(Effect.provide(live));
+
+      await Effect.runPromise(Effect.scoped(program));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('does not use lookahead to cross conflict boundaries for a fuller batch', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-budget-conflict-'));
+    try {
+      const port = await getFreePort();
+      const wsUrl = `ws://127.0.0.1:${port}/ws`;
+      const storeDbPath = path.join(tmpDir, 'store.sqlite');
+      const cfg = makeTestConfig({
+        storeDb: storeDbPath,
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+      });
+
+      const lens = findTextLensForPacking(cfg.wsDispatchMaxBytes);
+      expect(lens.big).toBeGreaterThan(0);
+      expect(lens.small).toBeGreaterThan(0);
+
+      const seedDb = openQueueDb(cfg.storeDb);
+      try {
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'A', text: 'a'.repeat(lens.big) } }]);
+        await sleep(2);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'B', text: 'a'.repeat(lens.small) } }]);
+        await sleep(2);
+        enqueueTxn(seedDb as any, [{ type: 'update_text', payload: { rem_id: 'B', text: 'a'.repeat(lens.small) } }]);
+      } finally {
+        seedDb.close();
+      }
+
+      const cfgLayer = Layer.succeed(AppConfig, cfg);
+      const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
+
+      const program = Effect.gen(function* () {
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
+
+        yield* Effect.promise(async () => {
+          const ws = await connectWsWithRetry(wsUrl, 3000);
+          const q = createJsonQueue(ws);
+
+          try {
+            ws.send(JSON.stringify({ type: 'Hello' }));
+            await q.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+
+            ws.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'conflict-test',
+                capabilities: { control: true, worker: true, readRpc: false, batchPull: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'Registered');
+
+            ws.send(JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }));
+            await q.next((m) => m?.type === 'SelectionAck');
+
+            ws.send(
+              JSON.stringify({
+                type: 'RequestOps',
+                leaseMs: 5000,
+                maxOps: 2,
+                maxBytes: cfg.wsDispatchMaxBytes,
+                maxOpBytes: cfg.wsDispatchMaxOpBytes,
+              }),
+            );
+
+            const batch = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length > 0,
+            );
+            expect(batch.ops).toHaveLength(1);
+            expect(batch.ops[0]?.payload?.rem_id).toBe('A');
           } finally {
             q.close();
             try {

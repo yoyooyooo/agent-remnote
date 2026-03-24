@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS queue_ops (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ops_status_next ON queue_ops(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_ops_txn_status_seq ON queue_ops(txn_id, status, op_seq);
+CREATE INDEX IF NOT EXISTS idx_ops_status_next_txn ON queue_ops(status, next_attempt_at, txn_id);
 CREATE INDEX IF NOT EXISTS idx_ops_locked_by ON queue_ops(locked_by);
 CREATE INDEX IF NOT EXISTS idx_ops_hash ON queue_ops(op_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ops_idem ON queue_ops(idempotency_key) WHERE idempotency_key IS NOT NULL;
@@ -68,6 +70,8 @@ CREATE TABLE IF NOT EXISTS queue_op_dependencies (
   FOREIGN KEY (op_id) REFERENCES queue_ops(op_id) ON DELETE CASCADE,
   FOREIGN KEY (depends_on_op_id) REFERENCES queue_ops(op_id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_op_deps_op_id ON queue_op_dependencies(op_id);
 
 CREATE TABLE IF NOT EXISTS queue_op_results (
   op_id         TEXT PRIMARY KEY,
@@ -103,6 +107,8 @@ CREATE TABLE IF NOT EXISTS queue_consumers (
   last_seen_at  INTEGER NOT NULL,
   meta_json     TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE INDEX IF NOT EXISTS idx_txns_status_priority ON queue_txns(status, priority, txn_id);
 
 CREATE TABLE IF NOT EXISTS workspace_bindings (
   workspace_id       TEXT PRIMARY KEY,

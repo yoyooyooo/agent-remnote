@@ -101,6 +101,24 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
     return uniq(keys);
   }
 
+  if (opType === 'create_portal_bulk') {
+    const bulkParentId = parentId ?? toParentId;
+    if (bulkParentId) {
+      keys.push(`rem:${bulkParentId}`);
+      keys.push(`children:${bulkParentId}`);
+    } else {
+      keys.push('global:structure_unknown');
+    }
+
+    const items = Array.isArray(p?.items) ? p.items : [];
+    for (const item of items) {
+      const targetId = getFirstString(item, ['target_rem_id', 'targetRemId', 'rem_id', 'remId']);
+      if (targetId) keys.push(`rem:${targetId}`);
+    }
+
+    return uniq(keys);
+  }
+
   if (isCreateOp(opType)) {
     const pid = parentId ?? toParentId;
     if (pid) {
@@ -142,6 +160,52 @@ export function deriveConflictKeys(opTypeRaw: unknown, payload: unknown): readon
       if (parentId) keys.push(`rem:${parentId}`, `children:${parentId}`);
     }
 
+    return uniq(keys);
+  }
+
+  if (opType === 'move_rem_bulk') {
+    const remIds = Array.isArray(p?.rem_ids)
+      ? p.rem_ids.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+    for (const remId of remIds) keys.push(`rem:${remId}`);
+
+    const bulkNewParentId = getFirstString(p, ['new_parent_id', 'newParentId']);
+    if (bulkNewParentId) keys.push(`children:${bulkNewParentId}`);
+
+    if (remIds.length === 0 && !bulkNewParentId) {
+      keys.push('global:structure_unknown');
+    }
+
+    return uniq(keys);
+  }
+
+  if (opType === 'add_tag_bulk' || opType === 'remove_tag_bulk') {
+    const items = Array.isArray(p?.items) ? p.items : [];
+    for (const item of items) {
+      const remId = getFirstString(item, ['rem_id', 'remId']);
+      if (remId) keys.push(`rem:${remId}`);
+    }
+    if (keys.length === 0) keys.push('global:unknown');
+    return uniq(keys);
+  }
+
+  if (opType === 'set_todo_status_bulk') {
+    const items = Array.isArray(p?.items) ? p.items : [];
+    for (const item of items) {
+      const remId = getFirstString(item, ['rem_id', 'remId']);
+      if (remId) keys.push(`rem:${remId}`);
+    }
+    if (keys.length === 0) keys.push('global:unknown');
+    return uniq(keys);
+  }
+
+  if (opType === 'add_source_bulk' || opType === 'remove_source_bulk') {
+    const items = Array.isArray(p?.items) ? p.items : [];
+    for (const item of items) {
+      const remId = getFirstString(item, ['rem_id', 'remId']);
+      if (remId) keys.push(`rem:${remId}`);
+    }
+    if (keys.length === 0) keys.push('global:unknown');
     return uniq(keys);
   }
 

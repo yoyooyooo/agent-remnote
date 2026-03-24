@@ -279,6 +279,11 @@ export interface HostApiClientService {
     readonly body: unknown;
     readonly timeoutMs?: number;
   }) => Effect.Effect<any, CliError>;
+  readonly resolveQueryPowerup: (params: {
+    readonly baseUrl: string;
+    readonly powerup: string;
+    readonly timeoutMs?: number;
+  }) => Effect.Effect<any, CliError>;
   readonly query: (params: {
     readonly baseUrl: string;
     readonly body: unknown;
@@ -405,6 +410,8 @@ export const HostApiClientLive = Layer.effect(
         request({ baseUrl, path: '/read/by-reference', method: 'POST', body, timeoutMs }),
       references: ({ baseUrl, body, timeoutMs }) =>
         request({ baseUrl, path: '/read/references', method: 'POST', body, timeoutMs }),
+      resolveQueryPowerup: ({ baseUrl, powerup, timeoutMs }) =>
+        request({ baseUrl, path: '/internal/query/resolve-powerup', method: 'POST', body: { powerup }, timeoutMs }),
       query: ({ baseUrl, body, timeoutMs }) => request({ baseUrl, path: '/read/query', method: 'POST', body, timeoutMs }),
       dailyRemId: ({ baseUrl, date, offsetDays, timeoutMs }) =>
         request({

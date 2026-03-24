@@ -132,6 +132,7 @@ Wave 1 runtime spine：
 - `POST /v1/read/by-reference`
 - `POST /v1/read/references`
 - `POST /v1/read/query`
+- `POST /v1/internal/query/resolve-powerup`
 - `POST /v1/read/resolve-ref`
 - `POST /v1/search/plugin`
 - `POST /v1/write/apply`
@@ -183,11 +184,17 @@ Wave 1 runtime spine：
 - `POST /v1/read/by-reference`
 - `POST /v1/read/references`
 - `POST /v1/read/query`
+- `POST /v1/internal/query/resolve-powerup`
 - `POST /v1/read/resolve-ref`
 - `GET /v1/daily/rem-id`
 - 任何需要解析 `page:` / `title:` / `daily:` / deep link workspace 的等价能力
 
 补充说明：
+
+- `POST /v1/read/page-id`
+  - 语义是“从给定 Rem 沿 `parent` 链向上解析，返回最顶层 owning page”
+  - 它不承诺等于当前 UI session 的 `pageRemId`
+  - 若某个 page 自己仍然挂在更高层 page 之下，`page-id` 会继续上爬到最顶层祖先
 
 - `GET /v1/plugin/current`
 - `GET /v1/plugin/selection/current`
@@ -203,6 +210,21 @@ Wave 1 runtime spine：
 - 禁止用 `String(...)`、`Number(...)` 等宽松 coercion 把畸形 JSON 悄悄转成业务输入。
 - 字段类型不匹配时必须返回 `INVALID_PAYLOAD`，不得把 `"[object Object]"`、空 ref
   或伪造 placement 继续下沉到 use case。
+
+## Query V2 canonical body
+
+- `POST /v1/read/query` 的 canonical request body 固定为：
+  - `query`
+  - `limit?`
+  - `offset?`
+  - `snippetLength?`
+- 兼容期内可以在 HTTP 边界暂时接受：
+  - `queryObj`
+  - `{ root: ... }`
+  - `{ query: { root: ... } }`
+- 这些 legacy 形态只能停留在 adapter boundary；进入 use case 前必须规范化为 canonical Query V2 body。
+- `query --powerup <name>` 的 remote authoring sugar 通过 `POST /v1/internal/query/resolve-powerup` 走 host-authoritative metadata normalization。
+- `POST /v1/internal/query/resolve-powerup` 属于 host-internal helper route，不代表 `powerup resolve` 已经 promotion 成 public remote business surface。
 
 ## Host API write flows
 

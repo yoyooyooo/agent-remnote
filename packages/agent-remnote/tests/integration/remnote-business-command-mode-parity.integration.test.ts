@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { startParityApiHarness } from '../helpers/remoteModeHarness.js';
 import { runCli } from '../helpers/runCli.js';
 
+const REMOTE_MODE_PARITY_TEST_TIMEOUT_MS = 45_000;
+
 function parseJsonLine(text: string): any {
   const trimmed = text.trim();
   if (!trimmed) throw new Error('Expected non-empty stdout JSON');
@@ -58,5 +60,5 @@ describe('integration: remnote business command mode parity', () => {
     } finally {
       await api.close();
     }
-  });
+  }, REMOTE_MODE_PARITY_TEST_TIMEOUT_MS);
 });

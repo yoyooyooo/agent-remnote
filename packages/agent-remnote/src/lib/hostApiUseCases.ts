@@ -40,6 +40,7 @@ import { currentRuntimeBuildInfo, runtimeVersionWarnings } from './runtimeBuildI
 import { dropBlankLinesOutsideFences, trimBoundaryBlankLines } from './text.js';
 import { requireResolvedWorkspace, resolveWorkspaceSnapshot } from './workspaceResolver.js';
 import { cliErrorFromUnknown } from '../commands/_tool.js';
+import { resolveQueryPowerupLocally } from './queryV2.js';
 
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -433,8 +434,16 @@ export function executeReferencesUseCase(params: {
   });
 }
 
+export function executeResolveQueryPowerupUseCase(params: {
+  readonly powerup: string;
+}): Effect.Effect<any, CliError, AppConfig | RemDb> {
+  return Effect.gen(function* () {
+    return yield* resolveQueryPowerupLocally(params.powerup);
+  });
+}
+
 export function executeQueryUseCase(params: {
-  readonly queryObj: Record<string, unknown>;
+  readonly query: Record<string, unknown>;
   readonly limit?: number | undefined;
   readonly offset?: number | undefined;
   readonly snippetLength?: number | undefined;
@@ -446,7 +455,7 @@ export function executeQueryUseCase(params: {
     const { payload } = yield* Effect.tryPromise({
       try: async () =>
         await executeSearchQuery({
-          ...params.queryObj,
+          query: params.query,
           dbPath,
           limit: params.limit as any,
           offset: params.offset as any,

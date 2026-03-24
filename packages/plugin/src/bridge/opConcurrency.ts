@@ -127,6 +127,18 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
       return keys;
     }
 
+    case 'create_portal_bulk': {
+      const parentId = normalizeId(payload.parent_id);
+      addRem(parentId);
+      addChildren(parentId);
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        const targetId = normalizeId((item as any)?.target_rem_id ?? (item as any)?.rem_id);
+        addRem(targetId);
+      }
+      return keys;
+    }
+
     case 'replace_selection_with_markdown': {
       // Replace is always a structure mutation: create new content + move + delete selection.
       const targetIdsRaw = payload?.target?.rem_ids;
@@ -173,6 +185,35 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
     case 'set_cell_date': {
       const remId = normalizeId(payload.rem_id);
       addRem(remId);
+      return keys;
+    }
+
+    case 'add_tag_bulk':
+    case 'remove_tag_bulk': {
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        const remId = normalizeId((item as any)?.rem_id);
+        addRem(remId);
+      }
+      return keys;
+    }
+
+    case 'set_todo_status_bulk': {
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        const remId = normalizeId((item as any)?.rem_id);
+        addRem(remId);
+      }
+      return keys;
+    }
+
+    case 'add_source_bulk':
+    case 'remove_source_bulk': {
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        const remId = normalizeId((item as any)?.rem_id);
+        addRem(remId);
+      }
       return keys;
     }
 
@@ -235,6 +276,27 @@ export async function computeOpLockKeys(plugin: ReactRNPlugin, op: OpDispatch): 
       const oldParentId = remId ? await findParentId(plugin, remId) : undefined;
       addRem(oldParentId);
       addChildren(oldParentId);
+      return keys;
+    }
+
+    case 'move_rem_bulk': {
+      const remIds = Array.isArray(payload.rem_ids)
+        ? payload.rem_ids
+            .map((value: unknown) => normalizeId(value))
+            .filter((value: string) => value.length > 0)
+        : [];
+      const newParentId = normalizeId(payload.new_parent_id);
+
+      for (const remId of remIds) addRem(remId);
+      addRem(newParentId);
+      addChildren(newParentId);
+
+      for (const remId of remIds) {
+        const oldParentId = remId ? await findParentId(plugin, remId) : undefined;
+        addRem(oldParentId);
+        addChildren(oldParentId);
+      }
+
       return keys;
     }
 

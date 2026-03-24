@@ -35,12 +35,40 @@
 ## 使用场景（RemNote 侧能获得什么）
 
 - 快速查找 TODO（只读）：`agent-remnote --json todo list --status unfinished --sort updatedAtDesc --limit 20`
+- Query 侧的 Todo preset 兼容入口：`agent-remnote --json query --preset todos.list --status unfinished --sort updatedAtDesc --limit 20`
+- 通过 Powerup sugar 跑宿主权威查询：`agent-remnote --json query --powerup "Todo" --text "weekly review"`
 - 枚举内置 Powerup（只读）：`agent-remnote --json powerup list`
 - 解析 Powerup（只读）：`agent-remnote --json powerup resolve --powerup "Todo"`
 - 通过主写入面新增结构化数据：`agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - 把某个 Rem 标记为 Todo（安全写入）：`agent-remnote --json todo add --rem "<rem_id>" --wait`
 - 把信息集中到一个地方（安全写入）：`agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md`
 - 外部信息处理 → 总结 → 自动归档：生成 `./summary.md` 后执行 `agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md`
+
+## 031 实验面
+
+下面这些能力已经在当前 worktree 里可用，但还不是 current public stable surface。
+
+- Query V2 的远端 canonical body 统一为 `{ query, limit?, offset?, snippetLength? }`，legacy `queryObj` 只允许停留在 adapter boundary。
+- `query --powerup <name>` 只是 authoring sugar。执行前会先走宿主权威 metadata path 规范化，不会把自由文本名字写进 canonical Query V2。
+- `query --preset todos.list` 是 `todo list -> query --preset` 的本地兼容桥。remote parity 还没 promotion，所以 `apiBaseUrl` 模式下会返回稳定拒绝。
+- 规划中的 `scenario` namespace：
+  - `agent-remnote --json scenario schema validate --spec @./scenario.json`
+  - `agent-remnote --json scenario schema normalize --spec @./scenario.json`
+  - `agent-remnote --json scenario schema explain --spec @./scenario.json --var target_ref=daily:today`
+  - `agent-remnote --json scenario schema generate --hint @./hint.json`
+  - 查看内置 package：
+    - `agent-remnote --json scenario builtin list`
+  - 把内置 package 注入用户 scenario 仓：
+    - `agent-remnote --json scenario builtin install dn_recent_todos_to_today_move`
+    - `agent-remnote --json scenario builtin install --all --if-missing`
+  - 默认用户 scenario 仓：
+    - `~/.agent-remnote/scenarios/*.json`
+  - 当前分支里的计划执行形状：
+    - `agent-remnote --json scenario run builtin:dn_recent_todos_to_today_portal --dry-run`
+    - `agent-remnote --json scenario run user:dn_recent_todos_to_today_portal --dry-run`
+    - 非 builtin 的裸 id 会从 `~/.agent-remnote/scenarios/<id>.json` 解析
+    - `--package <spec>` 继续保留为兼容 alias
+  - 在 promotion preconditions 完成前，一律把 `scenario run` 视为 planned / experimental surface。
 
 ## 安装（用户）
 
@@ -258,6 +286,8 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
 `apply` 里的 action/op payload 若带 `markdown` 字段，也会按 `--markdown` 同一套 input-spec 规则展开：支持 inline 文本、`@file`、`-` 与 `@@literal`。
+
+对于 `kind=actions`，runtime 可能会把连续、等价的 scalar action 静默收口成 internal bulk op，以降低 queue / WS / ack 开销。这个优化对 caller 透明：继续使用业务语义 action 即可，不要依赖 `ops.length === actions.length`。
 
 ## 如何使用（面向 Agent）
 

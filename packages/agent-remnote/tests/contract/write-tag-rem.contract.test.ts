@@ -46,10 +46,17 @@ describe('cli contract: write tag/rem', () => {
     expect(env.ok).toBe(true);
     expect(env.data?.dry_run).toBe(true);
     expect(env.data.ops).toEqual([
-      { type: 'add_tag', payload: { rem_id: 'r1', tag_id: 't1' } },
-      { type: 'add_tag', payload: { rem_id: 'r2', tag_id: 't1' } },
-      { type: 'add_tag', payload: { rem_id: 'r1', tag_id: 't2' } },
-      { type: 'add_tag', payload: { rem_id: 'r2', tag_id: 't2' } },
+      {
+        type: 'add_tag_bulk',
+        payload: {
+          items: [
+            { rem_id: 'r1', tag_id: 't1' },
+            { rem_id: 'r2', tag_id: 't1' },
+            { rem_id: 'r1', tag_id: 't2' },
+            { rem_id: 'r2', tag_id: 't2' },
+          ],
+        },
+      },
     ]);
   });
 
