@@ -16,9 +16,10 @@ import {
   executeDeleteBackupArtifact,
   executeDeleteRem,
   executeMoveRem,
+  executeMoveRemBulk,
   executeUpdateText,
 } from './handlers/remCrudOps';
-import { executeCreatePortal } from './handlers/portalOps';
+import { executeCreatePortal, executeCreatePortalBulk } from './handlers/portalOps';
 import {
   executeAddOption,
   executeAddProperty,
@@ -34,12 +35,17 @@ import {
   executeTableRemoveRow,
 } from './handlers/tableOps';
 import {
+  executeAddTagBulk,
   executeAddSource,
+  executeAddSourceBulk,
   executeAddTag,
+  executeRemoveTagBulk,
   executeRemoveSource,
+  executeRemoveSourceBulk,
   executeRemoveTag,
   executeSetAttributeOrTableCellWrite,
   executeSetTodoStatus,
+  executeSetTodoStatusBulk,
 } from './handlers/metaOps';
 
 const seenIdempotency = new Set<string>();
@@ -77,6 +83,9 @@ export async function executeOp(plugin: ReactRNPlugin, op: OpDispatch): Promise<
         break;
       case 'create_portal':
         result = await executeCreatePortal(plugin, op);
+        break;
+      case 'create_portal_bulk':
+        result = await executeCreatePortalBulk(plugin, op);
         break;
       case 'create_single_rem_with_markdown':
         result = await executeCreateSingleRemWithMarkdown(plugin, op);
@@ -135,11 +144,20 @@ export async function executeOp(plugin: ReactRNPlugin, op: OpDispatch): Promise<
       case 'move_rem':
         result = await executeMoveRem(plugin, op);
         break;
+      case 'move_rem_bulk':
+        result = await executeMoveRemBulk(plugin, op);
+        break;
       case 'add_tag':
         result = await executeAddTag(plugin, op);
         break;
+      case 'add_tag_bulk':
+        result = await executeAddTagBulk(plugin, op);
+        break;
       case 'remove_tag':
         result = await executeRemoveTag(plugin, op);
+        break;
+      case 'remove_tag_bulk':
+        result = await executeRemoveTagBulk(plugin, op);
         break;
       case 'set_attribute':
       case 'table_cell_write':
@@ -148,11 +166,20 @@ export async function executeOp(plugin: ReactRNPlugin, op: OpDispatch): Promise<
       case 'add_source':
         result = await executeAddSource(plugin, op);
         break;
+      case 'add_source_bulk':
+        result = await executeAddSourceBulk(plugin, op);
+        break;
       case 'remove_source':
         result = await executeRemoveSource(plugin, op);
         break;
+      case 'remove_source_bulk':
+        result = await executeRemoveSourceBulk(plugin, op);
+        break;
       case 'set_todo_status':
         result = await executeSetTodoStatus(plugin, op);
+        break;
+      case 'set_todo_status_bulk':
+        result = await executeSetTodoStatusBulk(plugin, op);
         break;
       case 'delete_rem':
         result = await executeDeleteRem(plugin, op);

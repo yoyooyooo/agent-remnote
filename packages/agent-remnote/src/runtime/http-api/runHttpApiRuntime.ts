@@ -27,6 +27,7 @@ import {
   executeReadOutlineUseCase,
   executeReferencesUseCase,
   executeResolvePlacementUseCase,
+  executeResolveQueryPowerupUseCase,
   executeResolveRefValueUseCase,
   executeResolveStableSiblingRangeUseCase,
   executeQueryUseCase,
@@ -35,6 +36,7 @@ import {
   executeWriteApplyUseCase,
 } from '../../lib/hostApiUseCases.js';
 import { apiContainerBaseUrl, apiLocalBaseUrl, normalizeApiBasePath } from '../../lib/apiUrls.js';
+import { normalizeCanonicalQueryRequest } from '../../lib/queryV2.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
@@ -212,6 +214,12 @@ function readOptionalObject(body: Record<string, unknown>, key: string, routePat
     throw invalidPayload(`Field "${key}" must be an object`, { route: routePath, field: key });
   }
   return value as Record<string, unknown>;
+}
+
+function readRequiredObject(body: Record<string, unknown>, key: string, routePath: string): Record<string, unknown> {
+  const value = readOptionalObject(body, key, routePath);
+  if (value) return value;
+  throw invalidPayload(`Field "${key}" is required`, { route: routePath, field: key });
 }
 
 export function runHttpApiRuntime(params?: {
@@ -603,12 +611,32 @@ export function runHttpApiRuntime(params?: {
         void (async () => {
           try {
             const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            const normalized = normalizeCanonicalQueryRequest(body);
             await run(
               executeQueryUseCase({
-                queryObj: readOptionalObject(body, 'queryObj', routePath) ?? {},
-                limit: readOptionalNumber(body, 'limit', routePath),
-                offset: readOptionalNumber(body, 'offset', routePath),
-                snippetLength: readOptionalNumber(body, 'snippetLength', routePath),
+                query: readRequiredObject(normalized, 'query', routePath),
+                limit: readOptionalNumber(normalized, 'limit', routePath),
+                offset: readOptionalNumber(normalized, 'offset', routePath),
+                snippetLength: readOptionalNumber(normalized, 'snippetLength', routePath),
+              }),
+            );
+          } catch (error) {
+            const cliError = isCliError(error)
+              ? error
+              : invalidPayload('Invalid JSON body', { error: String((error as any)?.message || error) });
+            sendJson(res, statusCodeFromCliError(cliError), fail(toJsonError(cliError), cliError.hint));
+          }
+        })();
+        return;
+      }
+
+      if (method === 'POST' && routePath === '/internal/query/resolve-powerup') {
+        void (async () => {
+          try {
+            const body = requireJsonObject(await Effect.runPromise(readJsonBody(req)), routePath);
+            await run(
+              executeResolveQueryPowerupUseCase({
+                powerup: readRequiredString(body, 'powerup', routePath),
               }),
             );
           } catch (error) {

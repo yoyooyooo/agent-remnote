@@ -208,6 +208,41 @@ export async function executeMoveRem(plugin: ReactRNPlugin, op: OpDispatch): Pro
   };
 }
 
+export async function executeMoveRemBulk(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
+  const { rem_ids, new_parent_id, position, is_document } = op.payload || {};
+  const remIds = Array.isArray(rem_ids)
+    ? rem_ids.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+    : [];
+  const newParentId = typeof new_parent_id === 'string' ? new_parent_id.trim() : '';
+
+  if (remIds.length === 0) throw new Error('Missing rem_ids');
+  if (!newParentId) throw new Error('Missing new_parent_id');
+
+  const basePosition = typeof position === 'number' && Number.isFinite(position) ? Math.floor(position) : 0;
+  for (let index = 0; index < remIds.length; index += 1) {
+    const remId = remIds[index]!;
+    await plugin.rem.moveRems([remId], newParentId, basePosition + index);
+  }
+
+  if (is_document === true) {
+    for (const remId of remIds) {
+      const rem = await plugin.rem.findOne(remId);
+      if (!rem) throw new Error(`Rem not found: ${remId}`);
+      if (typeof (rem as any).setIsDocument === 'function') {
+        await (rem as any).setIsDocument(true);
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    rem_ids: remIds,
+    new_parent_id: newParentId,
+    moved_count: remIds.length,
+    ...(is_document === true ? { is_document: true } : {}),
+  };
+}
+
 export async function executeDeleteRem(plugin: ReactRNPlugin, op: OpDispatch): Promise<any> {
   return executeDeleteWithSafeSubtree(plugin, op, {
     errorContext: 'rem deletion',

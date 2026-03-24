@@ -126,7 +126,7 @@ Wave 1 execution note：
   - `create_portal`（创建 Portal：在 parent 下插入“传送门”投影到目标 Rem）
     - `parentId`/`parent_id`（必填）：Portal 容器插入位置（父 Rem id）
     - `targetRemId`/`target_rem_id`（必填）：被投影的目标 Rem id
-    - `position`（可选，0-based）：插入到父级 children 的位置（默认 0）
+    - `position`（可选，0-based）：插入到父级 children 的位置；缺省时追加到尾部
     - 语义：插件侧以 `plugin.rem.createPortal()` 创建 portal 容器 → `moveRems` 定位 → `targetRem.addToPortal(portalId)` 绑定目标
   - `create_tree_with_markdown`（Markdown 导入树）
     - `markdown`（必填）：Markdown 字符串
@@ -249,6 +249,10 @@ node scripts/remnote-set-text-verify-ref.mjs \
   - 提供 `--idempotency-key` 时，若命中既有 txn，将复用 txn（`deduped=true`）
   - `alias_map` 会写入 txn meta（`write_plan.alias_map`）并在 dedupe 时回显，保证“重试返回稳定 alias_map”
 - 规范化：计划编译出的 ops 在 enqueue 前同样执行 `op.type` canonicalize（与 `apply` 完全一致）。
+- silent coalescing：
+  - `kind=actions` 允许在 host runtime 中把连续、同质、可证明等价的 scalar action 静默收口为 internal bulk op family
+  - 当前已覆盖的典型路径包括：`rem.move`、`portal.create`、`tag.add/remove`、`todo.setStatus`、`source.add/remove`
+  - 该优化不要求 caller 改写 command surface，也不承诺 `ops.length === actions.length`
 - 引用解析：
   - `@alias` 仅允许出现在 ID 语义字段（action-specific allowlist）；其它字段出现必须 fail-fast
   - daemon 在 dispatch 前对 ID 语义字段做替换：若字段值为 `tmp:*` 且 `queue_id_map` 已有映射，则替换为 remote id（见 013/012 的一致性语义）
@@ -282,6 +286,8 @@ node scripts/remnote-set-text-verify-ref.mjs \
 ### 回执一致性（attempt_id / CAS ack）
 
 - daemon 派发 `OpDispatch` 时会为本次派发生成 `attempt_id`；插件回 `OpAck` 时必须携带同一个 `attempt_id`。
+- 插件可以把同一连接上的多条 `OpAck` 合并为 `OpAckBatch` 发送；daemon 仍按逐项 CAS 语义处理并返回逐项 `AckOk/AckRejected`。
+- 当一次 `OpAckBatch` 覆盖多条回执时，daemon 可以再把逐项结果合并为 `AckBatch` 回给插件；插件必须按 item 逐项匹配 waiter。
 - daemon 落库回执使用 CAS：只允许命中“当前 in_flight attempt”（`status=in_flight AND locked_by=connId AND attempt_id`）的回执修改 queue_ops/queue_op_results/queue_id_map。
 - 若回执过期/乱序（例如多客户端切换、lease 回收后迟到），daemon 会返回 `AckRejected`（见 `docs/ssot/agent-remnote/ws-bridge-protocol.md`），并且不会回滚终态。
 - `queue_id_map` 是事实表：同 `client_temp_id` 不得漂移；若回执携带的映射与已有映射冲突，daemon 必须拒绝覆盖并产出可诊断错误（例如 `ID_MAP_CONFLICT`）。
@@ -289,6 +295,8 @@ node scripts/remnote-set-text-verify-ref.mjs \
 ### ack 重试与 dedup（避免映射缺失）
 
 - 插件会在未收到 `AckOk` 前重试发送同一个 `OpAck`（attempt_id 不变），用于降低“执行成功但 AckOk 丢失导致重放”的概率。
+- 当存在多条待确认回执时，插件可优先发送 `OpAckBatch`；若超时仍未收到逐项 `AckOk/AckRejected`，再进入重试调度。
+- 若收到 `AckBatch`，插件必须把其中每个 item 视为独立确认结果；`AckBatch` 只减少消息数，不改变逐项重试与失败处理语义。
 - 若执行器因 `idempotency_key` 触发 dedup，必须返回与第一次执行一致的 result（至少保证 `created/id_map` 等关键映射不缺失）；当前实现为 **进程内缓存**（不跨重启持久化）。
 
 ## 故障排查

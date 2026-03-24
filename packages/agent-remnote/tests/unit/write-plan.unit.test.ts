@@ -146,6 +146,150 @@ describe('write plan kernel: parse/compile', () => {
     expect(() => compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' })).toThrow(/preserve-anchor/i);
   });
 
+  it('compiles rem.moveMany into a single move_rem_bulk op', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'rem.moveMany',
+          input: {
+            rem_ids: ['r1', 'r2', 'r3'],
+            new_parent_id: 'parent-2',
+            position: 0,
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toEqual([
+      {
+        type: 'move_rem_bulk',
+        payload: {
+          rem_ids: ['r1', 'r2', 'r3'],
+          new_parent_id: 'parent-2',
+          position: 0,
+        },
+      },
+    ]);
+  });
+
+  it('compiles portal.createMany into a single create_portal_bulk op', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'portal.createMany',
+          input: {
+            parent_id: 'parent-2',
+            items: [{ target_rem_id: 'r1' }, { target_rem_id: 'r2', position: 2 }],
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toEqual([
+      {
+        type: 'create_portal_bulk',
+        payload: {
+          parent_id: 'parent-2',
+          items: [{ target_rem_id: 'r1' }, { target_rem_id: 'r2', position: 2 }],
+        },
+      },
+    ]);
+  });
+
+  it('compiles todo.setStatusMany into a single set_todo_status_bulk op', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'todo.setStatusMany',
+          input: {
+            items: [
+              { rem_id: 'r1', status: 'finished' },
+              { rem_id: 'r2', status: 'finished' },
+            ],
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toEqual([
+      {
+        type: 'set_todo_status_bulk',
+        payload: {
+          items: [
+            { rem_id: 'r1', status: 'finished' },
+            { rem_id: 'r2', status: 'finished' },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('compiles source.addMany into a single add_source_bulk op', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'source.addMany',
+          input: {
+            items: [
+              { rem_id: 'r1', source_id: 's1' },
+              { rem_id: 'r2', source_id: 's1' },
+            ],
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toEqual([
+      {
+        type: 'add_source_bulk',
+        payload: {
+          items: [
+            { rem_id: 'r1', source_id: 's1' },
+            { rem_id: 'r2', source_id: 's1' },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('compiles source.removeMany into a single remove_source_bulk op', () => {
+    const plan = parseWritePlanV1({
+      version: 1,
+      steps: [
+        {
+          action: 'source.removeMany',
+          input: {
+            items: [
+              { rem_id: 'r1', source_id: 's1' },
+              { rem_id: 'r2', source_id: 's1' },
+            ],
+          },
+        },
+      ],
+    });
+
+    const compiled = compileWritePlanV1(plan, { makeTempId: () => 'tmp:1' });
+    expect(compiled.ops).toEqual([
+      {
+        type: 'remove_source_bulk',
+        payload: {
+          items: [
+            { rem_id: 'r1', source_id: 's1' },
+            { rem_id: 'r2', source_id: 's1' },
+          ],
+        },
+      },
+    ]);
+  });
+
   it('classifies single-root markdown as outline-suitable', () => {
     expect(decideOutlineWriteShape({ markdown: '- Report\n  - detail' })).toEqual({
       shape: 'single_root_outline',

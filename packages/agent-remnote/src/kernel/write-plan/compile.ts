@@ -307,6 +307,48 @@ const ACTIONS: Record<string, ActionSpec> = {
     },
   },
 
+  'portal.createMany': {
+    opType: 'create_portal_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: ['parent_id'],
+    compile: ({ input }) => {
+      const parent_id = input.parent_id;
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const target_rem_id = item.target_rem_id;
+              if (typeof target_rem_id !== 'string' || !target_rem_id.trim()) {
+                throw new Error('portal.createMany requires each item.target_rem_id');
+              }
+              const out: Record<string, unknown> = { target_rem_id };
+              if (typeof item.position === 'number') out.position = item.position;
+              return out;
+            })
+        : [];
+
+      if (typeof parent_id !== 'string' || !parent_id.trim()) {
+        throw new Error('portal.createMany requires input.parent_id');
+      }
+      if (items.length === 0) {
+        throw new Error('portal.createMany requires input.items');
+      }
+
+      return {
+        ops: [
+          {
+            type: 'create_portal_bulk',
+            payload: {
+              parent_id,
+              items,
+            },
+          },
+        ],
+      };
+    },
+  },
+
   'rem.replace': {
     opType: 'replace_children_with_markdown',
     supportsAs: false,
@@ -426,6 +468,42 @@ const ACTIONS: Record<string, ActionSpec> = {
     },
   },
 
+  'rem.moveMany': {
+    opType: 'move_rem_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_ids[]', 'new_parent_id'],
+    compile: ({ input }) => {
+      const rem_ids = Array.isArray(input.rem_ids)
+        ? input.rem_ids.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        : [];
+      const new_parent_id = input.new_parent_id;
+      const standalone = input.standalone === true;
+      const leave_portal = input.leave_portal === true;
+
+      if (rem_ids.length === 0) {
+        throw new Error('rem.moveMany requires input.rem_ids');
+      }
+      if (standalone) {
+        throw new Error('rem.moveMany does not support input.standalone');
+      }
+      if (leave_portal) {
+        throw new Error('rem.moveMany does not support input.leave_portal');
+      }
+      if (typeof new_parent_id !== 'string' || !new_parent_id.trim()) {
+        throw new Error('rem.moveMany requires input.new_parent_id');
+      }
+
+      const payload: Record<string, unknown> = {
+        rem_ids,
+        new_parent_id,
+      };
+      if (typeof input.position === 'number') payload.position = input.position;
+      if (input.is_document === true) payload.is_document = true;
+
+      return { ops: [{ type: 'move_rem_bulk', payload }] };
+    },
+  },
+
   'replace.block': {
     opType: 'replace_selection_with_markdown',
     supportsAs: false,
@@ -471,6 +549,222 @@ const ACTIONS: Record<string, ActionSpec> = {
       }
       const payload: Record<string, unknown> = { rem_id, tag_id };
       return { ops: [{ type: 'add_tag', payload }] };
+    },
+  },
+
+  'tag.addMany': {
+    opType: 'add_tag_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: [],
+    compile: ({ input }) => {
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const rem_id = item.rem_id;
+              const tag_id = item.tag_id;
+              if (typeof rem_id !== 'string' || !rem_id.trim()) {
+                throw new Error('tag.addMany requires each item.rem_id');
+              }
+              if (typeof tag_id !== 'string' || !tag_id.trim()) {
+                throw new Error('tag.addMany requires each item.tag_id');
+              }
+              return { rem_id, tag_id };
+            })
+        : [];
+
+      if (items.length === 0) {
+        throw new Error('tag.addMany requires input.items');
+      }
+
+      return { ops: [{ type: 'add_tag_bulk', payload: { items } }] };
+    },
+  },
+
+  'tag.remove': {
+    opType: 'remove_tag',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id', 'tag_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const tag_id = input.tag_id;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('tag.remove requires input.rem_id');
+      }
+      if (typeof tag_id !== 'string' || !tag_id.trim()) {
+        throw new Error('tag.remove requires input.tag_id');
+      }
+      const payload: Record<string, unknown> = { rem_id, tag_id };
+      if (typeof input.remove_properties === 'boolean') payload.remove_properties = input.remove_properties;
+      return { ops: [{ type: 'remove_tag', payload }] };
+    },
+  },
+
+  'tag.removeMany': {
+    opType: 'remove_tag_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: [],
+    compile: ({ input }) => {
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const rem_id = item.rem_id;
+              const tag_id = item.tag_id;
+              if (typeof rem_id !== 'string' || !rem_id.trim()) {
+                throw new Error('tag.removeMany requires each item.rem_id');
+              }
+              if (typeof tag_id !== 'string' || !tag_id.trim()) {
+                throw new Error('tag.removeMany requires each item.tag_id');
+              }
+              return { rem_id, tag_id };
+            })
+        : [];
+
+      if (items.length === 0) {
+        throw new Error('tag.removeMany requires input.items');
+      }
+
+      const payload: Record<string, unknown> = { items };
+      if (typeof input.remove_properties === 'boolean') payload.remove_properties = input.remove_properties;
+      return { ops: [{ type: 'remove_tag_bulk', payload }] };
+    },
+  },
+
+  'todo.setStatus': {
+    opType: 'set_todo_status',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const status = input.status;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('todo.setStatus requires input.rem_id');
+      }
+      if (typeof status !== 'string' || !status.trim()) {
+        throw new Error('todo.setStatus requires input.status');
+      }
+      return { ops: [{ type: 'set_todo_status', payload: { rem_id, status } }] };
+    },
+  },
+
+  'todo.setStatusMany': {
+    opType: 'set_todo_status_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: [],
+    compile: ({ input }) => {
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const rem_id = item.rem_id;
+              const status = item.status;
+              if (typeof rem_id !== 'string' || !rem_id.trim()) {
+                throw new Error('todo.setStatusMany requires each item.rem_id');
+              }
+              if (typeof status !== 'string' || !status.trim()) {
+                throw new Error('todo.setStatusMany requires each item.status');
+              }
+              return { rem_id, status };
+            })
+        : [];
+      if (items.length === 0) {
+        throw new Error('todo.setStatusMany requires input.items');
+      }
+      return { ops: [{ type: 'set_todo_status_bulk', payload: { items } }] };
+    },
+  },
+
+  'source.add': {
+    opType: 'add_source',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id', 'source_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const source_id = input.source_id;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('source.add requires input.rem_id');
+      }
+      if (typeof source_id !== 'string' || !source_id.trim()) {
+        throw new Error('source.add requires input.source_id');
+      }
+      return { ops: [{ type: 'add_source', payload: { rem_id, source_id } }] };
+    },
+  },
+
+  'source.addMany': {
+    opType: 'add_source_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: [],
+    compile: ({ input }) => {
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const rem_id = item.rem_id;
+              const source_id = item.source_id;
+              if (typeof rem_id !== 'string' || !rem_id.trim()) {
+                throw new Error('source.addMany requires each item.rem_id');
+              }
+              if (typeof source_id !== 'string' || !source_id.trim()) {
+                throw new Error('source.addMany requires each item.source_id');
+              }
+              return { rem_id, source_id };
+            })
+        : [];
+      if (items.length === 0) {
+        throw new Error('source.addMany requires input.items');
+      }
+      return { ops: [{ type: 'add_source_bulk', payload: { items } }] };
+    },
+  },
+
+  'source.remove': {
+    opType: 'remove_source',
+    supportsAs: false,
+    aliasRefAllowlist: ['rem_id', 'source_id'],
+    compile: ({ input }) => {
+      const rem_id = input.rem_id;
+      const source_id = input.source_id;
+      if (typeof rem_id !== 'string' || !rem_id.trim()) {
+        throw new Error('source.remove requires input.rem_id');
+      }
+      if (typeof source_id !== 'string' || !source_id.trim()) {
+        throw new Error('source.remove requires input.source_id');
+      }
+      return { ops: [{ type: 'remove_source', payload: { rem_id, source_id } }] };
+    },
+  },
+
+  'source.removeMany': {
+    opType: 'remove_source_bulk',
+    supportsAs: false,
+    aliasRefAllowlist: [],
+    compile: ({ input }) => {
+      const items = Array.isArray(input.items)
+        ? input.items
+            .map((item) => getObject(item))
+            .filter((item): item is Record<string, unknown> => !!item)
+            .map((item) => {
+              const rem_id = item.rem_id;
+              const source_id = item.source_id;
+              if (typeof rem_id !== 'string' || !rem_id.trim()) {
+                throw new Error('source.removeMany requires each item.rem_id');
+              }
+              if (typeof source_id !== 'string' || !source_id.trim()) {
+                throw new Error('source.removeMany requires each item.source_id');
+              }
+              return { rem_id, source_id };
+            })
+        : [];
+      if (items.length === 0) {
+        throw new Error('source.removeMany requires input.items');
+      }
+      return { ops: [{ type: 'remove_source_bulk', payload: { items } }] };
     },
   },
 };

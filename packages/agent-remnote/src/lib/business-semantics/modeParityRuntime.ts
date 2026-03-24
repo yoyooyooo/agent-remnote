@@ -196,7 +196,7 @@ type ReadResolveRefCapabilityInput = {
 };
 
 type ReadQueryCapabilityInput = {
-  readonly queryObj: Record<string, unknown>;
+  readonly query: Record<string, unknown>;
   readonly limit?: number | undefined;
   readonly offset?: number | undefined;
   readonly snippetLength?: number | undefined;
@@ -457,7 +457,7 @@ export function resolveWave1ModeParityRuntime(): Effect.Effect<
         return hostApi.query({
           baseUrl: cfg.apiBaseUrl!,
           body: {
-            queryObj: params.queryObj,
+            query: params.query,
             limit: params.limit,
             offset: params.offset,
             snippetLength: params.snippetLength,

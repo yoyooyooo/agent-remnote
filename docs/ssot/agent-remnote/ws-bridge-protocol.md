@@ -187,6 +187,14 @@
   - `status`: `"success" | "retry" | "failed" | "dead"`
   - `success`: 允许带 `result`（可含 `created` / `id_map` 用于回填 `queue_id_map` 表）
   - `retry/failed/dead`: 使用 `error_code` / `error_message`（以及可选 `retry_after_ms`）
+- Client → Server：`OpAckBatch`
+  - `{ "type": "OpAckBatch", "items": [ {OpAck}, {OpAck}, ... ] }`
+  - 用于把同一 WS 连接上的多条 `OpAck` 一次发送到服务端，减少 client → server 消息数
+  - 服务端必须逐项复用既有 `OpAck` 语义处理，不得把 batch 视为新的事务边界
+- Server → Client：`AckBatch`
+  - `{ "type": "AckBatch", "items": [ {AckOk|AckRejected}, {AckOk|AckRejected}, ... ] }`
+  - 仅用于把同一批 `OpAckBatch` 的逐项结果一次回给客户端，减少 server → client 消息数
+  - 客户端必须按 item 内的 `op_id + attempt_id` 逐项分发，不得把 `AckBatch` 当成新的确认语义
 - Server → Client：`{ "type": "AckOk", "ok": true, "op_id": "...", "attempt_id": "..." }`
 - Server → Client（stale/invalid 回执被拒绝）：`{ "type": "AckRejected", "op_id": "...", "attempt_id": "...", "reason": "stale_attempt|stale_ack|not_found|..." }`
 - Client → Server（可选预留）：`{ "type": "LeaseExtend", "op_id": "...", "attempt_id": "...", "extendMs": 30000 }`

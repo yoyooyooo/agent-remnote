@@ -20,6 +20,70 @@ export type OpAckHandlingResult = {
   readonly invalidateStatusLineReason: string | null;
 };
 
+export function handleOpAckBatchMessage(params: {
+  readonly now: number;
+  readonly db: WsBridgeCoreDb;
+  readonly connId: WsConnId;
+  readonly msg: any;
+}): OpAckHandlingResult {
+  const items = Array.isArray(params.msg?.items) ? params.msg.items : [];
+  if (items.length === 0) {
+    return {
+      actions: [
+        {
+          _tag: 'Log',
+          level: 'warn',
+          event: 'invalid_op_ack_batch',
+          details: { connId: params.connId, size: items.length },
+        },
+        { _tag: 'SendJson', connId: params.connId, msg: { type: 'Error', message: 'invalid OpAckBatch' } },
+      ],
+      touchAckTimestamp: false,
+      invalidateStatusLineReason: null,
+    };
+  }
+
+  const actions: WsBridgeCoreAction[] = [];
+  let touchAckTimestamp = false;
+  let invalidateStatusLineReason: string | null = null;
+  const ackMessages: any[] = [];
+
+  for (const item of items) {
+    const res = handleOpAckMessage({
+      now: params.now,
+      db: params.db,
+      connId: params.connId,
+      msg: item,
+    });
+    for (const action of res.actions) {
+      if (action._tag === 'SendJson' && action.connId === params.connId) {
+        const msg = (action as any).msg;
+        if (msg?.type === 'AckOk' || msg?.type === 'AckRejected') {
+          ackMessages.push(msg);
+          continue;
+        }
+      }
+      actions.push(action);
+    }
+    if (res.touchAckTimestamp) touchAckTimestamp = true;
+    if (!invalidateStatusLineReason && res.invalidateStatusLineReason) {
+      invalidateStatusLineReason = res.invalidateStatusLineReason;
+    }
+  }
+
+  if (ackMessages.length === 1) {
+    actions.push({ _tag: 'SendJson', connId: params.connId, msg: ackMessages[0] });
+  } else if (ackMessages.length > 1) {
+    actions.push({
+      _tag: 'SendJson',
+      connId: params.connId,
+      msg: { type: 'AckBatch', items: ackMessages },
+    });
+  }
+
+  return { actions, touchAckTimestamp, invalidateStatusLineReason };
+}
+
 export function handleOpAckMessage(params: {
   readonly now: number;
   readonly db: WsBridgeCoreDb;

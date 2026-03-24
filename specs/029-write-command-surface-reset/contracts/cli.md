@@ -149,6 +149,8 @@ agent-remnote portal create \
 
 - `--to` identifies the target Rem that the portal should point to
 - `--at` identifies where the portal itself should be inserted
+- `--at parent:<ref>` without an explicit index appends the portal to that parent's tail
+- `--at parent[<position>]:<ref>` inserts at the explicit 0-based index
 
 ## Single-Subject Rem Writes
 

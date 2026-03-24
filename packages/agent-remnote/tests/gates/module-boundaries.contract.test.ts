@@ -20,6 +20,7 @@ const ALLOWED_INTERNAL_TS_FILES = new Set([
   'packages/agent-remnote/src/internal/store/migrations/0006-add-workspace-bindings.ts',
   'packages/agent-remnote/src/internal/store/migrations/0008-add-automation-skeleton.ts',
   'packages/agent-remnote/src/internal/store/migrations/0009-add-task-run-fk-indexes.ts',
+  'packages/agent-remnote/src/internal/store/migrations/0010-add-queue-hot-path-indexes.ts',
   'packages/agent-remnote/src/internal/store/migrations/index.ts',
   'packages/agent-remnote/src/internal/remdb-tools/executeSearchQuery.ts',
   'packages/agent-remnote/src/internal/remdb-tools/findRemsByReference.ts',

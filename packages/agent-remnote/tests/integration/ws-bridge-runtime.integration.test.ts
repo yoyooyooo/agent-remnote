@@ -929,4 +929,120 @@ describe('WsBridgeRuntime (integration)', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('accepts OpAckBatch and returns a single AckBatch with per-item results', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-ws-bridge-ack-batch-'));
+
+    try {
+      const port = await getFreePort();
+      const wsUrl = `ws://127.0.0.1:${port}/ws`;
+      const cfg = makeTestConfig({
+        storeDb: path.join(tmpDir, 'store.sqlite'),
+        wsUrl,
+        wsStateFilePath: path.join(tmpDir, 'ws.bridge.state.json'),
+        statusLineFile: path.join(tmpDir, 'status-line.txt'),
+        statusLineJsonFile: path.join(tmpDir, 'status-line.json'),
+      });
+
+      const seedDb = openQueueDb(cfg.storeDb);
+      try {
+        enqueueTxn(
+          seedDb as any,
+          [
+            { type: 'update_text', payload: { rem_id: 'A', text: 'x' } },
+            { type: 'update_text', payload: { rem_id: 'B', text: 'y' } },
+          ],
+          { dispatchMode: 'conflict_parallel' },
+        );
+      } finally {
+        seedDb.close();
+      }
+
+      const cfgLayer = Layer.succeed(AppConfig, cfg);
+      const statusLineStub = Layer.succeed(StatusLineController, { invalidate: () => Effect.void });
+      const live = Layer.mergeAll(
+        cfgLayer,
+        WsBridgeServerLive,
+        WsBridgeStateFileLive,
+        StatusLineFileLive,
+        statusLineStub,
+      );
+
+      const program = Effect.gen(function* () {
+        yield* runWsBridgeRuntime({
+          host: '127.0.0.1',
+          port,
+          path: '/ws',
+          heartbeatIntervalMs: 50,
+          kickConfig: { enabled: false, intervalMs: 0, cooldownMs: 0, noProgressWarnMs: 0, noProgressEscalateMs: 0 },
+        }).pipe(Effect.forkScoped);
+
+        yield* Effect.promise(async () => {
+          const plugin = await connectWsWithRetry(wsUrl, 3000);
+          const q = createJsonQueue(plugin);
+
+          try {
+            plugin.send(JSON.stringify({ type: 'Hello' }));
+            await q.next((m) => m?.type === 'HelloAck' && m?.ok === true);
+            plugin.send(
+              JSON.stringify({
+                type: 'Register',
+                protocolVersion: 2,
+                clientType: 'remnote-plugin',
+                clientInstanceId: 'ack-batch-test',
+                capabilities: { control: true, worker: true, readRpc: false, batchPull: true },
+              }),
+            );
+            await q.next((m) => m?.type === 'Registered');
+            plugin.send(
+              JSON.stringify({ type: 'SelectionChanged', kind: 'none', selectionType: 'None', ts: Date.now() }),
+            );
+            await q.next((m) => m?.type === 'SelectionAck');
+
+            plugin.send(JSON.stringify({ type: 'RequestOps', leaseMs: 5000, maxOps: 2 }));
+            const batch = await q.next(
+              (m) => m?.type === 'OpDispatchBatch' && Array.isArray(m?.ops) && m.ops.length === 2,
+            );
+
+            const items = (batch as any).ops.map((op: any) => ({
+              type: 'OpAck',
+              op_id: op.op_id,
+              attempt_id: op.attempt_id,
+              status: 'success',
+              result: { ok: true },
+            }));
+
+            plugin.send(JSON.stringify({ type: 'OpAckBatch', items }));
+
+            const ackBatch = await q.next(
+              (m) => m?.type === 'AckBatch' && Array.isArray(m?.items) && m.items.length === 2,
+            );
+            expect(new Set((ackBatch as any).items.map((item: any) => String(item.op_id)))).toEqual(
+              new Set((batch as any).ops.map((op: any) => String(op.op_id))),
+            );
+            expect((ackBatch as any).items.every((item: any) => item.type === 'AckOk')).toBe(true);
+
+            const db = openQueueDb(cfg.storeDb);
+            try {
+              const rows = db.prepare(`SELECT status FROM queue_ops ORDER BY op_seq ASC`).all() as any[];
+              expect(rows.map((row) => String(row.status))).toEqual(['succeeded', 'succeeded']);
+            } finally {
+              db.close();
+            }
+          } finally {
+            try {
+              q.close();
+            } catch {}
+            try {
+              plugin.close();
+            } catch {}
+          }
+        });
+      }).pipe(Effect.provide(live));
+
+      await Effect.runPromise(Effect.scoped(program));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

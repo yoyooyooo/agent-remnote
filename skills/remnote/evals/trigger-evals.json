@@ -1,94 +1,82 @@
 [
   {
-    "query": "我已经知道目标 rem id 是 9c1LghrPFSZuzGStA，把它下面现在所有 chunk 全部替换成这段 Markdown：\n- 发布收口\n  - 改成 apply 单入口\n  - 删掉 import 和 plan apply\n不要等结果，直接给我最短命令。",
+    "query": "我现在就在 RemNote 桌面端里，刚选中了一个标题 rem。下面已经有几条乱掉的子项，你别新建页面，也别往页面根下插新节点，直接把这个标题下面的 children 重写成一个更清楚、由浅入深的大纲，标题本身要保留。",
     "should_trigger": true
   },
   {
-    "query": "把下面这段研究笔记直接写到今天的 Daily Note 里，不用确认落库：\n- Claude Code\n  - skill trigger 要更激进\n  - 默认不要 wait",
+    "query": "我在容器里跑 agent-remnote，`apiBaseUrl` 已经指到宿主机了。帮我把 rem id `4MZL7Gxd3MIwn3M9J` 下面追加一段结构化 Markdown，不要碰容器里的本地 `remnote.db`，也不用 wait。",
     "should_trigger": true
   },
   {
-    "query": "我在容器里，apiBaseUrl 已经配好了。帮我把 rem id 4MZL7Gxd3MIwn3M9J 下面追加一段 Markdown，不要走本地 remnote.db。",
+    "query": "把这段调研总结整理后写进今天的 RemNote Daily Note，要求只有一个主线入口，后面还能继续往下展开。不要为了看起来安全再包一层多余容器，也别先全库搜索。",
     "should_trigger": true
   },
   {
-    "query": "给我看一下 RemNote 当前 page 和 focus，越短越好，只要能做下一步决策就行。",
+    "query": "agent-remnote 刚返回 `sent=0`，而且我下一步还要继续依赖这次写入结果。你先别猜，帮我给出最短排障顺序：先看 daemon、plugin，还是 queue wait，怎么确认是哪个环节没接上。",
     "should_trigger": true
   },
   {
-    "query": "刚刚 agent-remnote 返回 sent=0，我想知道现在该先看 daemon status 还是 queue wait，帮我走最短排障路径。",
+    "query": "我接下来要继续在 RemNote 当前页面里写东西，但先想知道当前 page、focus rem 和 selection 大概是什么。给我最低 token 的读取路径，不要一上来就 search 全库。",
     "should_trigger": true
   },
   {
-    "query": "已知 parentRemId 是 qXENhfiOUJiThAamg，把这段内容插到它子级最上面：\n- 优先级\n  - 最短路径\n  - 最少读取",
+    "query": "我有个 `~/.agent-remnote/scenarios/recent-review.json`，先想知道它到底暴露了哪些 vars 和默认值，再决定要不要 run。现在在 `apiBaseUrl` 模式，先别真的写入。",
     "should_trigger": true
   },
   {
-    "query": "我只想把 rem id dmYbmbDWkOKgGcj02 自己的文本改掉，不要碰下面的子级，也不要做额外读取。",
+    "query": "我记不清 `dn_recent_todos_to_today_move` 这条 builtin scenario 的 `source_scope` 怎么传了。想先 dry-run 看 lowering，目标是把过去 3 天 DN 里的 todo 搬到今天，而且今天不算进 source。",
     "should_trigger": true
   },
   {
-    "query": "帮我把 rem id qXENhfiOUJiThAamg 的 direct children 清空，但这个 rem 自己要保留。",
+    "query": "我已经有一个 RemNote 的 rem id，想把它沉淀成独立 page，并且在原位置留一个 portal。别走那种先写 DN、再手工 portal create、再手工 move 的旧多步路径，帮我选更稳的 route。",
     "should_trigger": true
   },
   {
-    "query": "先在 rem id 4MZL7Gxd3MIwn3M9J 下面创建一个 Weekly Review，再在它下面加 Wins 和 Risks。我要一次发起，因为后一步依赖前一步新建的节点。",
+    "query": "RemNote 里有个 section，我只想把它下面的 direct children 全部清空，这个 section 自己必须保留，不能把整棵树删掉。给我最短正确路径，不要做多余读取。",
     "should_trigger": true
   },
   {
-    "query": "我选中了 RemNote 里的一条标题，想继续往下展开讲讲，整理成由浅入深的大纲，但不要在页面根下新增并列节点。",
+    "query": "RemNote 里一个已经在 UI 里配置好的 `single_select` 列，我现在在远端 `apiBaseUrl` 模式下想给它加一个 option。先判断这个命令支不支持透明远程执行，别把 generic property type mutation 和 option add/remove 混在一起。",
     "should_trigger": true
   },
   {
-    "query": "把这份调研总结写到今天日记里，要求单一主线、后面还能继续往下展开。",
-    "should_trigger": true
-  },
-  {
-    "query": "这段论证文字先原样记到今天日记里，不要为了规整强行拆成大纲。",
-    "should_trigger": true
-  },
-  {
-    "query": "给我一个最稳的 RemNote 引用写法，我已经有目标 RID 了，后面会把它塞进结构化写入命令里。",
-    "should_trigger": true
-  },
-  {
-    "query": "把这个 Markdown 文件里的所有 chunk 标题都替换成 H2，然后生成一个新的 README 草稿。",
+    "query": "帮我把 Notion 这个页面下面所有子 block 全部替换成新的 Markdown 内容，并同步回数据库；如果要先查当前 block 树也没关系。",
     "should_trigger": false
   },
   {
-    "query": "帮我把 Notion 这个页面里的所有子 block 全部替换成新的 Markdown 内容，并同步到数据库。",
+    "query": "我想在 Obsidian 的今天日记里追加一段模板内容，最好顺手帮我把旧段落归档一下，别碰 RemNote。",
     "should_trigger": false
   },
   {
-    "query": "我想在 Obsidian 的今天日记里追加一段模板内容，别碰 RemNote。",
+    "query": "现在只想知道 Arc 当前 page 和 focus tab 是什么，越短越好，后面我要继续整理浏览器窗口。",
     "should_trigger": false
   },
   {
-    "query": "React 里这个节点的 children 全部要清空再重新渲染，给我一个最短的组件写法。",
+    "query": "BullMQ 这边一个 job 卡住了，我现在是在 worker 容器里。你觉得先看 queue wait 还是先看 worker logs，更容易判断是 lease 还是 handler 卡死？",
     "should_trigger": false
   },
   {
-    "query": "现在只想知道 Arc 当前 page 和 focus tab，越短越好。",
+    "query": "给我一个 apply payload，把这几个 GitHub issue 一次性批量打上标签、发评论，再顺手改成 closed。",
     "should_trigger": false
   },
   {
-    "query": "BullMQ 这边一个 job 卡住了，我是该先 queue wait 还是先看 worker logs？",
+    "query": "把这条飞书文档下面新增两条子项，顺便置顶插入一个总结块，我后面还会继续改这篇文档的结构。",
     "should_trigger": false
   },
   {
-    "query": "给我一个 apply payload，把这几个 GitHub issue 一次性批量打上标签并评论完成。",
+    "query": "我想直接改 SQLite 里的 `notes` 表，把几条记录的 `title` 批量替换掉，然后再补一个更新时间字段。",
     "should_trigger": false
   },
   {
-    "query": "把这条飞书文档下面新增两条子项，顺便置顶插入一个总结块。",
+    "query": "帮我设计一个 GitHub Actions 用的 scenario package，我也想在 JSON 里放 `source_scope` 和 `target_ref` 这种字段名，不过这和 RemNote 没关系。",
     "should_trigger": false
   },
   {
-    "query": "我想直接改 SQLite 里的 notes 表，把几条记录的 title 批量替换掉。",
+    "query": "请帮我做一个 tmux 状态栏 segment，显示当前页面标题和焦点 pane 信息，后面我想接进自己的 `.tmux.conf`。",
     "should_trigger": false
   },
   {
-    "query": "请帮我做一个 tmux 状态栏 segment，显示当前页面和焦点窗口信息。",
+    "query": "React 里这个树节点的 children 要先清空再重新渲染，帮我写一个最短的组件方案，必要的话可以直接重构 state shape。",
     "should_trigger": false
   }
 ]

@@ -20,6 +20,11 @@ function columnExists(db: any, table: string, column: string): boolean {
   }
 }
 
+function indexExists(db: any, name: string): boolean {
+  const row = db.prepare(`SELECT 1 as ok FROM sqlite_master WHERE type='index' AND name=? LIMIT 1`).get(name) as any;
+  return !!row?.ok;
+}
+
 describe('store contract: legacy queue tables are renamed to queue_*', () => {
   it('migrates a v1-style schema (txns/ops/...) into queue_* and preserves data', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-store-prefix-queue-'));
@@ -147,6 +152,10 @@ describe('store contract: legacy queue tables are renamed to queue_*', () => {
 
         expect(columnExists(db, 'queue_txns', 'dispatch_mode')).toBe(true);
         expect(columnExists(db, 'queue_ops', 'attempt_id')).toBe(true);
+        expect(indexExists(db, 'idx_ops_txn_status_seq')).toBe(true);
+        expect(indexExists(db, 'idx_ops_status_next_txn')).toBe(true);
+        expect(indexExists(db, 'idx_op_deps_op_id')).toBe(true);
+        expect(indexExists(db, 'idx_txns_status_priority')).toBe(true);
 
         const txnRow = db.prepare(`SELECT txn_id FROM queue_txns WHERE txn_id=?`).get(txnId) as any;
         expect(String(txnRow?.txn_id ?? '')).toBe(txnId);

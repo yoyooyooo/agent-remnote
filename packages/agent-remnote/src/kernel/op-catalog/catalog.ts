@@ -33,6 +33,16 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     id_fields: ['parent_id', 'target_rem_id'],
   },
 
+  create_portal_bulk: {
+    op_type: 'create_portal_bulk',
+    payload: {
+      required: ['parent_id', 'items'],
+      optional: [],
+    },
+    description: 'Create multiple portals under the same parent in one bulk operation.',
+    id_fields: ['parent_id', 'items[].target_rem_id'],
+  },
+
   create_link_rem: {
     op_type: 'create_link_rem',
     aliases: ['rem.createLink'],
@@ -61,6 +71,16 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     },
     description: 'Move a Rem to a new parent or to standalone top-level placement.',
     id_fields: ['rem_id', 'new_parent_id'],
+  },
+
+  move_rem_bulk: {
+    op_type: 'move_rem_bulk',
+    payload: {
+      required: ['rem_ids', 'new_parent_id'],
+      optional: ['position', 'is_document'],
+    },
+    description: 'Move multiple Rems to the same parent in one bulk operation.',
+    id_fields: ['rem_ids', 'rem_ids[]', 'new_parent_id'],
   },
 
   delete_rem: {
@@ -138,12 +158,26 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     id_fields: ['rem_id', 'tag_id'],
   },
 
+  add_tag_bulk: {
+    op_type: 'add_tag_bulk',
+    payload: { required: ['items'], optional: [] },
+    description: 'Add multiple tags to Rems in one bulk operation.',
+    id_fields: ['items[].rem_id', 'items[].tag_id'],
+  },
+
   remove_tag: {
     op_type: 'remove_tag',
     aliases: ['tag.remove'],
     payload: { required: ['rem_id', 'tag_id'], optional: ['remove_properties'] },
     description: 'Remove a tag from a Rem.',
     id_fields: ['rem_id', 'tag_id'],
+  },
+
+  remove_tag_bulk: {
+    op_type: 'remove_tag_bulk',
+    payload: { required: ['items'], optional: ['remove_properties'] },
+    description: 'Remove multiple tags from Rems in one bulk operation.',
+    id_fields: ['items[].rem_id', 'items[].tag_id'],
   },
 
   set_attribute: {
@@ -272,6 +306,13 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     id_fields: ['rem_id', 'source_id'],
   },
 
+  add_source_bulk: {
+    op_type: 'add_source_bulk',
+    payload: { required: ['items'], optional: [] },
+    description: 'Add multiple source links to Rems in one bulk operation.',
+    id_fields: ['items[].rem_id', 'items[].source_id'],
+  },
+
   remove_source: {
     op_type: 'remove_source',
     aliases: ['source.remove'],
@@ -280,11 +321,25 @@ export const OP_CATALOG: Record<string, OpCatalogEntry> = {
     id_fields: ['rem_id', 'source_id'],
   },
 
+  remove_source_bulk: {
+    op_type: 'remove_source_bulk',
+    payload: { required: ['items'], optional: [] },
+    description: 'Remove multiple source links from Rems in one bulk operation.',
+    id_fields: ['items[].rem_id', 'items[].source_id'],
+  },
+
   set_todo_status: {
     op_type: 'set_todo_status',
     aliases: ['todo.setStatus'],
     payload: { required: ['rem_id', 'status'], optional: [] },
     description: 'Set todo completion status.',
     id_fields: ['rem_id'],
+  },
+
+  set_todo_status_bulk: {
+    op_type: 'set_todo_status_bulk',
+    payload: { required: ['items'], optional: [] },
+    description: 'Set todo completion status across multiple Rems in one bulk operation.',
+    id_fields: ['items[].rem_id'],
   },
 } as const;

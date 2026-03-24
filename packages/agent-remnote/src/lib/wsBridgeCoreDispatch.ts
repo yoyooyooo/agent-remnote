@@ -4,6 +4,7 @@ import { collectTempIdsFromPayload, substituteTempIdsInPayload } from '../kernel
 import {
   ackDead,
   claimOpById,
+  claimSelectedOpsBatch,
   getRemoteIdsByClientTempIds,
   listInFlightOps,
   peekEligibleOps,
@@ -22,6 +23,125 @@ export type RequestOpsSelection =
       readonly maxOpBytesEffective: number;
     }
   | { readonly kind: 'dispatch'; readonly msg: any; readonly firstOpId: string | null };
+
+type DispatchCandidateInfo = {
+  readonly op_id: string;
+  readonly txn_id: string;
+  readonly op_seq: number;
+  readonly op_type: string;
+  readonly txn_dispatch_mode: string | null;
+  readonly payload: unknown;
+  readonly payload_json: string;
+  readonly payloadSub: unknown;
+  readonly idempotency_key: string | null;
+  readonly leaseMs: number;
+  readonly depsReady: boolean;
+  readonly missingTempIds: readonly string[];
+  readonly keys: readonly string[];
+  readonly opBytes: number;
+};
+
+function chooseLookaheadSeed(params: {
+  readonly candidates: readonly DispatchCandidateInfo[];
+  readonly maxOpsEffective: number;
+  readonly maxBytesEffective: number;
+  readonly maxOpBytesEffective: number;
+  readonly baseBudgetForEstimate: unknown;
+  readonly skipped: unknown;
+  readonly estimateBatchBytes: (p: {
+    readonly opBytesSum: number;
+    readonly opCount: number;
+    readonly budget: unknown;
+    readonly skipped: unknown;
+  }) => number;
+  readonly usedKeys: ReadonlySet<string>;
+  readonly usedTxnIds: ReadonlySet<string>;
+  readonly wsSchedulerEnabled: boolean;
+  readonly isSerialTxn: (dispatchMode: unknown) => boolean;
+}): {
+  readonly windowCount: number;
+  readonly seedIds: ReadonlySet<string>;
+} {
+  const windowCount = Math.min(params.candidates.length, Math.max(8, Math.min(12, params.maxOpsEffective * 4)));
+  if (windowCount <= 1 || params.maxOpsEffective <= 1) {
+    return { windowCount: 0, seedIds: new Set() };
+  }
+
+  const window = params.candidates.slice(0, windowCount);
+  let best: {
+    readonly indices: readonly number[];
+    readonly bytes: number;
+  } = {
+    indices: [],
+    bytes: 0,
+  };
+
+  const betterThanBest = (indices: readonly number[], bytes: number): boolean => {
+    if (indices.length !== best.indices.length) return indices.length > best.indices.length;
+    const sum = indices.reduce((acc, value) => acc + value, 0);
+    const bestSum = best.indices.reduce((acc, value) => acc + value, 0);
+    if (sum !== bestSum) return sum < bestSum;
+    return bytes > best.bytes;
+  };
+
+  const dfs = (
+    position: number,
+    selectedIndices: readonly number[],
+    usedKeys: ReadonlySet<string>,
+    usedTxnIds: ReadonlySet<string>,
+    opBytesSum: number,
+  ): void => {
+    if (selectedIndices.length > params.maxOpsEffective) return;
+    if (selectedIndices.length + (window.length - position) < best.indices.length) return;
+
+    if (position >= window.length) {
+      if (betterThanBest(selectedIndices, opBytesSum)) {
+        best = { indices: [...selectedIndices], bytes: opBytesSum };
+      }
+      return;
+    }
+
+    dfs(position + 1, selectedIndices, usedKeys, usedTxnIds, opBytesSum);
+
+    const candidate = window[position]!;
+    if (!candidate.depsReady) return;
+    if (candidate.txn_id && usedTxnIds.has(candidate.txn_id)) return;
+    if (params.wsSchedulerEnabled) {
+      for (const key of candidate.keys) {
+        if (usedKeys.has(key)) return;
+      }
+    }
+    if (candidate.opBytes > params.maxOpBytesEffective) return;
+
+    const nextCount = selectedIndices.length + 1;
+    const nextBytesSum = opBytesSum + candidate.opBytes;
+    const est = params.estimateBatchBytes({
+      opBytesSum: nextBytesSum,
+      opCount: nextCount,
+      budget: params.baseBudgetForEstimate,
+      skipped: params.skipped,
+    });
+    if (est + 256 > params.maxBytesEffective) return;
+
+    const nextUsedKeys = new Set(usedKeys);
+    const nextUsedTxnIds = new Set(usedTxnIds);
+    if (candidate.txn_id && params.isSerialTxn(candidate.txn_dispatch_mode)) nextUsedTxnIds.add(candidate.txn_id);
+    if (params.wsSchedulerEnabled) for (const key of candidate.keys) nextUsedKeys.add(key);
+
+    dfs(position + 1, [...selectedIndices, position], nextUsedKeys, nextUsedTxnIds, nextBytesSum);
+  };
+
+  dfs(0, [], new Set(params.usedKeys), new Set(params.usedTxnIds), 0);
+
+  if (best.indices.length <= 1) {
+    return { windowCount: 0, seedIds: new Set() };
+  }
+
+  return {
+    windowCount,
+    seedIds: new Set(best.indices.map((index) => window[index]!.op_id)),
+  };
+}
 
 export function selectOpsForDispatch(params: {
   readonly db: WsBridgeCoreDb;
@@ -140,18 +260,19 @@ export function selectOpsForDispatch(params: {
     };
   });
 
-  const tempIds: string[] = [];
+  const tempIds = new Set<string>();
   for (const o of inFlight) {
     const opType = String((o as any)?.type ?? '');
     const payload = safeParseJson(String((o as any)?.payload_json ?? ''));
     const ids = collectTempIdsFromPayload(opType, payload);
-    for (const id of ids) if (!tempIds.includes(id)) tempIds.push(id);
+    for (const id of ids) tempIds.add(id);
   }
   for (const c of candidates) {
     const ids = collectTempIdsFromPayload(c.op_type, c.payload);
-    for (const id of ids) if (!tempIds.includes(id)) tempIds.push(id);
+    for (const id of ids) tempIds.add(id);
   }
-  const idMap = tempIds.length > 0 ? getRemoteIdsByClientTempIds(params.db, tempIds) : {};
+  const tempIdList = Array.from(tempIds);
+  const idMap = tempIdList.length > 0 ? getRemoteIdsByClientTempIds(params.db, tempIdList) : {};
 
   if (params.cfg.wsSchedulerEnabled) {
     for (const o of inFlight) {
@@ -166,7 +287,7 @@ export function selectOpsForDispatch(params: {
   const UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
   const LEASE_EXPIRES_AT_PLACEHOLDER = 1700000000000;
 
-  const candidateInfos = candidates.map((c) => {
+  const candidateInfos: DispatchCandidateInfo[] = candidates.map((c) => {
     const opTempIds = collectTempIdsFromPayload(c.op_type, c.payload);
     const missingTempIds: string[] = [];
     for (const id of opTempIds) {
@@ -198,6 +319,20 @@ export function selectOpsForDispatch(params: {
       keys,
       opBytes,
     };
+  });
+
+  const lookaheadSeed = chooseLookaheadSeed({
+    candidates: candidateInfos,
+    maxOpsEffective,
+    maxBytesEffective,
+    maxOpBytesEffective,
+    baseBudgetForEstimate,
+    skipped,
+    estimateBatchBytes,
+    usedKeys,
+    usedTxnIds,
+    wsSchedulerEnabled: params.cfg.wsSchedulerEnabled,
+    isSerialTxn,
   });
 
   // Oversize op: fail-fast and mark it dead to avoid jitter.
@@ -236,8 +371,19 @@ export function selectOpsForDispatch(params: {
   const selectedOps: typeof candidateInfos = [];
   let opBytesSum = 0;
 
-  for (const c of candidateInfos) {
+  for (let index = 0; index < candidateInfos.length; index += 1) {
+    const c = candidateInfos[index]!;
     if (selectedOps.length >= maxOpsEffective) break;
+    if (lookaheadSeed.windowCount > 0 && index < lookaheadSeed.windowCount && !lookaheadSeed.seedIds.has(c.op_id)) {
+      continue;
+    }
+    if (lookaheadSeed.seedIds.has(c.op_id)) {
+      selectedOps.push(c);
+      opBytesSum += c.opBytes;
+      if (c.txn_id && isSerialTxn(c.txn_dispatch_mode)) usedTxnIds.add(c.txn_id);
+      if (params.cfg.wsSchedulerEnabled) for (const k of c.keys) usedKeys.add(k);
+      continue;
+    }
     if (c.txn_id && usedTxnIds.has(c.txn_id)) {
       skipped.txnBusy += 1;
       continue;
@@ -284,15 +430,22 @@ export function selectOpsForDispatch(params: {
     if (params.cfg.wsSchedulerEnabled) for (const k of c.keys) usedKeys.add(k);
   }
 
-  const claimedOps: any[] = [];
   const selectedById = new Map<string, (typeof candidateInfos)[number]>();
   for (const s of selectedOps) selectedById.set(s.op_id, s);
 
-  for (const s of selectedOps) {
-    const claimed = claimOpById(params.db, s.op_id, params.client.connId, s.leaseMs);
-    if (!claimed) continue;
-    claimedOps.push(claimed);
-  }
+  const claimedOps = claimSelectedOpsBatch(params.db, {
+    lockedBy: params.client.connId,
+    selected: selectedOps.map((s) => ({
+      op_id: s.op_id,
+      txn_id: s.txn_id,
+      op_seq: s.op_seq,
+      txn_dispatch_mode: s.txn_dispatch_mode,
+      type: s.op_type,
+      payload_json: s.payload_json,
+      idempotency_key: s.idempotency_key,
+      leaseMs: s.leaseMs,
+    })),
+  });
 
   if (claimedOps.length === 0) return { kind: 'none' };
 
@@ -317,9 +470,7 @@ export function selectOpsForDispatch(params: {
   };
 
   const msg0: any = { type: 'OpDispatchBatch', budget: { ...budget, approxBytes: 0 }, skipped, ops: dispatchItems };
-  let approxBytes = Buffer.byteLength(JSON.stringify(msg0), 'utf8');
-  msg0.budget.approxBytes = approxBytes;
-  approxBytes = Buffer.byteLength(JSON.stringify(msg0), 'utf8');
+  const approxBytes = Buffer.byteLength(JSON.stringify(msg0), 'utf8');
   msg0.budget.approxBytes = approxBytes;
 
   return { kind: 'dispatch', msg: msg0, firstOpId: dispatchItems[0]?.op_id ?? null };

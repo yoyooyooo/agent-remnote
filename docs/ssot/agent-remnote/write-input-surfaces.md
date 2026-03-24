@@ -69,6 +69,7 @@ inventory note：
 
 - `--to <ref>`
 - `--at <placement-spec>`
+- `--at parent:<ref>` 且未显式提供 index 时，portal 默认追加到该父级 tail
 
 限制：
 

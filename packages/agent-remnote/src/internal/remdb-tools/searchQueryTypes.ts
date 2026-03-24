@@ -52,6 +52,14 @@ const tagConditionSchema = z.object({
   includeDescendants: z.boolean().optional(),
 });
 
+const powerupConditionSchema = z.object({
+  type: z.literal('powerup'),
+  powerup: z.object({
+    by: z.enum(['id', 'rcrt']),
+    value: z.string().min(1, 'powerup.value is required'),
+  }),
+});
+
 const remConditionSchema = z.object({
   type: z.literal('rem'),
   id: z.string().min(1, 'rem id is required'),
@@ -65,6 +73,7 @@ export type AttributeOperator = z.infer<typeof attributeOperatorSchema>;
 export type AttributeCondition = z.infer<typeof attributeConditionSchema>;
 export type TextCondition = z.infer<typeof textConditionSchema>;
 export type TagCondition = z.infer<typeof tagConditionSchema>;
+export type PowerupCondition = z.infer<typeof powerupConditionSchema>;
 export type RemCondition = z.infer<typeof remConditionSchema>;
 export type PageCondition = z.infer<typeof pageConditionSchema>;
 
@@ -73,6 +82,7 @@ const queryNodeSchemaInternal: z.ZodTypeAny = z.lazy(() =>
     attributeConditionSchema,
     textConditionSchema,
     tagConditionSchema,
+    powerupConditionSchema,
     remConditionSchema,
     pageConditionSchema,
     z.object({ type: z.literal('not'), node: queryNodeSchemaInternal }),
@@ -83,7 +93,7 @@ const queryNodeSchemaInternal: z.ZodTypeAny = z.lazy(() =>
   ]),
 );
 
-export type QueryLeaf = AttributeCondition | TextCondition | TagCondition | RemCondition | PageCondition;
+export type QueryLeaf = AttributeCondition | TextCondition | TagCondition | PowerupCondition | RemCondition | PageCondition;
 
 export type QueryNode =
   | QueryLeaf
@@ -136,6 +146,8 @@ export function describeQueryNode(node: QueryNode): string {
       return `text contains "${node.value}"`;
     case 'tag':
       return `has tag ${node.id}`;
+    case 'powerup':
+      return `has powerup ${node.powerup.by}:${node.powerup.value}`;
     case 'rem':
       return `target rem is ${node.id}`;
     case 'page':

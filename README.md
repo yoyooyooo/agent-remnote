@@ -35,12 +35,40 @@ This repo is optimized for the “agent calls CLI” workflow, not for humans cl
 ## Use cases (RemNote workflows)
 
 - Find TODOs quickly (read-only): `agent-remnote --json todo list --status unfinished --sort updatedAtDesc --limit 20`
+- Query-owned Todo preset compatibility surface: `agent-remnote --json query --preset todos.list --status unfinished --sort updatedAtDesc --limit 20`
+- Run a host-authoritative query with Powerup sugar: `agent-remnote --json query --powerup "Todo" --text "weekly review"`
 - List built-in powerups (read-only): `agent-remnote --json powerup list`
 - Resolve a powerup (read-only): `agent-remnote --json powerup resolve --powerup "Todo"`
 - Add structured data through the primary table surface: `agent-remnote --json table record add --table-tag "<tag_id>" --parent "<parent_id>" --text "..."`
 - Mark a Rem as Todo (safe write): `agent-remnote --json todo add --rem "<rem_id>" --wait`
 - Dump everything into one place (safe write): `agent-remnote --json rem children append --subject "page:Inbox" --markdown @./note.md`
 - Process external info → summarize → auto-file into RemNote: generate `./summary.md` then `agent-remnote --json rem children append --subject "page:Reading" --markdown @./summary.md`
+
+## Experimental 031 surfaces
+
+These surfaces are available in this worktree for the 031 pilot. They are not current public stable inventory yet.
+
+- Query V2 remote body is canonicalized to `{ query, limit?, offset?, snippetLength? }`. Legacy `queryObj` stays adapter-only.
+- `query --powerup <name>` is authoring sugar. It resolves through a host-authoritative metadata path before execution and never writes the free-text name into canonical Query V2.
+- `query --preset todos.list` is the local compatibility bridge for `todo list -> query --preset`. Remote parity is still promotion-gated, so `apiBaseUrl` mode returns a stable refusal for this preset.
+- Planned `scenario` namespace:
+  - `agent-remnote --json scenario schema validate --spec @./scenario.json`
+  - `agent-remnote --json scenario schema normalize --spec @./scenario.json`
+  - `agent-remnote --json scenario schema explain --spec @./scenario.json --var target_ref=daily:today`
+  - `agent-remnote --json scenario schema generate --hint @./hint.json`
+  - Discover builtin packages:
+    - `agent-remnote --json scenario builtin list`
+  - Seed builtin packages into the user scenario store:
+    - `agent-remnote --json scenario builtin install dn_recent_todos_to_today_move`
+    - `agent-remnote --json scenario builtin install --all --if-missing`
+  - Default user scenario store:
+    - `~/.agent-remnote/scenarios/*.json`
+  - Planned execution shape in this branch:
+    - `agent-remnote --json scenario run builtin:dn_recent_todos_to_today_portal --dry-run`
+    - `agent-remnote --json scenario run user:dn_recent_todos_to_today_portal --dry-run`
+    - bare non-builtin ids resolve from `~/.agent-remnote/scenarios/<id>.json`
+    - `--package <spec>` remains accepted as a compatibility alias
+  - Treat `scenario run` as planned/experimental until promotion preconditions are completed.
 
 ## Installation (users)
 
@@ -258,6 +286,8 @@ agent-remnote --json queue wait --txn "<txn_id>"
 ```
 
 `apply` also expands `markdown` fields inside action/op payloads using the same input-spec semantics as `--markdown`: inline text, `@file`, `-`, and `@@literal`.
+
+For `kind=actions`, the runtime may silently coalesce consecutive, equivalent scalar actions into internal bulk ops to reduce queue / WS / ack overhead. This is caller-neutral: keep using business-semantic actions and do not depend on `ops.length === actions.length`.
 
 ## Usage with AI agents
 

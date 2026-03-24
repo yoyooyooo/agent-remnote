@@ -67,7 +67,7 @@ const uiContextListenerKeys = {
   selection: `${uiContextListenerKeyBase}.selection`,
 } as const;
 
-const DEFAULT_SYNC_CONCURRENCY = 4;
+const DEFAULT_SYNC_CONCURRENCY = 8;
 const DEFAULT_LEASE_MS = 120_000;
 const DEFAULT_REQUEST_MAX_BYTES = 512_000;
 const DEFAULT_REQUEST_MAX_OP_BYTES = 256_000;
@@ -101,6 +101,17 @@ function computeRequestOpsRetryDelayMs(streak: number): number {
   return Math.min(REQUEST_OPS_RETRY_MAX_DELAY_MS, backoff);
 }
 
+export function resolveSyncConcurrencySetting(raw: unknown): number {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 1) {
+    return Math.min(16, Math.floor(raw));
+  }
+  return DEFAULT_SYNC_CONCURRENCY;
+}
+
+export function computePostOpYieldDelayMs(_processed: number): number {
+  return 0;
+}
+
 type PendingAck = {
   readonly key: string;
   readonly op_id: string;
@@ -119,6 +130,11 @@ let ackFlushTimer: any = null;
 const ACK_WAIT_TIMEOUT_MS = 1500;
 const ACK_RETRY_MIN_DELAY_MS = 600;
 const ACK_RETRY_MAX_DELAY_MS = 5000;
+
+type AckFlushMessage = {
+  readonly ws: WebSocket;
+  readonly payload: any;
+};
 
 const leaseExtendRejections = new Map<string, { readonly reason: string; readonly at: number }>();
 const leaseExtendListenerInstalled = new WeakSet<WebSocket>();
@@ -188,6 +204,36 @@ export function __getRuntimeStateForTests() {
 
 function ackKey(opId: string, attemptId: string): string {
   return `${opId}:${attemptId}`;
+}
+
+export function buildAckFlushMessagesForTests(
+  entries: readonly {
+    readonly ws: WebSocket;
+    readonly payload: any;
+  }[],
+): readonly AckFlushMessage[] {
+  const grouped = new Map<WebSocket, any[]>();
+  for (const entry of entries) {
+    const current = grouped.get(entry.ws) ?? [];
+    current.push(entry.payload);
+    grouped.set(entry.ws, current);
+  }
+
+  const messages: AckFlushMessage[] = [];
+  for (const [ws, payloads] of grouped.entries()) {
+    if (payloads.length <= 1) {
+      messages.push({ ws, payload: payloads[0] ?? null });
+      continue;
+    }
+    messages.push({
+      ws,
+      payload: {
+        type: 'OpAckBatch',
+        items: payloads,
+      },
+    });
+  }
+  return messages;
 }
 
 function ensureLeaseExtendListener(ws: WebSocket) {
@@ -262,14 +308,7 @@ function ensureAckListener(ws: WebSocket) {
   if (ackListenerInstalled.has(ws)) return;
   ackListenerInstalled.add(ws);
 
-  ws.addEventListener('message', (ev) => {
-    let msg: any;
-    try {
-      msg = JSON.parse(String((ev as any)?.data));
-    } catch {
-      return;
-    }
-
+  const handleAckResponseMessage = (msg: any) => {
     if (msg?.type !== 'AckOk' && msg?.type !== 'AckRejected') return;
 
     const opId = typeof msg?.op_id === 'string' ? msg.op_id : typeof msg?.opId === 'string' ? msg.opId : '';
@@ -290,11 +329,26 @@ function ensureAckListener(ws: WebSocket) {
     }
 
     if (msg.type === 'AckRejected') {
-      // Avoid toast storms; emit a low-noise diagnostic event.
       try {
         console.warn('[agent-remnote][ack] rejected', { opId, attemptId, reason: msg?.reason, current: msg?.current });
       } catch {}
     }
+  };
+
+  ws.addEventListener('message', (ev) => {
+    let msg: any;
+    try {
+      msg = JSON.parse(String((ev as any)?.data));
+    } catch {
+      return;
+    }
+
+    if (msg?.type === 'AckBatch' && Array.isArray(msg?.items)) {
+      for (const item of msg.items) handleAckResponseMessage(item);
+      return;
+    }
+
+    handleAckResponseMessage(msg);
   });
 }
 
@@ -303,11 +357,13 @@ function scheduleAckFlush() {
   ackFlushTimer = setTimeout(() => {
     ackFlushTimer = null;
     flushPendingAcks();
-  }, 300);
+  }, 0);
 }
 
 function flushPendingAcks() {
   const now = Date.now();
+  const due: PendingAck[] = [];
+
   for (const ack of pendingAcks.values()) {
     if (!ack.ws || ack.ws.readyState !== WebSocket.OPEN) {
       pendingAcks.delete(ack.key);
@@ -315,10 +371,26 @@ function flushPendingAcks() {
     }
     if (now < ack.nextRetryAt) continue;
 
-    try {
-      send(ack.ws, ack.payload);
-    } catch {}
+    due.push(ack);
+  }
 
+  const messages = buildAckFlushMessagesForTests(
+    due.map((ack) => ({
+      ws: ack.ws,
+      payload: ack.payload,
+    })),
+  );
+
+  for (const message of messages) {
+    try {
+      send(message.ws, message.payload);
+    } catch {}
+  }
+
+  for (const ack of due) {
+    try {
+      // no-op; send already attempted in grouped flush above
+    } catch {}
     ack.retries += 1;
     const backoff = Math.min(ACK_RETRY_MAX_DELAY_MS, ACK_RETRY_MIN_DELAY_MS + ack.retries * 500);
     ack.nextRetryAt = now + backoff;
@@ -359,13 +431,11 @@ async function sendAckWithConfirm(ws: WebSocket, payload: any, timeoutMs = ACK_W
     ws,
     payload,
     retries: 0,
-    nextRetryAt: Date.now() + ACK_RETRY_MIN_DELAY_MS,
+    nextRetryAt: Date.now(),
   });
 
   const waiter = waitForAck(key, timeoutMs);
-  try {
-    send(ws, payload);
-  } catch {}
+  scheduleAckFlush();
 
   const msg = await waiter;
   if (!msg) {
@@ -1287,7 +1357,7 @@ export async function runSyncLoop(
     let maxConcurrency = DEFAULT_SYNC_CONCURRENCY;
     try {
       const raw = await plugin.settings.getSetting<number>(BRIDGE_SETTING_IDS.syncConcurrency);
-      if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 1) maxConcurrency = Math.min(16, Math.floor(raw));
+      maxConcurrency = resolveSyncConcurrencySetting(raw);
     } catch {}
 
     const inFlight = new Map<string, Promise<void>>();
@@ -1333,8 +1403,9 @@ export async function runSyncLoop(
           release?.();
         } catch {}
         processed += 1;
-        if (processed % 10 === 0) {
-          await sleep(50);
+        const yieldDelayMs = computePostOpYieldDelayMs(processed);
+        if (yieldDelayMs > 0) {
+          await sleep(yieldDelayMs);
         }
       }
     };
