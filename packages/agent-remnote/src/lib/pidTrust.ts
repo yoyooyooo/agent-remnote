@@ -13,14 +13,37 @@ function normalizeToken(value: string): string {
   return value.trim().replace(/\\/g, '/').toLowerCase();
 }
 
+function collectCommandTokens(raw: readonly string[]): string[] {
+  const out = new Set<string>();
+
+  for (const item of raw) {
+    const normalized = normalizeToken(String(item ?? ''));
+    if (!normalized) continue;
+
+    const unquoted = normalized.replace(/^['"]|['"]$/g, '');
+    const base = path.basename(unquoted);
+
+    if (unquoted.includes('agent-remnote') || base.includes('agent-remnote')) {
+      out.add('agent-remnote');
+    }
+    if (base === 'node' || base === 'node.exe') out.add('node');
+    if (base === 'tsx' || base === 'tsx.cmd') out.add('tsx');
+    if (base.endsWith('.js') || base.endsWith('.ts')) out.add(base);
+    if (!unquoted.startsWith('-') && !unquoted.includes('/')) out.add(unquoted);
+  }
+
+  out.add('agent-remnote');
+  return Array.from(out);
+}
+
 function expectedTokens(record: PidRecord): string[] {
   const raw = Array.isArray(record.cmd) ? record.cmd : [];
-  const out = raw
-    .map((item) => normalizeToken(String(item ?? '')))
-    .filter(Boolean)
-    .map((item) => path.basename(item))
-    .filter((item) => item === 'node' || item === 'tsx' || item.endsWith('.js') || item.endsWith('.ts') || item.includes('agent-remnote'));
-  return Array.from(new Set(out));
+  return collectCommandTokens(raw);
+}
+
+function actualTokens(commandLine: string): Set<string> {
+  const parts = commandLine.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+  return new Set(collectCommandTokens(parts));
 }
 
 export function isTrustedPidRecord(record: PidRecord): Effect.Effect<boolean, never, Process> {
@@ -29,16 +52,13 @@ export function isTrustedPidRecord(record: PidRecord): Effect.Effect<boolean, ne
     const alive = yield* proc.isPidRunning(record.pid);
     if (!alive) return false;
 
-    if (!proc.getCommandLine) return true;
+    if (!proc.getCommandLine) return false;
     const commandLine = yield* proc.getCommandLine(record.pid);
     if (!commandLine) return false;
 
-    const normalizedActual = normalizeToken(commandLine);
     const expected = expectedTokens(record);
-    if (expected.length === 0) {
-      return normalizedActual.includes('agent-remnote');
-    }
-    return expected.every((token) => normalizedActual.includes(token));
+    const actual = actualTokens(commandLine);
+    return expected.every((token) => actual.has(token));
   });
 }
 

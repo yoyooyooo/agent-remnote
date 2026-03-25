@@ -17,8 +17,10 @@ describe('cli contract: daemon restart cleans up display artifacts', () => {
     const wsBridgeStateFile = path.join(artifactsDir, 'ws.bridge.state.json');
     const statusLineFile = path.join(artifactsDir, 'status-line.txt');
     const statusLineJsonFile = path.join(artifactsDir, 'status-line.json');
+    const runtimeScript = path.join(tmpDir, 'agent-remnote-runtime.js');
 
-    const dummy = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    await fs.writeFile(runtimeScript, 'setInterval(() => {}, 1000);\n', 'utf8');
+    const dummy = spawn(process.execPath, [runtimeScript, 'daemon', 'supervisor'], { stdio: 'ignore' });
     if (!dummy.pid) throw new Error('failed to spawn dummy process');
 
     const wss = new WebSocketServer({ port: 0, host: '127.0.0.1', path: '/ws' });
@@ -78,7 +80,7 @@ describe('cli contract: daemon restart cleans up display artifacts', () => {
           ws_bridge_state_file: wsBridgeStateFile,
           status_line_file: statusLineFile,
           status_line_json_file: statusLineJsonFile,
-          cmd: ['node', '-e', '...'],
+          cmd: [process.execPath, runtimeScript, 'daemon', 'supervisor'],
         }),
         'utf8',
       );

@@ -11,8 +11,10 @@ describe('cli contract: daemon stop respects REMNOTE_DAEMON_PID_FILE when --pid-
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-cli-test-'));
     const pidFile = path.join(tmpDir, 'ws.pid');
     const stateFile = path.join(tmpDir, 'ws.state.json');
+    const runtimeScript = path.join(tmpDir, 'agent-remnote-runtime.js');
 
-    const dummy = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    await fs.writeFile(runtimeScript, 'setInterval(() => {}, 1000);\n', 'utf8');
+    const dummy = spawn(process.execPath, [runtimeScript, 'daemon', 'supervisor'], { stdio: 'ignore' });
     if (!dummy.pid) throw new Error('failed to spawn dummy process');
 
     try {
@@ -26,7 +28,7 @@ describe('cli contract: daemon stop respects REMNOTE_DAEMON_PID_FILE when --pid-
           ws_url: 'ws://localhost:0/ws',
           log_file: path.join(tmpDir, 'ws.log'),
           state_file: stateFile,
-          cmd: ['node', '-e', '...'],
+          cmd: [process.execPath, runtimeScript, 'daemon', 'supervisor'],
         }),
         'utf8',
       );

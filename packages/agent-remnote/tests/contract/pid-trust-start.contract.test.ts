@@ -32,7 +32,7 @@ async function getFreePort(): Promise<number> {
 }
 
 function trustedCmdStub(kind: 'daemon' | 'api' | 'plugin'): string[] {
-  const base = ['/usr/local/bin/node', '--import', 'tsx', '/tmp/agent-remnote/src/main.ts'];
+  const base = [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts')];
   if (kind === 'daemon') return [...base, 'daemon', 'supervisor'];
   if (kind === 'api') return [...base, 'api', 'serve'];
   return [...base, 'plugin', 'serve'];

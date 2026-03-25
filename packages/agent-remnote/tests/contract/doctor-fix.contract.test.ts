@@ -27,14 +27,21 @@ async function createDeadPid(): Promise<number> {
   const pid = child.pid;
   if (!pid) throw new Error('failed to create dummy pid');
   child.kill('SIGKILL');
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 2000);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`dummy pid ${pid} did not exit in time`)), 2000);
     child.once('exit', () => {
       clearTimeout(timer);
       resolve();
     });
   });
   return pid;
+}
+
+function trustedCmdStub(kind: 'daemon' | 'api' | 'plugin'): string[] {
+  const base = [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts')];
+  if (kind === 'daemon') return [...base, 'daemon', 'supervisor'];
+  if (kind === 'api') return [...base, 'api', 'serve'];
+  return [...base, 'plugin', 'serve'];
 }
 
 describe('cli contract: doctor --fix', () => {
@@ -181,6 +188,75 @@ describe('cli contract: doctor --fix', () => {
       const current = await fs.readFile(configFile, 'utf8');
       expect(current.trim()).toBe(original.trim());
     } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }, 40_000);
+
+  it('cleans live but untrusted runtime artifacts using recorded state_file paths', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-doctor-fix-live-untrusted-'));
+    const tmpHome = path.join(tmpDir, 'home');
+    const stateDir = path.join(tmpHome, '.agent-remnote');
+    const remnoteDb = path.join(tmpDir, 'remnote.db');
+    const daemonPid = path.join(stateDir, 'ws.pid');
+    const apiPid = path.join(stateDir, 'api.pid');
+    const pluginPid = path.join(stateDir, 'plugin-server.pid');
+    const runtimeStateDir = path.join(stateDir, 'custom-runtime');
+    const daemonState = path.join(runtimeStateDir, 'ws-custom.state.json');
+    const apiState = path.join(runtimeStateDir, 'api-custom.state.json');
+    const pluginState = path.join(runtimeStateDir, 'plugin-custom.state.json');
+    const dummy = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    if (!dummy.pid) throw new Error('failed to spawn dummy process');
+
+    try {
+      createMinimalRemnoteDb(remnoteDb);
+      await fs.mkdir(stateDir, { recursive: true });
+      await fs.mkdir(runtimeStateDir, { recursive: true });
+
+      await fs.writeFile(
+        daemonPid,
+        JSON.stringify({ pid: dummy.pid, mode: 'supervisor', state_file: daemonState, cmd: trustedCmdStub('daemon') }, null, 2),
+        'utf8',
+      );
+      await fs.writeFile(
+        apiPid,
+        JSON.stringify({ pid: dummy.pid, state_file: apiState, cmd: trustedCmdStub('api') }, null, 2),
+        'utf8',
+      );
+      await fs.writeFile(
+        pluginPid,
+        JSON.stringify({ pid: dummy.pid, state_file: pluginState, cmd: trustedCmdStub('plugin') }, null, 2),
+        'utf8',
+      );
+      await fs.writeFile(daemonState, JSON.stringify({ status: 'running' }, null, 2), 'utf8');
+      await fs.writeFile(apiState, JSON.stringify({ running: true, pid: dummy.pid }, null, 2), 'utf8');
+      await fs.writeFile(pluginState, JSON.stringify({ running: true, pid: dummy.pid }, null, 2), 'utf8');
+
+      const res = await runCli(['--json', '--remnote-db', remnoteDb, 'doctor', '--fix'], {
+        env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
+        timeoutMs: 30_000,
+      });
+
+      expect(res.exitCode).toBe(0);
+      expect(res.stderr).toBe('');
+
+      const parsed = JSON.parse(res.stdout.trim());
+      expect(parsed.ok).toBe(true);
+      const runtimeFix = (parsed.data?.fixes ?? []).find((item: any) => item.id === 'runtime.cleanup_stale_artifacts');
+      expect(runtimeFix?.ok).toBe(true);
+      expect(runtimeFix?.changed).toBe(true);
+
+      await expect(fs.stat(daemonPid)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat(apiPid)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat(pluginPid)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat(daemonState)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat(apiState)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat(pluginState)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      expect(() => process.kill(dummy.pid!, 0)).not.toThrow();
+    } finally {
+      try {
+        dummy.kill('SIGKILL');
+      } catch {}
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   }, 40_000);

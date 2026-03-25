@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as Effect from 'effect/Effect';
+import os from 'node:os';
+import path from 'node:path';
 
 import { stopPluginServer } from '../../src/commands/plugin/stop.js';
 import { PluginServerFiles } from '../../src/services/PluginServerFiles.js';
@@ -11,6 +13,7 @@ describe('plugin stop (unit)', () => {
     const deletedPidFiles: string[] = [];
     const deletedStateFiles: string[] = [];
     let waited = false;
+    const runtimeScript = path.join(os.tmpdir(), 'agent-remnote-plugin-runtime.js');
 
     const result = await Effect.runPromise(
       stopPluginServer({
@@ -26,6 +29,7 @@ describe('plugin stop (unit)', () => {
             Effect.succeed({
               pid: 123,
               state_file: '/tmp/plugin-server.state.json',
+              cmd: [process.execPath, runtimeScript, 'plugin', 'serve'],
             }),
           writePidFile: () => Effect.void,
           deletePidFile: (filePath) =>
@@ -41,6 +45,7 @@ describe('plugin stop (unit)', () => {
         }),
         Effect.provideService(Process, {
           isPidRunning: () => Effect.succeed(true),
+          getCommandLine: () => Effect.succeed(`${process.execPath} ${runtimeScript} plugin serve`),
           spawnDetached: () =>
             Effect.fail(new CliError({ code: 'INTERNAL', message: 'unexpected spawnDetached', exitCode: 1 })),
           kill: () =>

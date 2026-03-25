@@ -444,7 +444,7 @@ agent-remnote --json plugin restart
 
 - 清理 stale daemon / api / plugin pid 或 state 文件
 - 把支持的用户配置形态重写成 canonical keys
-- 复检 builtin scenarios 与 plugin artifacts 的发布包完整性
+- 把发布包完整性检查留在 `doctor` 诊断输出中汇报
 - 汇报 `restart_summary`，但默认不自动重启后台服务
 
 `doctor --fix` 不会修改 queue 内容、`remnote.db` 或用户内容数据。

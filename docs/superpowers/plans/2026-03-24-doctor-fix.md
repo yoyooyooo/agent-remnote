@@ -53,7 +53,7 @@
 
 - [ ] Add typed doctor check/fix models
 - [ ] Implement read-only checks for the first 6 stable ids
-- [ ] Implement safe repair pipeline for stale pid/state and lifecycle restart
+- [ ] Implement safe repair pipeline for stale pid/state cleanup and restart-summary reporting (no automatic restart)
 - [ ] Implement doctor command rendering for diagnostics-only and fix mode
 - [ ] Run targeted doctor tests and verify GREEN
 

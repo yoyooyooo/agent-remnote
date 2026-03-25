@@ -444,7 +444,7 @@ agent-remnote --json plugin restart
 
 - cleans stale daemon/api/plugin pid or state files
 - rewrites supported user config shapes into canonical keys
-- re-checks packaged builtin scenarios and plugin artifacts
+- leaves package integrity checks to diagnostic checks reported by `doctor`
 - reports `restart_summary` without auto-restarting background services
 
 `doctor --fix` does not modify queue contents, `remnote.db`, or user content.
