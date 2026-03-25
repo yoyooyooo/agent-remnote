@@ -187,6 +187,20 @@ RemNote 官方资料：
 - 改 plugin 写入逻辑：通常还要 `npm run build --workspace @remnote/plugin`
 - 改 WS / queue / Host API：跑对应 contract / integration / runtime tests
 
+## Turbo / 增量验证
+
+- 根脚本已经提供 Turbo 入口：
+  - 全仓：`npm run test:turbo`、`npm run typecheck:turbo`、`npm run lint:turbo`
+  - 增量：`npm run test:turbo:affected`、`npm run typecheck:turbo:affected`、`npm run lint:turbo:affected`
+- agent 默认规则：
+  - 只改少量文件时，优先跑 `*:turbo:affected`
+  - 改 CLI 契约、协议、runtime、发布链路、workspace 配置、共享脚本时，必须补一轮全仓验证
+- `*:turbo:affected` 依赖本地 `origin/master` 基线；运行前可先：
+  - `git fetch origin master`
+- 若需要一次性全量收口，可用：
+  - `npm run check:turbo`
+  - `npm run check:turbo:affected`
+
 ## 常用路径与端口
 
 - WS：`ws://localhost:6789/ws`
