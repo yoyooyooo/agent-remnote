@@ -144,7 +144,7 @@ If you want callers to access RemNote through the host, do not mount `remnote.db
 
 ```bash
 agent-remnote stack ensure
-agent-remnote api status --json
+agent-remnote --json api status
 ```
 
 Direct HTTP:
@@ -418,6 +418,7 @@ agent-remnote --json plugin status
 agent-remnote --json api status
 agent-remnote --json stack status
 agent-remnote --json doctor
+agent-remnote --json doctor --fix
 ```
 
 What they now expose:
@@ -427,6 +428,9 @@ What they now expose:
 - `clients[].runtime` or `active_worker.runtime`: the live RemNote plugin build when connected
 - `warnings`: explicit mismatch hints when you are still talking to an old daemon/api/plugin
 - `doctor.queue.schema`: current and supported store schema versions
+- `doctor.checks[]`: stable diagnostic ids for runtime/config/package/env checks
+- `doctor.fixes[]`: safe repair actions applied by `doctor --fix`
+- `doctor.restart_summary`: best-effort runtime restart results after safe repair
 
 If you still see old `build_id` values after code changes, restart the affected process:
 
@@ -435,6 +439,21 @@ agent-remnote --json daemon restart --wait 15000
 agent-remnote --json api restart
 agent-remnote --json plugin restart
 ```
+
+`doctor --fix` stays inside the safe repair boundary:
+
+- cleans stale daemon/api/plugin pid or state files
+- rewrites supported user config shapes into canonical keys
+- re-checks packaged builtin scenarios and plugin artifacts
+- reports `restart_summary` without auto-restarting background services
+
+`doctor --fix` does not modify queue contents, `remnote.db`, or user content.
+
+Packaged release guarantees:
+
+- installed npm packages must load builtin scenarios without source-tree assumptions
+- packaged plugin artifacts are part of the release integrity check
+- successful `search --json` calls print a single JSON envelope to stdout
 
 ## Optional: tmux statusline (RN segment)
 
@@ -497,7 +516,7 @@ flowchart LR
 - WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` (default: `~/.agent-remnote/ws.bridge.state.json`)
 - Daemon pidfile (env-only): `REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE` (default: `~/.agent-remnote/ws.pid`)
 - Daemon log file (env-only): `REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE` (default: `~/.agent-remnote/ws.log`)
-- Active worker (auto): determined by recent RemNote UI activity (selection/uiContext); inspect via `agent-remnote daemon status --json` (`activeWorkerConnId`)
+- Active worker (auto): determined by recent RemNote UI activity (selection/uiContext); inspect via `agent-remnote --json daemon status` (`activeWorkerConnId`)
 - repo: `--repo` / `AGENT_REMNOTE_REPO`
 - WS scheduler (env-only): `REMNOTE_WS_SCHEDULER` (set to `0` to disable conflict-aware scheduling; debug only)
 - tmux refresh (env-only): `REMNOTE_TMUX_REFRESH` / `REMNOTE_TMUX_REFRESH_MIN_INTERVAL_MS`

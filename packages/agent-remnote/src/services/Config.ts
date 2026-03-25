@@ -175,6 +175,44 @@ function isConfigCommandInvocation(argv: readonly string[]): boolean {
   return tokens[i] === 'config';
 }
 
+function isDoctorCommandInvocation(argv: readonly string[]): boolean {
+  const tokens = argv.slice(2);
+  let i = 0;
+  while (i < tokens.length) {
+    const raw = String(tokens[i] ?? '');
+    if (!raw) break;
+    if (raw === '--') {
+      i += 1;
+      break;
+    }
+    if (!raw.startsWith('-')) break;
+
+    const { flag, inlineValue } = splitFlagInlineValue(raw);
+
+    if (ROOT_VALUE_FLAGS.has(flag)) {
+      i += inlineValue !== null ? 1 : 2;
+      continue;
+    }
+
+    if (ROOT_BOOL_FLAGS.has(flag) || BUILTIN_BOOL_FLAGS.has(flag)) {
+      if (inlineValue !== null) {
+        i += 1;
+        continue;
+      }
+      const next = tokens[i + 1];
+      if (typeof next === 'string' && isBooleanLiteralToken(next)) {
+        i += 2;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+
+    break;
+  }
+  return tokens[i] === 'doctor';
+}
+
 export function normalizeApiBasePath(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '/v1';
@@ -441,6 +479,24 @@ function readUserConfigFile(configFile: string): {
     });
   }
 
+  const normalizedApiBaseUrl =
+    apiBaseUrl === undefined
+      ? undefined
+      : (() => {
+          const normalized = normalizeApiBaseUrl(apiBaseUrl);
+          const rootNormalized = typeof config.apiBaseUrl === 'string' ? normalizeApiBaseUrl(config.apiBaseUrl) : undefined;
+          const nestedNormalized = typeof nestedBaseUrl === 'string' ? normalizeApiBaseUrl(nestedBaseUrl) : undefined;
+          if (rootNormalized && nestedNormalized && rootNormalized !== nestedNormalized) {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config keys apiBaseUrl and api.baseUrl conflict: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalized;
+        })();
+
   const apiHost =
     apiHostRaw === undefined
       ? undefined
@@ -453,7 +509,18 @@ function readUserConfigFile(configFile: string): {
               details: { config_file: file },
             });
           }
-          return normalizeApiHost(apiHostRaw);
+          const normalized = normalizeApiHost(apiHostRaw);
+          const rootNormalized = typeof config.apiHost === 'string' ? normalizeApiHost(config.apiHost) : undefined;
+          const nestedNormalized = typeof nestedHost === 'string' ? normalizeApiHost(nestedHost) : undefined;
+          if (rootNormalized !== undefined && nestedNormalized !== undefined && rootNormalized !== nestedNormalized) {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config keys apiHost and api.host conflict: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalized;
         })();
 
   const apiPort =
@@ -468,7 +535,22 @@ function readUserConfigFile(configFile: string): {
               details: { config_file: file },
             });
           }
-          return normalizeApiPort(apiPortRaw);
+          const normalized = normalizeApiPort(apiPortRaw);
+          const rootNormalized =
+            typeof config.apiPort === 'number' || typeof config.apiPort === 'string'
+              ? normalizeApiPort(config.apiPort)
+              : undefined;
+          const nestedNormalized =
+            typeof nestedPort === 'number' || typeof nestedPort === 'string' ? normalizeApiPort(nestedPort) : undefined;
+          if (rootNormalized !== undefined && nestedNormalized !== undefined && rootNormalized !== nestedNormalized) {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config keys apiPort and api.port conflict: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalized;
         })();
 
   const apiBasePath =
@@ -483,14 +565,25 @@ function readUserConfigFile(configFile: string): {
               details: { config_file: file },
             });
           }
-          return normalizeApiBasePath(apiBasePathRaw);
+          const normalized = normalizeApiBasePath(apiBasePathRaw);
+          const rootNormalized = typeof config.apiBasePath === 'string' ? normalizeApiBasePath(config.apiBasePath) : undefined;
+          const nestedNormalized = typeof nestedBasePath === 'string' ? normalizeApiBasePath(nestedBasePath) : undefined;
+          if (rootNormalized !== undefined && nestedNormalized !== undefined && rootNormalized !== nestedNormalized) {
+            throw new CliError({
+              code: 'INVALID_ARGS',
+              message: `Config keys apiBasePath and api.basePath conflict: ${file}`,
+              exitCode: 2,
+              details: { config_file: file },
+            });
+          }
+          return normalized;
         })();
 
   if (apiBaseUrl === undefined && apiHost === undefined && apiPort === undefined && apiBasePath === undefined) {
     return {};
   }
 
-  return { apiBaseUrl, apiHost, apiPort, apiBasePath };
+  return { apiBaseUrl: normalizedApiBaseUrl, apiHost, apiPort, apiBasePath };
 }
 
 export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
@@ -514,7 +607,7 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
     const userConfig =
       userConfigResult._tag === 'Right'
         ? userConfigResult.right
-        : isConfigCommandInvocation(process.argv)
+        : isConfigCommandInvocation(process.argv) || isDoctorCommandInvocation(process.argv)
           ? {}
           : yield* Effect.fail(userConfigResult.left);
 

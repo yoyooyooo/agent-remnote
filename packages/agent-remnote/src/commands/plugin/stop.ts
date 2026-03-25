@@ -7,6 +7,7 @@ import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { CliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { PLUGIN_SERVER_STOP_WAIT_DEFAULT_MS } from './_shared.js';
 
@@ -50,7 +51,7 @@ export function stopPluginServer(params: {
     const cleanupStale = () =>
       Effect.gen(function* () {
         yield* files.deletePidFile(params.pidFilePath);
-        yield* files.deleteStateFile(existing.state_file ?? params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+        yield* files.deleteStateFile(params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
         return {
           stopped: true as const,
           stale: true as const,
@@ -64,6 +65,7 @@ export function stopPluginServer(params: {
       return yield* cleanupStale();
     }
 
+    yield* requireTrustedPidRecord({ record: existing, pidFilePath: params.pidFilePath });
     const termResult = yield* proc.kill(existing.pid, 'SIGTERM').pipe(Effect.either);
     if (termResult._tag === 'Left') {
       if (isEsrch(termResult.left)) {
@@ -99,7 +101,7 @@ export function stopPluginServer(params: {
     }
 
     yield* files.deletePidFile(params.pidFilePath);
-    yield* files.deleteStateFile(existing.state_file ?? params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+    yield* files.deleteStateFile(params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
     return {
       stopped: true as const,
       pid: existing.pid,

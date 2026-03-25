@@ -9,6 +9,7 @@ import { DaemonFiles } from '../../services/DaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { cleanupStatuslineArtifacts, resolveStatuslineArtifactPaths } from '../../lib/statuslineArtifacts.js';
 import { refreshTmuxStatusLine } from '../../lib/tmux.js';
@@ -17,6 +18,42 @@ import { WS_STOP_WAIT_DEFAULT_MS } from './_shared.js';
 
 function optionToUndefined<A>(opt: Option.Option<A>): A | undefined {
   return Option.isSome(opt) ? opt.value : undefined;
+}
+
+function resolveManagedStateFile(params: {
+  readonly pidFilePath: string;
+  readonly defaultStateFilePath: string;
+  readonly candidate?: string | undefined;
+}): string {
+  const candidate = params.candidate ? resolveUserFilePath(params.candidate) : undefined;
+  if (!candidate) return resolveUserFilePath(params.defaultStateFilePath);
+  if (candidate === resolveUserFilePath(params.defaultStateFilePath)) return candidate;
+  return path.dirname(candidate) === path.dirname(params.pidFilePath)
+    ? candidate
+    : resolveUserFilePath(params.defaultStateFilePath);
+}
+
+function isWithinRoot(rootDir: string, targetPath: string): boolean {
+  const rel = path.relative(rootDir, targetPath);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function sanitizePidInfoForArtifacts(params: {
+  readonly pidFilePath: string;
+  readonly pidInfo: any;
+}) {
+  const rootDir = path.dirname(params.pidFilePath);
+  const normalizeMaybe = (value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const resolved = resolveUserFilePath(value);
+    return isWithinRoot(rootDir, resolved) ? resolved : undefined;
+  };
+  return {
+    ...params.pidInfo,
+    ws_bridge_state_file: normalizeMaybe((params.pidInfo as any).ws_bridge_state_file),
+    status_line_file: normalizeMaybe((params.pidInfo as any).status_line_file),
+    status_line_json_file: normalizeMaybe((params.pidInfo as any).status_line_json_file),
+  };
 }
 
 const pidFile = Options.text('pid-file').pipe(Options.optional, Options.map(optionToUndefined));
@@ -33,7 +70,10 @@ export const wsStopCommand = Command.make('stop', { force: Options.boolean('forc
 
     const cleanupDisplayArtifacts = (pidInfo?: typeof existing) =>
       Effect.gen(function* () {
-        const paths = resolveStatuslineArtifactPaths({ cfg, pidInfo });
+        const paths = resolveStatuslineArtifactPaths({
+          cfg,
+          pidInfo: pidInfo ? sanitizePidInfoForArtifacts({ pidFilePath, pidInfo }) : undefined,
+        });
         const cleanup = yield* cleanupStatuslineArtifacts(paths);
         yield* Effect.sync(() => refreshTmuxStatusLine());
         return cleanup;
@@ -48,9 +88,11 @@ export const wsStopCommand = Command.make('stop', { force: Options.boolean('forc
       return;
     }
 
-    const stateFilePath = resolveUserFilePath(
-      existing.state_file ?? path.join(path.dirname(pidFilePath), 'ws.state.json'),
-    );
+    const stateFilePath = resolveManagedStateFile({
+      pidFilePath,
+      defaultStateFilePath: supervisorState.defaultStateFile(),
+      candidate: existing.state_file,
+    });
 
     const alive = yield* proc.isPidRunning(existing.pid);
     if (!alive) {
@@ -64,6 +106,7 @@ export const wsStopCommand = Command.make('stop', { force: Options.boolean('forc
       return;
     }
 
+    yield* requireTrustedPidRecord({ record: existing, pidFilePath });
     yield* proc.kill(existing.pid, 'SIGTERM');
     const exited = yield* proc.waitForExit({ pid: existing.pid, timeoutMs: WS_STOP_WAIT_DEFAULT_MS });
     if (!exited) {

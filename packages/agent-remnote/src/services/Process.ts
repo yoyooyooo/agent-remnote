@@ -1,7 +1,7 @@
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -9,6 +9,7 @@ import { CliError, isCliError } from './Errors.js';
 
 export interface ProcessService {
   readonly isPidRunning: (pid: number) => Effect.Effect<boolean>;
+  readonly getCommandLine?: ((pid: number) => Effect.Effect<string | undefined>) | undefined;
   readonly spawnDetached: (params: {
     readonly command: string;
     readonly args: readonly string[];
@@ -37,6 +38,41 @@ export const ProcessLive = Layer.succeed(Process, {
         if (error?.code === 'EPERM') return true;
         return false;
       }
+    }),
+  getCommandLine: (pid) =>
+    Effect.async<string | undefined>((resume) => {
+      if (!Number.isFinite(pid) || pid <= 0) {
+        resume(Effect.succeed(undefined));
+        return;
+      }
+
+      const finish = (value: string | undefined) => resume(Effect.succeed(value));
+
+      if (process.platform === 'win32') {
+        execFile(
+          'powershell.exe',
+          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`],
+          { windowsHide: true },
+          (error, stdout) => {
+            if (error) {
+              finish(undefined);
+              return;
+            }
+            const text = String(stdout ?? '').trim();
+            finish(text || undefined);
+          },
+        );
+        return;
+      }
+
+      execFile('ps', ['-p', String(pid), '-o', 'command='], (error, stdout) => {
+        if (error) {
+          finish(undefined);
+          return;
+        }
+        const text = String(stdout ?? '').trim();
+        finish(text || undefined);
+      });
     }),
   spawnDetached: (params) =>
     Effect.try({
