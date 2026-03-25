@@ -63,12 +63,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Verify release inputs
-        run: npm run release:check
-
       - name: Version packages or publish
         uses: changesets/action@v1
         with:
+          # This workflow runs on workflow_run with a detached HEAD checkout of
+          # the already-green CI commit. Re-running changeset status here is
+          # redundant with CI and can fail because branch divergence metadata is
+          # unavailable in this checkout mode.
           version: npm run version-packages
           publish: npm run release
           title: 'chore(release): version packages'
