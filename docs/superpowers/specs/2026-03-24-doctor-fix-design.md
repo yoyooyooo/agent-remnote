@@ -64,9 +64,10 @@ Each check must include:
 Safe default repairs:
 
 - Remove stale daemon/api/plugin pid or state files when the referenced process is no longer alive
+- Restart trusted live daemon/api/plugin runtimes when their build metadata is mismatched and ownership can be proven safely
 - Normalize and rewrite supported config keys into canonical user config
 - Repair packaged builtin-scenarios resolution when the installed package layout is valid but the runtime locator is wrong
-- Report `restart_summary` without automatically restarting background runtime services
+- Report `restart_summary`, including restarted, skipped, and failed runtime actions
 
 Diagnostics only:
 

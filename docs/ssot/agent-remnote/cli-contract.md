@@ -321,8 +321,9 @@ Wave 1 runtime shape：
   - `restart_summary`
 - `doctor --fix` 是 `doctor` 的安全修复模式：
   - 允许清理 stale daemon/api/plugin pid/state 文件
+  - 允许在 pid 归属可信且状态文件位于受管路径时，自动重启 build metadata 明确不匹配的 daemon/api/plugin 运行时
   - 允许把支持的用户配置形态重写成 canonical keys
-  - 允许汇报 `restart_summary`，但默认不自动重启 runtime 服务
+  - 允许汇报 `restart_summary`，其中必须区分 `restarted` / `skipped` / `failed`
   - 禁止修改 queue 内容、`remnote.db` 与用户内容数据
 
 ## 9) packaged runtime guarantees
