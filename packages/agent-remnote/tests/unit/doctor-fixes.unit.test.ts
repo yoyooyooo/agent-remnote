@@ -298,6 +298,11 @@ describe('doctor fixes (unit)', () => {
     expect(restartFix?.changed).toBe(true);
     expect((restartFix?.details as any)?.restarted).toEqual(expect.arrayContaining(['daemon', 'api', 'plugin']));
     expect((restartFix?.details as any)?.failed).toEqual([]);
+    expect(mocks.startApiDaemon).toHaveBeenCalledWith(
+      expect.objectContaining({
+        basePath: '/v1',
+      }),
+    );
     expect(deletedPidFiles).toEqual(expect.arrayContaining([wsPid, apiPid, pluginPid]));
     expect(deletedStateFiles).toEqual(
       expect.arrayContaining([
