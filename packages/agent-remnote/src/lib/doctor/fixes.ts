@@ -1,5 +1,4 @@
 import * as Effect from 'effect/Effect';
-import path from 'node:path';
 
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { AppConfig } from '../../services/AppConfig.js';
@@ -9,15 +8,15 @@ import { Process } from '../../services/Process.js';
 import { StatusLineFile } from '../../services/StatusLineFile.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
 import { UserConfigFile } from '../../services/UserConfigFile.js';
-import { HostApiClient } from '../../services/HostApiClient.js';
-import { WsClient } from '../../services/WsClient.js';
+import { resolveManagedStateFile } from '../managedRuntimePaths.js';
+import { isTrustedPidRecord } from '../pidTrust.js';
 import { cleanupStatuslineArtifacts, resolveStatuslineArtifactPaths } from '../statuslineArtifacts.js';
 import type { DoctorFix, DoctorRestartSummary } from './types.js';
 
 export function applyDoctorFixes(): Effect.Effect<
   { readonly fixes: readonly DoctorFix[]; readonly changed: boolean; readonly restartSummary: DoctorRestartSummary },
   never,
-  AppConfig | DaemonFiles | ApiDaemonFiles | PluginServerFiles | SupervisorState | Process | UserConfigFile | HostApiClient | WsClient | StatusLineFile
+  AppConfig | DaemonFiles | ApiDaemonFiles | PluginServerFiles | SupervisorState | Process | UserConfigFile | StatusLineFile
 > {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
@@ -32,50 +31,101 @@ export function applyDoctorFixes(): Effect.Effect<
     const fixes: DoctorFix[] = [];
 
     const cleaned: Array<{ service: string; pidFile: string; stateFile: string; pid: number }> = [];
+    const cleanupFailures: Array<{ service: string; pidFile: string; stateFile: string; pid: number; error: string }> = [];
 
     const daemonPidFile = daemonFiles.defaultPidFile();
     const daemonPidInfo = yield* daemonFiles.readPidFile(daemonPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (daemonPidInfo?.pid && !(yield* proc.isPidRunning(daemonPidInfo.pid))) {
-      yield* daemonFiles.deletePidFile(daemonPidFile).pipe(Effect.orElseSucceed(() => undefined));
-      const daemonStateFile = supervisorState.defaultStateFile();
-      yield* supervisorState.deleteStateFile(daemonStateFile).pipe(Effect.orElseSucceed(() => undefined));
-      yield* cleanupStatuslineArtifacts(resolveStatuslineArtifactPaths({ cfg })).pipe(
-        Effect.orElseSucceed(() => ({
-          wsBridgeStateFile: { action: 'skipped', file: cfg.wsStateFile.path },
-          statusLineFile: { action: 'skipped', file: cfg.statusLineFile },
-          statusLineJsonFile: { action: 'skipped', file: cfg.statusLineJsonFile },
-        })),
-      );
-      cleaned.push({ service: 'daemon', pidFile: daemonPidFile, stateFile: daemonStateFile, pid: daemonPidInfo.pid });
-      changed = true;
+    if (daemonPidInfo?.pid && !(yield* isTrustedPidRecord(daemonPidInfo))) {
+      const daemonStateFile = resolveManagedStateFile({
+        pidFilePath: daemonPidFile,
+        defaultStateFilePath: supervisorState.defaultStateFile(),
+        candidate: daemonPidInfo.state_file,
+      });
+      const result = yield* Effect.gen(function* () {
+        yield* daemonFiles.deletePidFile(daemonPidFile);
+        yield* supervisorState.deleteStateFile(daemonStateFile);
+        return yield* cleanupStatuslineArtifacts(resolveStatuslineArtifactPaths({ cfg, pidInfo: daemonPidInfo }));
+      }).pipe(Effect.either);
+      if (result._tag === 'Right') {
+        cleaned.push({ service: 'daemon', pidFile: daemonPidFile, stateFile: daemonStateFile, pid: daemonPidInfo.pid });
+        changed = true;
+      } else {
+        cleanupFailures.push({
+          service: 'daemon',
+          pidFile: daemonPidFile,
+          stateFile: daemonStateFile,
+          pid: daemonPidInfo.pid,
+          error: result.left.message,
+        });
+      }
     }
 
     const apiPidFile = apiFiles.defaultPidFile();
     const apiPidInfo = yield* apiFiles.readPidFile(apiPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (apiPidInfo?.pid && !(yield* proc.isPidRunning(apiPidInfo.pid))) {
-      yield* apiFiles.deletePidFile(apiPidFile).pipe(Effect.orElseSucceed(() => undefined));
-      const apiStateFile = apiFiles.defaultStateFile();
-      yield* apiFiles.deleteStateFile(apiStateFile).pipe(Effect.orElseSucceed(() => undefined));
-      cleaned.push({ service: 'api', pidFile: apiPidFile, stateFile: apiStateFile, pid: apiPidInfo.pid });
-      changed = true;
+    if (apiPidInfo?.pid && !(yield* isTrustedPidRecord(apiPidInfo))) {
+      const apiStateFile = resolveManagedStateFile({
+        pidFilePath: apiPidFile,
+        defaultStateFilePath: apiFiles.defaultStateFile(),
+        candidate: apiPidInfo.state_file,
+      });
+      const result = yield* Effect.gen(function* () {
+        yield* apiFiles.deletePidFile(apiPidFile);
+        yield* apiFiles.deleteStateFile(apiStateFile);
+      }).pipe(Effect.either);
+      if (result._tag === 'Right') {
+        cleaned.push({ service: 'api', pidFile: apiPidFile, stateFile: apiStateFile, pid: apiPidInfo.pid });
+        changed = true;
+      } else {
+        cleanupFailures.push({
+          service: 'api',
+          pidFile: apiPidFile,
+          stateFile: apiStateFile,
+          pid: apiPidInfo.pid,
+          error: result.left.message,
+        });
+      }
     }
 
     const pluginPidFile = pluginFiles.defaultPidFile();
     const pluginPidInfo = yield* pluginFiles.readPidFile(pluginPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (pluginPidInfo?.pid && !(yield* proc.isPidRunning(pluginPidInfo.pid))) {
-      yield* pluginFiles.deletePidFile(pluginPidFile).pipe(Effect.orElseSucceed(() => undefined));
-      const pluginStateFile = pluginFiles.defaultStateFile();
-      yield* pluginFiles.deleteStateFile(pluginStateFile).pipe(Effect.orElseSucceed(() => undefined));
-      cleaned.push({ service: 'plugin', pidFile: pluginPidFile, stateFile: pluginStateFile, pid: pluginPidInfo.pid });
-      changed = true;
+    if (pluginPidInfo?.pid && !(yield* isTrustedPidRecord(pluginPidInfo))) {
+      const pluginStateFile = resolveManagedStateFile({
+        pidFilePath: pluginPidFile,
+        defaultStateFilePath: pluginFiles.defaultStateFile(),
+        candidate: pluginPidInfo.state_file,
+      });
+      const result = yield* Effect.gen(function* () {
+        yield* pluginFiles.deletePidFile(pluginPidFile);
+        yield* pluginFiles.deleteStateFile(pluginStateFile);
+      }).pipe(Effect.either);
+      if (result._tag === 'Right') {
+        cleaned.push({ service: 'plugin', pidFile: pluginPidFile, stateFile: pluginStateFile, pid: pluginPidInfo.pid });
+        changed = true;
+      } else {
+        cleanupFailures.push({
+          service: 'plugin',
+          pidFile: pluginPidFile,
+          stateFile: pluginStateFile,
+          pid: pluginPidInfo.pid,
+          error: result.left.message,
+        });
+      }
     }
 
     fixes.push({
       id: 'runtime.cleanup_stale_artifacts',
-      ok: true,
+      ok: cleanupFailures.length === 0,
       changed: cleaned.length > 0,
-      summary: cleaned.length > 0 ? `Cleaned ${cleaned.length} stale runtime artifact set(s)` : 'No stale runtime artifacts needed cleanup',
-      details: cleaned,
+      summary:
+        cleaned.length === 0 && cleanupFailures.length === 0
+          ? 'No stale runtime artifacts needed cleanup'
+          : cleanupFailures.length === 0
+            ? `Cleaned ${cleaned.length} stale runtime artifact set(s)`
+            : `Cleaned ${cleaned.length} stale runtime artifact set(s); ${cleanupFailures.length} cleanup failure(s) need manual follow-up`,
+      details: {
+        cleaned,
+        failed: cleanupFailures,
+      },
     });
 
     const configRepair = yield* userConfig.repair().pipe(Effect.either);

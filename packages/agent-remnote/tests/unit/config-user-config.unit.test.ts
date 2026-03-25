@@ -89,4 +89,14 @@ describe('Config user config file (unit)', () => {
     const cfg = await runWithProvider(new Map(), { REMNOTE_CONFIG_FILE: configFile });
     expect(cfg.apiPort).toBe(3002);
   });
+
+  it('rejects empty root apiBaseUrl when nested api.baseUrl disagrees', async () => {
+    const configFile = writeTempConfigFile({
+      apiBaseUrl: '',
+      api: { baseUrl: 'http://127.0.0.1:3000' },
+    });
+    await expect(runWithProvider(new Map(), { REMNOTE_CONFIG_FILE: configFile })).rejects.toMatchObject({
+      message: expect.stringContaining('conflict'),
+    });
+  });
 });

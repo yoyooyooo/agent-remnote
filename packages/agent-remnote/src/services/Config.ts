@@ -464,8 +464,10 @@ function readUserConfigFile(configFile: string): {
   const nestedHost = apiObject?.host;
   const nestedPort = apiObject?.port;
   const nestedBasePath = apiObject?.basePath;
+  const hasRootApiBaseUrl = Object.prototype.hasOwnProperty.call(config, 'apiBaseUrl');
+  const hasNestedBaseUrl = apiObject ? Object.prototype.hasOwnProperty.call(apiObject, 'baseUrl') : false;
 
-  const apiBaseUrl = config.apiBaseUrl ?? nestedBaseUrl;
+  const apiBaseUrl = hasRootApiBaseUrl ? config.apiBaseUrl : nestedBaseUrl;
   const apiHostRaw = config.apiHost ?? nestedHost;
   const apiPortRaw = config.apiPort ?? nestedPort;
   const apiBasePathRaw = config.apiBasePath ?? nestedBasePath;
@@ -486,7 +488,7 @@ function readUserConfigFile(configFile: string): {
           const normalized = normalizeApiBaseUrl(apiBaseUrl);
           const rootNormalized = typeof config.apiBaseUrl === 'string' ? normalizeApiBaseUrl(config.apiBaseUrl) : undefined;
           const nestedNormalized = typeof nestedBaseUrl === 'string' ? normalizeApiBaseUrl(nestedBaseUrl) : undefined;
-          if (rootNormalized && nestedNormalized && rootNormalized !== nestedNormalized) {
+          if (hasRootApiBaseUrl && hasNestedBaseUrl && rootNormalized !== nestedNormalized) {
             throw new CliError({
               code: 'INVALID_ARGS',
               message: `Config keys apiBaseUrl and api.baseUrl conflict: ${file}`,

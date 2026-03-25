@@ -16,7 +16,7 @@ async function isAlive(pid: number): Promise<boolean> {
 }
 
 function trustedCmdStub(kind: 'daemon' | 'api' | 'plugin'): string[] {
-  const base = ['/usr/local/bin/node', '--import', 'tsx', '/tmp/agent-remnote/src/main.ts'];
+  const base = [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts')];
   if (kind === 'daemon') return [...base, 'daemon', 'serve'];
   if (kind === 'api') return [...base, 'api', 'serve'];
   return [...base, 'plugin', 'serve'];

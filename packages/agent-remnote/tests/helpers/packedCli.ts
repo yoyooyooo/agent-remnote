@@ -132,7 +132,9 @@ async function ensurePackedCliCache(): Promise<string> {
   } catch {}
 
   let lockHeld = false;
-  const lockDeadline = Date.now() + 30_000;
+  const lockWaitMs = 30_000;
+  const staleLockMs = 240_000;
+  const lockDeadline = Date.now() + lockWaitMs;
   for (;;) {
     if (Date.now() > lockDeadline) {
       throw new Error(`Timed out waiting for pack cache lock: ${cacheLock}`);
@@ -144,7 +146,7 @@ async function ensurePackedCliCache(): Promise<string> {
     } catch (error: any) {
       if (error?.code !== 'EEXIST') throw error;
       const stat = await fs.stat(cacheLock).catch(() => undefined);
-      if (stat && Date.now() - stat.mtimeMs > 30_000) {
+      if (stat && Date.now() - stat.mtimeMs > staleLockMs) {
         await fs.rm(cacheLock, { recursive: true, force: true });
         continue;
       }

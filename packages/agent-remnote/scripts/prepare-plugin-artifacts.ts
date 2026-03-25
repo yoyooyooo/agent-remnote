@@ -47,9 +47,7 @@ async function main(): Promise<void> {
   try {
     await fs.rename(artifactsRoot, staleArtifactsRoot);
   } catch (error: any) {
-    if (error?.code !== 'ENOENT') {
-      await fs.rm(artifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
+    if (error?.code !== 'ENOENT') throw error;
   }
   await fs.rm(staleArtifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   try {
