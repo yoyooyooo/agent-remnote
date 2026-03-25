@@ -5,6 +5,7 @@ import * as Option from 'effect/Option';
 
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
+import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
@@ -38,6 +39,12 @@ export const apiRestartCommand = Command.make(
       const proc = yield* Process;
       const pidFilePath = resolveUserFilePath(pidFile ?? apiFiles.defaultPidFile());
       const existing = yield* apiFiles.readPidFile(pidFilePath);
+      const stateFilePath = resolveManagedStateFile({
+        pidFilePath,
+        defaultStateFilePath: apiFiles.defaultStateFile(),
+        explicitStateFilePath: stateFile,
+        candidate: existing?.state_file,
+      });
       let stoppedPid: number | undefined;
 
       if (existing) {
@@ -73,9 +80,7 @@ export const apiRestartCommand = Command.make(
           stoppedPid = existing.pid;
         }
         yield* apiFiles.deletePidFile(pidFilePath).pipe(Effect.catchAll(() => Effect.void));
-        yield* apiFiles
-          .deleteStateFile(resolveUserFilePath(stateFile ?? apiFiles.defaultStateFile()))
-          .pipe(Effect.catchAll(() => Effect.void));
+        yield* apiFiles.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
       }
 
       const started = yield* startApiDaemon({ host, port, waitMs: wait, pidFile, logFile, stateFile });

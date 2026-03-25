@@ -95,6 +95,7 @@
 **Files:**
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
+- Modify: `README.local.md`
 - Modify: `docs/ssot/agent-remnote/cli-contract.md`
 
 - [ ] Document `doctor --fix` behavior and boundaries

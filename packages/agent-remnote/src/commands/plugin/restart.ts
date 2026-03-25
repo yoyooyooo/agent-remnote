@@ -5,6 +5,7 @@ import * as Option from 'effect/Option';
 
 import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { CliError } from '../../services/Errors.js';
+import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
@@ -42,6 +43,12 @@ export const pluginRestartCommand = Command.make(
       const proc = yield* Process;
       const pidFilePath = resolveUserFilePath(pidFile ?? files.defaultPidFile());
       const existing = yield* files.readPidFile(pidFilePath);
+      const stateFilePath = resolveManagedStateFile({
+        pidFilePath,
+        defaultStateFilePath: files.defaultStateFile(),
+        explicitStateFilePath: stateFile,
+        candidate: existing?.state_file,
+      });
       let stoppedPid: number | undefined;
 
       if (existing) {
@@ -77,9 +84,7 @@ export const pluginRestartCommand = Command.make(
           stoppedPid = existing.pid;
         }
         yield* files.deletePidFile(pidFilePath).pipe(Effect.catchAll(() => Effect.void));
-        yield* files
-          .deleteStateFile(resolveUserFilePath(stateFile ?? files.defaultStateFile()))
-          .pipe(Effect.catchAll(() => Effect.void));
+        yield* files.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
       }
 
       const started = yield* startPluginServer({ host, port, waitMs: wait, pidFile, logFile, stateFile });

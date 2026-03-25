@@ -578,6 +578,30 @@ npm run dev -- --help
 npm run check
 ```
 
+### 7) Turbo 快捷入口
+
+本地全仓验证：
+
+```bash
+npm run test:turbo
+npm run typecheck:turbo
+npm run lint:turbo
+```
+
+按当前分支相对 `origin/master` 做增量验证：
+
+```bash
+npm run test:turbo:affected
+npm run typecheck:turbo:affected
+npm run lint:turbo:affected
+```
+
+如果本地 `origin/master` 不新，先执行：
+
+```bash
+git fetch origin master
+```
+
 ## 发布
 
 本仓库使用 Changesets 管理 npm 发版。

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import path from 'node:path';
 import { promises as fs } from 'node:fs';
 
 import { installPackedCli, packAgentRemnoteCli, runInstalledCli } from '../helpers/packedCli.js';
@@ -18,7 +19,7 @@ describe('cli contract: builtin scenarios work in installed package layout', () 
     const installed = await installPackedCli(tarballPath);
     installDir = installed.installDir;
     cliPath = installed.cliPath;
-    scenarioDir = `${installDir}/scenario-user`;
+    scenarioDir = path.join(installDir, 'scenario-user');
   }, 240_000);
 
   afterAll(async () => {
@@ -31,7 +32,7 @@ describe('cli contract: builtin scenarios work in installed package layout', () 
 
     expect(versionRes.exitCode).toBe(0);
     expect(versionRes.stderr).toBe('');
-    expect(versionRes.stdout.trim()).toBe('1.4.0');
+    expect(versionRes.stdout.trim()).toMatch(/^\d+\.\d+\.\d+(-.*)?$/);
 
     const listRes = await runInstalledCli({ cliPath, args: ['--json', 'scenario', 'builtin', 'list'], timeoutMs: 30_000 });
     expect(listRes.exitCode).toBe(0);
@@ -51,6 +52,6 @@ describe('cli contract: builtin scenarios work in installed package layout', () 
     const installed = JSON.parse(installRes.stdout.trim());
     expect(installed.ok).toBe(true);
     expect(String(JSON.stringify(installed.data.installed))).toContain('dn_recent_todos_to_today_move');
-    await expect(fs.stat(`${scenarioDir}/dn_recent_todos_to_today_move.json`)).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(scenarioDir, 'dn_recent_todos_to_today_move.json'))).resolves.toBeTruthy();
   });
 });

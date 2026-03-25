@@ -5,6 +5,7 @@ import * as Option from 'effect/Option';
 
 import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { CliError } from '../../services/Errors.js';
+import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
@@ -39,9 +40,15 @@ export function stopPluginServer(params: {
     const proc = yield* Process;
 
     const existing = yield* files.readPidFile(params.pidFilePath);
+    const stateFilePath = resolveManagedStateFile({
+      pidFilePath: params.pidFilePath,
+      defaultStateFilePath: files.defaultStateFile(),
+      explicitStateFilePath: params.stateFilePath,
+      candidate: existing?.state_file,
+    });
 
     if (!existing) {
-      yield* files.deleteStateFile(params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+      yield* files.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
       return {
         stopped: true as const,
         pid_file: params.pidFilePath,
@@ -51,7 +58,7 @@ export function stopPluginServer(params: {
     const cleanupStale = () =>
       Effect.gen(function* () {
         yield* files.deletePidFile(params.pidFilePath);
-        yield* files.deleteStateFile(params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+        yield* files.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
         return {
           stopped: true as const,
           stale: true as const,
@@ -101,7 +108,7 @@ export function stopPluginServer(params: {
     }
 
     yield* files.deletePidFile(params.pidFilePath);
-    yield* files.deleteStateFile(params.stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+    yield* files.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
     return {
       stopped: true as const,
       pid: existing.pid,

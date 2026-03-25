@@ -5,6 +5,7 @@ import * as Option from 'effect/Option';
 
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
+import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
@@ -27,8 +28,13 @@ export const apiStopCommand = Command.make(
       const proc = yield* Process;
 
       const pidFilePath = resolveUserFilePath(pidFile ?? apiFiles.defaultPidFile());
-      const stateFilePath = resolveUserFilePath(stateFile ?? apiFiles.defaultStateFile());
       const existing = yield* apiFiles.readPidFile(pidFilePath);
+      const stateFilePath = resolveManagedStateFile({
+        pidFilePath,
+        defaultStateFilePath: apiFiles.defaultStateFile(),
+        explicitStateFilePath: stateFile,
+        candidate: existing?.state_file,
+      });
 
       if (!existing) {
         yield* apiFiles.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));

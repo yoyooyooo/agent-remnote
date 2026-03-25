@@ -8,6 +8,6 @@
 - Implement config migration helpers
 - Fix packaged builtin-scenarios locator
 - Fix JSON output pollution
-- Update README, README.zh-CN, and SSoT
+- Update README, README.zh-CN, README.local, and SSoT
 - Run full verification
 - Run 5-reviewer evaluation loop and close gaps
