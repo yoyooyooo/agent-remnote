@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "check-types": "tsc --noEmit",
-    "clean": "shx rm -rf dist PluginZip.zip",
+    "clean": "node ./scripts/clean.mjs",
     "dev": "vite",
     "build": "npm run clean && vite build && npm run zip",
     "zip": "cd dist && bestzip ../PluginZip.zip ./*",

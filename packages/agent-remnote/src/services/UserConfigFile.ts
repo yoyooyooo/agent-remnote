@@ -39,6 +39,19 @@ export type UserConfigSetResult = {
   readonly changed: boolean;
 };
 
+export type UserConfigRepairPreview = {
+  readonly configFile: string;
+  readonly exists: boolean;
+  readonly changed: boolean;
+  readonly before: UserConfigInspection;
+  readonly after: UserConfigInspection;
+  readonly nextDoc: UserConfigDoc;
+};
+
+export type UserConfigRepairResult = UserConfigRepairPreview & {
+  readonly written: boolean;
+};
+
 export type UserConfigUnsetResult = {
   readonly configFile: string;
   readonly key: string;
@@ -49,6 +62,8 @@ export type UserConfigUnsetResult = {
 export interface UserConfigFileService {
   readonly path: () => Effect.Effect<string, never, AppConfig>;
   readonly inspect: () => Effect.Effect<UserConfigInspection, never, AppConfig>;
+  readonly previewRepair: () => Effect.Effect<UserConfigRepairPreview, CliError, AppConfig>;
+  readonly repair: () => Effect.Effect<UserConfigRepairResult, CliError, AppConfig>;
   readonly get: (key: string) => Effect.Effect<UserConfigGetResult, CliError, AppConfig>;
   readonly set: (key: string, value: string) => Effect.Effect<UserConfigSetResult, CliError, AppConfig>;
   readonly unset: (key: string) => Effect.Effect<UserConfigUnsetResult, CliError, AppConfig>;
@@ -102,14 +117,28 @@ function readApiBaseUrl(doc: UserConfigDoc): {
     root === undefined
       ? undefined
       : typeof root === 'string'
-        ? root
+        ? (() => {
+            try {
+              return normalizeApiBaseUrl(root);
+            } catch (error) {
+              errors.push(isCliError(error) ? error.message : 'Config key apiBaseUrl must be a valid URL');
+              return undefined;
+            }
+          })()
         : (errors.push('Config key apiBaseUrl must be a string'), undefined);
 
   const nestedValue =
     nested === undefined
       ? undefined
       : typeof nested === 'string'
-        ? nested
+        ? (() => {
+            try {
+              return normalizeApiBaseUrl(nested);
+            } catch (error) {
+              errors.push(isCliError(error) ? error.message : 'Config key api.baseUrl must be a valid URL');
+              return undefined;
+            }
+          })()
         : (errors.push('Config key api.baseUrl must be a string'), undefined);
 
   if (rootValue && nestedValue && rootValue !== nestedValue) {
@@ -263,6 +292,38 @@ function inspectDoc(configFile: string, exists: boolean, doc: UserConfigDoc): Us
     errors,
     valid: errors.length === 0,
   };
+}
+
+function canonicalizeDoc(doc: UserConfigDoc): UserConfigDoc {
+  const next = cloneDoc(doc);
+  const inspection = inspectDoc('', true, next);
+  if (!inspection.valid) {
+    return next;
+  }
+
+  if (inspection.values.apiBaseUrl !== undefined) {
+    next.apiBaseUrl = inspection.values.apiBaseUrl;
+  }
+  if (inspection.values.apiHost !== undefined) {
+    next.apiHost = inspection.values.apiHost;
+  }
+  if (inspection.values.apiPort !== undefined) {
+    next.apiPort = inspection.values.apiPort;
+  }
+  if (inspection.values.apiBasePath !== undefined) {
+    next.apiBasePath = inspection.values.apiBasePath;
+  }
+
+  const api = next.api;
+  if (isPlainObject(api)) {
+    delete api.baseUrl;
+    delete api.host;
+    delete api.port;
+    delete api.basePath;
+    removeEmptyApiObject(next);
+  }
+
+  return next;
 }
 
 async function ensureDir(filePath: string): Promise<void> {
@@ -495,6 +556,72 @@ export const UserConfigFileLive = Layer.succeed(UserConfigFile, {
         } satisfies UserConfigInspection;
       }
       return inspectDoc(parsed.configFile, parsed.exists, parsed.doc);
+    }),
+  previewRepair: () =>
+    Effect.gen(function* () {
+      const cfg = yield* AppConfig;
+      const parsed = yield* Effect.promise(() => readDocDetailed(cfg.configFile));
+      const { configFile, doc, exists } = yield* Effect.try({
+        try: () => requireParsedDoc(parsed),
+        catch: (error) => toCliFailure(error, 'Invalid config file'),
+      });
+      const before = inspectDoc(configFile, exists, doc);
+      const nextDoc = canonicalizeDoc(doc);
+      const after = inspectDoc(configFile, exists, nextDoc);
+      return {
+        configFile,
+        exists,
+        changed: JSON.stringify(doc) !== JSON.stringify(nextDoc),
+        before,
+        after,
+        nextDoc,
+      } satisfies UserConfigRepairPreview;
+    }),
+  repair: () =>
+    Effect.gen(function* () {
+      const cfg = yield* AppConfig;
+      const parsed = yield* Effect.promise(() => readDocDetailed(cfg.configFile));
+      const { configFile, doc, exists } = yield* Effect.try({
+        try: () => requireParsedDoc(parsed),
+        catch: (error) => toCliFailure(error, 'Invalid config file'),
+      });
+      const before = inspectDoc(configFile, exists, doc);
+      const nextDoc = canonicalizeDoc(doc);
+      const after = inspectDoc(configFile, exists, nextDoc);
+      const preview = {
+        configFile,
+        exists,
+        changed: JSON.stringify(doc) !== JSON.stringify(nextDoc),
+        before,
+        after,
+        nextDoc,
+      } satisfies UserConfigRepairPreview;
+      if (!preview.changed) {
+        return {
+          ...preview,
+          written: false,
+        } satisfies UserConfigRepairResult;
+      }
+      if (!preview.before.valid) {
+        return {
+          ...preview,
+          written: false,
+        } satisfies UserConfigRepairResult;
+      }
+      yield* Effect.tryPromise({
+        try: async () => await writeDoc(preview.configFile, preview.nextDoc),
+        catch: (error) =>
+          new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to write config file',
+            exitCode: 1,
+            details: { config_file: preview.configFile, error: String((error as any)?.message || error) },
+          }),
+      });
+      return {
+        ...preview,
+        written: true,
+      } satisfies UserConfigRepairResult;
     }),
   get: (key) =>
     Effect.gen(function* () {

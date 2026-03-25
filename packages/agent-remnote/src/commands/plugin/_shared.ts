@@ -6,6 +6,7 @@ import { PluginServerFiles, type PluginServerPidFile } from '../../services/Plug
 import { CliError, isCliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 
 export const PLUGIN_SERVER_HEALTH_TIMEOUT_MS = 2000;
@@ -98,6 +99,7 @@ export function startPluginServer(
       if (!alive) {
         yield* files.deletePidFile(pidFilePath);
       } else {
+        yield* requireTrustedPidRecord({ record: existing, pidFilePath });
         return {
           started: false,
           pid: existing.pid,
@@ -179,6 +181,7 @@ export function ensurePluginServer(
       if (existing) {
         const alive = yield* proc.isPidRunning(existing.pid);
         if (alive) {
+          yield* requireTrustedPidRecord({ record: existing, pidFilePath });
           return {
             started: false,
             pid: existing.pid,

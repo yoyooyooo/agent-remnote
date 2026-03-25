@@ -358,4 +358,52 @@ describe('cli contract: config user file', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('marks invalid apiBaseUrl strings as invalid instead of crashing config validate', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-invalid-base-url-'));
+    const tmpHome = path.join(tmpDir, 'home');
+    const configDir = path.join(tmpHome, '.agent-remnote');
+    const configFile = path.join(configDir, 'config.json');
+
+    try {
+      await fs.mkdir(configDir, { recursive: true });
+      await fs.writeFile(configFile, '{\n  "apiBaseUrl": "not-a-url"\n}\n', 'utf8');
+
+      const res = await runCli(['--json', 'config', 'validate'], { env: { HOME: tmpHome } });
+
+      expect(res.exitCode).toBe(0);
+      expect(res.stderr).toBe('');
+      expect(parseJsonLine(res.stdout).data).toMatchObject({
+        valid: false,
+        config_file: path.normalize(configFile),
+      });
+      expect(String(parseJsonLine(res.stdout).data.errors.join(' '))).toContain('apiBaseUrl');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects non-config commands when user config contains conflicting keys', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-conflict-runtime-'));
+    const tmpHome = path.join(tmpDir, 'home');
+    const configDir = path.join(tmpHome, '.agent-remnote');
+    const configFile = path.join(configDir, 'config.json');
+    const missingDb = path.join(tmpDir, 'missing-remnote.db');
+
+    try {
+      await fs.mkdir(configDir, { recursive: true });
+      await fs.writeFile(configFile, '{\n  "apiPort": 3001,\n  "api": { "port": 3002 }\n}\n', 'utf8');
+
+      const res = await runCli(['--json', '--remnote-db', missingDb, 'search', '--query', 'hello'], {
+        env: { HOME: tmpHome },
+      });
+
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toBe('');
+      expect(parseJsonLine(res.stdout).ok).toBe(false);
+      expect(String(parseJsonLine(res.stdout).error.message)).toContain('conflict');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

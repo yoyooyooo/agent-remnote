@@ -9,8 +9,10 @@ import * as Layer from 'effect/Layer';
 import * as Option from 'effect/Option';
 import { readFileSync } from 'node:fs';
 import { format } from 'node:util';
+import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 
 import { rootCommand } from './commands/index.js';
+import { runSearchRemOverviewWorkerJob } from './internal/remdb-tools/index.js';
 import { buildCliEnvConfigProvider } from './services/CliConfigProvider.js';
 import { cliErrorFromValidationError, exitCodeFromExit, fail, isCliError, toJsonError } from './services/Errors.js';
 import { CliError } from './services/Errors.js';
@@ -613,84 +615,90 @@ function strictCommandPreflightOrExit(argv: readonly string[]): void {
 
 strictCommandPreflightOrExit(argv);
 
-const configProvider = buildCliEnvConfigProvider({ cli: parseRootConfigFromArgv(argv), env: process.env });
+const isSearchWorkerThread = !isMainThread && (workerData as any)?.kind === 'search_rem_overview';
 
-cli(argv)
-  .pipe(
-    Effect.withConfigProvider(configProvider),
-    Effect.provide(Layer.mergeAll(NodeContext.layer, Console.setConsole(makeCliConsole()))),
-    Effect.scoped,
-    Effect.exit,
-    Effect.flatMap((exit) =>
-      Effect.sync(() => {
-        process.exitCode = exitCodeFromExit(exit);
+if (isSearchWorkerThread && parentPort) {
+  void runSearchRemOverviewWorkerJob(workerData as any, parentPort);
+} else {
+  const configProvider = buildCliEnvConfigProvider({ cli: parseRootConfigFromArgv(argv), env: process.env });
 
-        if (Exit.isSuccess(exit)) return;
+  cli(argv)
+    .pipe(
+      Effect.withConfigProvider(configProvider),
+      Effect.provide(Layer.mergeAll(NodeContext.layer, Console.setConsole(makeCliConsole()))),
+      Effect.scoped,
+      Effect.exit,
+      Effect.flatMap((exit) =>
+        Effect.sync(() => {
+          process.exitCode = exitCodeFromExit(exit);
 
-        const failure = Cause.failureOption(exit.cause);
-        if (Option.isNone(failure)) {
+          if (Exit.isSuccess(exit)) return;
+
+          const failure = Cause.failureOption(exit.cause);
+          if (Option.isNone(failure)) {
+            if (jsonRequested) {
+              process.stdout.write(
+                `${JSON.stringify(
+                  fail({
+                    code: 'INTERNAL',
+                    message: 'Unknown runtime error (defect)',
+                    details: debugRequested ? { cause: Cause.pretty(exit.cause) } : undefined,
+                  }),
+                )}\n`,
+              );
+            } else if (!(globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__) {
+              (globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__ = true;
+              process.stderr.write(`${formatHumanErrorLine('Unknown runtime error (defect)')}\n`);
+              if (debugRequested) process.stderr.write(Cause.pretty(exit.cause) + '\n');
+            }
+            return;
+          }
+
+          const error = failure.value;
+
+          if (ValidationError.isValidationError(error)) {
+            if (!jsonRequested) return;
+            const cliError = cliErrorFromValidationError(error);
+            process.stdout.write(`${JSON.stringify(fail(toJsonError(cliError), cliError.hint))}\n`);
+            return;
+          }
+
+          if (isCliError(error)) {
+            if (jsonRequested) {
+              process.stdout.write(`${JSON.stringify(fail(toJsonError(error), error.hint))}\n`);
+              return;
+            }
+            if (!(globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__) {
+              (globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__ = true;
+              process.stderr.write(`${formatHumanErrorLine(error.message)}\n`);
+              if (debugRequested && error.details !== undefined) {
+                process.stderr.write(`${JSON.stringify(error.details, null, 2)}\n`);
+              }
+              if (error.hint && error.hint.length > 0) {
+                process.stderr.write('Hint:\n');
+                for (const h of error.hint) process.stderr.write(`- ${h}\n`);
+              }
+            }
+            return;
+          }
+
           if (jsonRequested) {
             process.stdout.write(
               `${JSON.stringify(
                 fail({
                   code: 'INTERNAL',
-                  message: 'Unknown runtime error (defect)',
-                  details: debugRequested ? { cause: Cause.pretty(exit.cause) } : undefined,
+                  message: String((error as any)?.message || error || 'Unknown error'),
                 }),
               )}\n`,
             );
           } else if (!(globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__) {
             (globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__ = true;
-            process.stderr.write(`${formatHumanErrorLine('Unknown runtime error (defect)')}\n`);
-            if (debugRequested) process.stderr.write(Cause.pretty(exit.cause) + '\n');
+            process.stderr.write(
+              `${formatHumanErrorLine(String((error as any)?.message || error || 'Unknown error'))}\n`,
+            );
           }
-          return;
-        }
-
-        const error = failure.value;
-
-        if (ValidationError.isValidationError(error)) {
-          if (!jsonRequested) return;
-          const cliError = cliErrorFromValidationError(error);
-          process.stdout.write(`${JSON.stringify(fail(toJsonError(cliError), cliError.hint))}\n`);
-          return;
-        }
-
-        if (isCliError(error)) {
-          if (jsonRequested) {
-            process.stdout.write(`${JSON.stringify(fail(toJsonError(error), error.hint))}\n`);
-            return;
-          }
-          if (!(globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__) {
-            (globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__ = true;
-            process.stderr.write(`${formatHumanErrorLine(error.message)}\n`);
-            if (debugRequested && error.details !== undefined) {
-              process.stderr.write(`${JSON.stringify(error.details, null, 2)}\n`);
-            }
-            if (error.hint && error.hint.length > 0) {
-              process.stderr.write('Hint:\n');
-              for (const h of error.hint) process.stderr.write(`- ${h}\n`);
-            }
-          }
-          return;
-        }
-
-        if (jsonRequested) {
-          process.stdout.write(
-            `${JSON.stringify(
-              fail({
-                code: 'INTERNAL',
-                message: String((error as any)?.message || error || 'Unknown error'),
-              }),
-            )}\n`,
-          );
-        } else if (!(globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__) {
-          (globalThis as any).__REMNOTE_CLI_ERROR_REPORTED__ = true;
-          process.stderr.write(
-            `${formatHumanErrorLine(String((error as any)?.message || error || 'Unknown error'))}\n`,
-          );
-        }
-      }),
-    ),
-  )
-  .pipe(NodeRuntime.runMain as any);
+        }),
+      ),
+    )
+    .pipe(NodeRuntime.runMain as any);
+}

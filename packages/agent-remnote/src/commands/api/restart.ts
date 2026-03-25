@@ -4,8 +4,10 @@ import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
+import { CliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { API_START_WAIT_DEFAULT_MS, API_STOP_WAIT_DEFAULT_MS, startApiDaemon } from './_shared.js';
 
@@ -41,17 +43,38 @@ export const apiRestartCommand = Command.make(
       if (existing) {
         const alive = yield* proc.isPidRunning(existing.pid);
         if (alive) {
+          yield* requireTrustedPidRecord({ record: existing, pidFilePath });
           yield* proc.kill(existing.pid, 'SIGTERM');
           const exited = yield* proc.waitForExit({ pid: existing.pid, timeoutMs: API_STOP_WAIT_DEFAULT_MS });
-          if (!exited && force) {
+          if (!exited) {
+            if (!force) {
+              return yield* Effect.fail(
+                new CliError({
+                  code: 'INTERNAL',
+                  message: `Host API did not exit within ${API_STOP_WAIT_DEFAULT_MS}ms; use --force`,
+                  exitCode: 1,
+                  details: { pid: existing.pid, pid_file: pidFilePath },
+                }),
+              );
+            }
             yield* proc.kill(existing.pid, 'SIGKILL');
-            yield* proc.waitForExit({ pid: existing.pid, timeoutMs: API_STOP_WAIT_DEFAULT_MS });
+            const killed = yield* proc.waitForExit({ pid: existing.pid, timeoutMs: API_STOP_WAIT_DEFAULT_MS });
+            if (!killed) {
+              return yield* Effect.fail(
+                new CliError({
+                  code: 'INTERNAL',
+                  message: 'Force stop failed (process is still alive)',
+                  exitCode: 1,
+                  details: { pid: existing.pid, pid_file: pidFilePath },
+                }),
+              );
+            }
           }
           stoppedPid = existing.pid;
         }
         yield* apiFiles.deletePidFile(pidFilePath).pipe(Effect.catchAll(() => Effect.void));
         yield* apiFiles
-          .deleteStateFile(existing.state_file ?? resolveUserFilePath(stateFile ?? apiFiles.defaultStateFile()))
+          .deleteStateFile(resolveUserFilePath(stateFile ?? apiFiles.defaultStateFile()))
           .pipe(Effect.catchAll(() => Effect.void));
       }
 

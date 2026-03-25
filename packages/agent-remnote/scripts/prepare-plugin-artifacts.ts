@@ -31,14 +31,37 @@ async function main(): Promise<void> {
   const pluginDist = path.join(pluginRoot, 'dist');
   const pluginZip = path.join(pluginRoot, 'PluginZip.zip');
   const artifactsRoot = path.join(packageRoot, 'plugin-artifacts');
-  const artifactsDist = path.join(artifactsRoot, 'dist');
+  const token = `${process.pid}-${Date.now()}`;
+  const stagingRoot = `${artifactsRoot}.staging-${token}`;
+  const stagingDist = path.join(stagingRoot, 'dist');
+  const staleArtifactsRoot = `${artifactsRoot}.stale-${token}`;
 
   await runCommand(npmCommand(), ['run', 'build', '--workspace', '@remnote/plugin'], repoRoot);
 
-  await fs.rm(artifactsRoot, { recursive: true, force: true });
-  await fs.mkdir(artifactsRoot, { recursive: true });
-  await fs.cp(pluginDist, artifactsDist, { recursive: true });
-  await fs.copyFile(pluginZip, path.join(artifactsRoot, 'PluginZip.zip'));
+  await fs.rm(stagingRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.mkdir(stagingRoot, { recursive: true });
+  await fs.cp(pluginDist, stagingDist, { recursive: true });
+  await fs.copyFile(pluginZip, path.join(stagingRoot, 'PluginZip.zip'));
+
+  await fs.rm(staleArtifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  try {
+    await fs.rename(artifactsRoot, staleArtifactsRoot);
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT') {
+      await fs.rm(artifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }
+  await fs.rm(staleArtifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  try {
+    await fs.rename(stagingRoot, artifactsRoot);
+  } catch (error: any) {
+    if (error?.code === 'EEXIST') {
+      await fs.rm(artifactsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      await fs.rename(stagingRoot, artifactsRoot);
+    } else {
+      throw error;
+    }
+  }
 }
 
 await main();

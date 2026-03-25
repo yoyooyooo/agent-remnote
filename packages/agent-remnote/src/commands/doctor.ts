@@ -2,17 +2,25 @@ import { Command } from '@effect/cli';
 import * as Effect from 'effect/Effect';
 
 import { AppConfig } from '../services/AppConfig.js';
+import { ApiDaemonFiles } from '../services/ApiDaemonFiles.js';
 import { DaemonFiles } from '../services/DaemonFiles.js';
 import { FsAccess } from '../services/FsAccess.js';
+import { PluginServerFiles } from '../services/PluginServerFiles.js';
+import { Process } from '../services/Process.js';
 import { Queue } from '../services/Queue.js';
 import { RemDb } from '../services/RemDb.js';
+import { SupervisorState } from '../services/SupervisorState.js';
+import { UserConfigFile } from '../services/UserConfigFile.js';
 import { WsClient } from '../services/WsClient.js';
 import { CliError } from '../services/Errors.js';
 import { openStoreDb, readStoreSchemaStatus } from '../internal/public.js';
+import { applyDoctorFixes } from '../lib/doctor/fixes.js';
+import { collectDoctorChecks } from '../lib/doctor/checks.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { WS_HEALTH_TIMEOUT_MS } from './ws/_shared.js';
+import * as Options from '@effect/cli/Options';
 
-export const doctorCommand = Command.make('doctor', {}, () =>
+export const doctorCommand = Command.make('doctor', { fix: Options.boolean('fix') }, ({ fix }) =>
   Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const queue = yield* Queue;
@@ -20,78 +28,104 @@ export const doctorCommand = Command.make('doctor', {}, () =>
     const ws = yield* WsClient;
     const daemonFiles = yield* DaemonFiles;
     const fsAccess = yield* FsAccess;
+    yield* ApiDaemonFiles;
+    yield* PluginServerFiles;
+    yield* Process;
+    yield* SupervisorState;
+    yield* UserConfigFile;
 
-    const queueStats = yield* queue.stats({ dbPath: cfg.storeDb }).pipe(Effect.either);
-    const remnote = yield* remDb
-      .withDb(cfg.remnoteDb, (db) => {
-        db.prepare('SELECT 1 FROM quanta LIMIT 1').get();
-        const hasSearchInfos = !!db
-          .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='remsSearchInfos' LIMIT 1`)
-          .get();
-        const hasContents = !!db
-          .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='remsContents' LIMIT 1`)
-          .get();
-        return { has_search_index: hasSearchInfos && hasContents };
-      })
-      .pipe(Effect.either);
-    const schema = yield* Effect.try({
-      try: () => {
-        const db = openStoreDb(cfg.storeDb);
-        try {
-          return readStoreSchemaStatus(db);
-        } finally {
-          db.close();
-        }
-      },
-      catch: (error) =>
-        new CliError({
-          code: 'DB_UNAVAILABLE',
-          message: `Failed to read store schema: ${String((error as any)?.message || error)}`,
-          exitCode: 1,
-        }),
-    }).pipe(Effect.either);
+    const collectSnapshot = () =>
+      Effect.gen(function* () {
+        const queueStats = yield* queue.stats({ dbPath: cfg.storeDb }).pipe(Effect.either);
+        const remnote = yield* remDb
+          .withDb(cfg.remnoteDb, (db) => {
+            db.prepare('SELECT 1 FROM quanta LIMIT 1').get();
+            const hasSearchInfos = !!db
+              .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='remsSearchInfos' LIMIT 1`)
+              .get();
+            const hasContents = !!db
+              .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='remsContents' LIMIT 1`)
+              .get();
+            return { has_search_index: hasSearchInfos && hasContents };
+          })
+          .pipe(Effect.either);
+        const schema = yield* Effect.try({
+          try: () => {
+            const db = openStoreDb(cfg.storeDb);
+            try {
+              return readStoreSchemaStatus(db);
+            } finally {
+              db.close();
+            }
+          },
+          catch: (error) =>
+            new CliError({
+              code: 'DB_UNAVAILABLE',
+              message: `Failed to read store schema: ${String((error as any)?.message || error)}`,
+              exitCode: 1,
+            }),
+        }).pipe(Effect.either);
 
-    const wsHealth = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
-    const wsClients = yield* ws.queryClients({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
+        const wsHealth = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
+        const wsClients = yield* ws.queryClients({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
 
-    const pidFilePath = daemonFiles.defaultPidFile();
-    const logFilePath = daemonFiles.defaultLogFile();
-    const pidWritable = yield* fsAccess.canWritePath(pidFilePath);
-    const logWritable = yield* fsAccess.canWritePath(logFilePath);
+        const pidFilePath = daemonFiles.defaultPidFile();
+        const logFilePath = daemonFiles.defaultLogFile();
+        const pidWritable = yield* fsAccess.canWritePath(pidFilePath);
+        const logWritable = yield* fsAccess.canWritePath(logFilePath);
+        const storeDbWritable = yield* fsAccess.checkWritableFile(cfg.storeDb);
 
-    const storeDbWritable = yield* fsAccess.checkWritableFile(cfg.storeDb);
+        return {
+          queue: {
+            ok: queueStats._tag === 'Right',
+            db_path: cfg.storeDb,
+            schema: schema._tag === 'Right' ? schema.right : undefined,
+            schema_error: schema._tag === 'Left' ? schema.left.message : undefined,
+            writable: storeDbWritable.ok,
+            writable_reason: storeDbWritable.reason,
+            stats: queueStats._tag === 'Right' ? queueStats.right : undefined,
+            error: queueStats._tag === 'Left' ? queueStats.left.message : undefined,
+          },
+          remnote_db: {
+            ok: remnote._tag === 'Right',
+            db_path: remnote._tag === 'Right' ? remnote.right.info.dbPath : cfg.remnoteDb,
+            resolution: remnote._tag === 'Right' ? remnote.right.info.source : undefined,
+            has_search_index: remnote._tag === 'Right' ? remnote.right.result.has_search_index : undefined,
+            error: remnote._tag === 'Left' ? remnote.left.message : undefined,
+          },
+          ws: {
+            ok: wsHealth._tag === 'Right',
+            url: cfg.wsUrl,
+            rtt_ms: wsHealth._tag === 'Right' ? wsHealth.right.rtt_ms : undefined,
+            error: wsHealth._tag === 'Left' ? wsHealth.left.message : undefined,
+            clients: wsClients._tag === 'Right' ? wsClients.right.clients : [],
+          },
+          daemon_files: {
+            pid_file: pidFilePath,
+            log_file: logFilePath,
+            pid_writable: pidWritable,
+            log_writable: logWritable,
+          },
+        };
+      });
+
+    const snapshotBefore = yield* collectSnapshot();
+    const checksBefore = yield* collectDoctorChecks();
+    const fixResult = fix ? yield* applyDoctorFixes() : { fixes: [], changed: false, restartSummary: { attempted: [], restarted: [], skipped: [], failed: [] } };
+    const snapshotAfter = fix ? yield* collectSnapshot() : snapshotBefore;
+    const checks = fix ? yield* collectDoctorChecks() : checksBefore;
 
     const data = {
-      queue: {
-        ok: queueStats._tag === 'Right',
-        db_path: cfg.storeDb,
-        schema: schema._tag === 'Right' ? schema.right : undefined,
-        schema_error: schema._tag === 'Left' ? schema.left.message : undefined,
-        writable: storeDbWritable.ok,
-        writable_reason: storeDbWritable.reason,
-        stats: queueStats._tag === 'Right' ? queueStats.right : undefined,
-        error: queueStats._tag === 'Left' ? queueStats.left.message : undefined,
-      },
-      remnote_db: {
-        ok: remnote._tag === 'Right',
-        db_path: remnote._tag === 'Right' ? remnote.right.info.dbPath : cfg.remnoteDb,
-        resolution: remnote._tag === 'Right' ? remnote.right.info.source : undefined,
-        has_search_index: remnote._tag === 'Right' ? remnote.right.result.has_search_index : undefined,
-        error: remnote._tag === 'Left' ? remnote.left.message : undefined,
-      },
-      ws: {
-        ok: wsHealth._tag === 'Right',
-        url: cfg.wsUrl,
-        rtt_ms: wsHealth._tag === 'Right' ? wsHealth.right.rtt_ms : undefined,
-        error: wsHealth._tag === 'Left' ? wsHealth.left.message : undefined,
-        clients: wsClients._tag === 'Right' ? wsClients.right.clients : [],
-      },
-      daemon_files: {
-        pid_file: pidFilePath,
-        log_file: logFilePath,
-        pid_writable: pidWritable,
-        log_writable: logWritable,
-      },
+      queue: snapshotAfter.queue,
+      remnote_db: snapshotAfter.remnote_db,
+      ws: snapshotAfter.ws,
+      daemon_files: snapshotAfter.daemon_files,
+      before: fix ? snapshotBefore : undefined,
+      changed: fixResult.changed,
+      checks_before: checksBefore,
+      checks,
+      fixes: fixResult.fixes,
+      restart_summary: fixResult.restartSummary,
     };
 
     const overallOk =
@@ -99,7 +133,8 @@ export const doctorCommand = Command.make('doctor', {}, () =>
       data.remnote_db.ok &&
       data.ws.ok &&
       data.daemon_files.pid_writable &&
-      data.daemon_files.log_writable;
+      data.daemon_files.log_writable &&
+      checks.every((check) => check.ok);
 
     const hints: string[] = [];
     if (!data.ws.ok) hints.push('Try: agent-remnote daemon ensure / agent-remnote daemon status');
@@ -142,6 +177,9 @@ export const doctorCommand = Command.make('doctor', {}, () =>
       `- pid_file: ${data.daemon_files.pid_file}`,
       `- log_file_writable: ${data.daemon_files.log_writable}`,
       `- log_file: ${data.daemon_files.log_file}`,
+      `- changed: ${data.changed}`,
+      `- checks_total: ${data.checks.length}`,
+      `- fixes_total: ${data.fixes.length}`,
       hints.length > 0 ? `\n## Hint` : '',
       ...hints.map((h) => `- ${h}`),
     ]

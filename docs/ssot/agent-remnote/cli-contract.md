@@ -314,3 +314,18 @@ Wave 1 runtime shape：
   - `latest_supported_version`
   - `applied_migrations`
   - `latest_applied_version`
+- `doctor --json` 必须暴露：
+  - `checks[]`
+  - `changed`
+  - `fixes[]`
+  - `restart_summary`
+- `doctor --fix` 是 `doctor` 的安全修复模式：
+  - 允许清理 stale daemon/api/plugin pid/state 文件
+  - 允许把支持的用户配置形态重写成 canonical keys
+  - 允许汇报 `restart_summary`，但默认不自动重启 runtime 服务
+  - 禁止修改 queue 内容、`remnote.db` 与用户内容数据
+
+## 9) packaged runtime guarantees
+
+- installed npm package layout 必须能加载 builtin scenario package，不得依赖 source-tree 路径
+- packaged `search --json` 成功路径必须只向 stdout 写一个 JSON envelope

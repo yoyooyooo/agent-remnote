@@ -1,4 +1,5 @@
 import { z, type ZodRawShape } from 'zod';
+import { fileURLToPath } from 'node:url';
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 
 import { withResolvedDatabase, getDateFormatting, formatDateWithPattern, type BetterSqliteInstance } from './shared.js';
@@ -79,6 +80,26 @@ type WorkerResult =
   | { readonly ok: true; readonly result: unknown }
   | { readonly ok: false; readonly error: { readonly message: string; readonly stack?: string } };
 
+export async function runSearchRemOverviewWorkerJob(
+  job: WorkerJob,
+  port: { readonly postMessage: (message: WorkerResult) => void },
+): Promise<void> {
+  if (job.kind === 'search_rem_overview') {
+    try {
+      const result = await executeSearchRemOverviewDirect(job.input);
+      port.postMessage({ ok: true, result } satisfies WorkerResult);
+    } catch (e) {
+      port.postMessage({
+        ok: false,
+        error: { message: asErrorMessage(e), stack: (e as any)?.stack },
+      } satisfies WorkerResult);
+    }
+    return;
+  }
+
+  port.postMessage({ ok: false, error: { message: 'Unknown worker job' } } satisfies WorkerResult);
+}
+
 function asErrorMessage(e: unknown): string {
   return String((e as any)?.message || e || 'Unknown error');
 }
@@ -93,7 +114,8 @@ async function executeSearchRemOverviewDirect(params: SearchRemOverviewInput) {
 
 async function executeSearchRemOverviewWithHardTimeout(params: SearchRemOverviewInput, timeoutMs: number) {
   const selfUrl = new URL(import.meta.url);
-  const isSourceMode = selfUrl.protocol === 'file:' && selfUrl.pathname.endsWith('.ts');
+  const selfFilePath = selfUrl.protocol === 'file:' ? fileURLToPath(selfUrl) : '';
+  const isSourceMode = selfFilePath.endsWith('.ts');
 
   if (isSourceMode) {
     return await executeSearchRemOverviewDirect(params);
@@ -113,21 +135,7 @@ if (!isMainThread) {
     throw new Error('Worker parentPort is unavailable');
   }
   const job = (workerData ?? { kind: 'unknown' }) as WorkerJob;
-  if (job.kind === 'search_rem_overview') {
-    void executeSearchRemOverviewDirect(job.input).then(
-      (result) => {
-        port.postMessage({ ok: true, result } satisfies WorkerResult);
-      },
-      (e) => {
-        port.postMessage({
-          ok: false,
-          error: { message: asErrorMessage(e), stack: (e as any)?.stack },
-        } satisfies WorkerResult);
-      },
-    );
-  } else {
-    port.postMessage({ ok: false, error: { message: 'Unknown worker job' } } satisfies WorkerResult);
-  }
+  void runSearchRemOverviewWorkerJob(job, port);
 }
 
 type SearchRow = {

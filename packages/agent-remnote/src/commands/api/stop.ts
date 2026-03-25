@@ -7,6 +7,7 @@ import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { API_STOP_WAIT_DEFAULT_MS } from './_shared.js';
 
@@ -41,7 +42,7 @@ export const apiStopCommand = Command.make(
       const alive = yield* proc.isPidRunning(existing.pid);
       if (!alive) {
         yield* apiFiles.deletePidFile(pidFilePath);
-        yield* apiFiles.deleteStateFile(existing.state_file ?? stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+        yield* apiFiles.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
         yield* writeSuccess({
           data: { stopped: true, stale: true, pid: existing.pid, pid_file: pidFilePath },
           md: `- stopped: true\n- stale: true\n- pid: ${existing.pid}\n- pid_file: ${pidFilePath}\n`,
@@ -49,6 +50,7 @@ export const apiStopCommand = Command.make(
         return;
       }
 
+      yield* requireTrustedPidRecord({ record: existing, pidFilePath });
       yield* proc.kill(existing.pid, 'SIGTERM');
       const exited = yield* proc.waitForExit({ pid: existing.pid, timeoutMs: API_STOP_WAIT_DEFAULT_MS });
       if (!exited) {
@@ -77,7 +79,7 @@ export const apiStopCommand = Command.make(
       }
 
       yield* apiFiles.deletePidFile(pidFilePath);
-      yield* apiFiles.deleteStateFile(existing.state_file ?? stateFilePath).pipe(Effect.catchAll(() => Effect.void));
+      yield* apiFiles.deleteStateFile(stateFilePath).pipe(Effect.catchAll(() => Effect.void));
       yield* writeSuccess({
         data: { stopped: true, pid: existing.pid, pid_file: pidFilePath },
         md: `- stopped: true\n- pid: ${existing.pid}\n- pid_file: ${pidFilePath}\n`,

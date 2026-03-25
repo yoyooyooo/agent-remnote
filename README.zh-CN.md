@@ -144,7 +144,7 @@ agent-remnote --json daemon status
 
 ```bash
 agent-remnote stack ensure
-agent-remnote api status --json
+agent-remnote --json api status
 ```
 
 直接调 HTTP：
@@ -418,6 +418,7 @@ agent-remnote --json plugin status
 agent-remnote --json api status
 agent-remnote --json stack status
 agent-remnote --json doctor
+agent-remnote --json doctor --fix
 ```
 
 现在这些输出会直接给出：
@@ -427,6 +428,9 @@ agent-remnote --json doctor
 - `clients[].runtime` 或 `active_worker.runtime`：当前 live RemNote 插件构建
 - `warnings`：当你连到旧 daemon / 旧 api / 旧 plugin 时的明确告警
 - `doctor.queue.schema`：当前 store schema 版本与支持版本
+- `doctor.checks[]`：稳定的 runtime/config/package/env 检查项 id
+- `doctor.fixes[]`：`doctor --fix` 实际执行过的安全修复动作
+- `doctor.restart_summary`：安全修复后的 best-effort runtime 重启结果
 
 如果改了代码但 `build_id` 还旧，直接重启对应进程：
 
@@ -435,6 +439,21 @@ agent-remnote --json daemon restart --wait 15000
 agent-remnote --json api restart
 agent-remnote --json plugin restart
 ```
+
+`doctor --fix` 的默认安全边界：
+
+- 清理 stale daemon / api / plugin pid 或 state 文件
+- 把支持的用户配置形态重写成 canonical keys
+- 复检 builtin scenarios 与 plugin artifacts 的发布包完整性
+- 汇报 `restart_summary`，但默认不自动重启后台服务
+
+`doctor --fix` 不会修改 queue 内容、`remnote.db` 或用户内容数据。
+
+发布包保证：
+
+- npm 安装态加载 builtin scenarios 时不依赖 source-tree 路径
+- plugin artifacts 属于发布完整性检查的一部分
+- `search --json` 成功返回时，stdout 只输出单个 JSON envelope
 
 ## 可选：tmux statusline（右下角 RN 段）
 
@@ -497,7 +516,7 @@ flowchart LR
 - WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`（默认 `~/.agent-remnote/ws.bridge.state.json`）
 - daemon pidfile（仅 env）：`REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`（默认 `~/.agent-remnote/ws.pid`）
 - daemon log file（仅 env）：`REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE`（默认 `~/.agent-remnote/ws.log`）
-- active worker（自动）：由最近的 RemNote UI 活跃度（selection/uiContext）决定；可用 `agent-remnote daemon status --json` 查看 `activeWorkerConnId`
+- active worker（自动）：由最近的 RemNote UI 活跃度（selection/uiContext）决定；可用 `agent-remnote --json daemon status` 查看 `activeWorkerConnId`
 - repo：`--repo` / `AGENT_REMNOTE_REPO`
 - WS 调度器（仅 env）：`REMNOTE_WS_SCHEDULER`（设为 `0` 可关闭冲突调度；仅用于排障）
 - tmux refresh（仅 env）：`REMNOTE_TMUX_REFRESH` / `REMNOTE_TMUX_REFRESH_MIN_INTERVAL_MS`

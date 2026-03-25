@@ -8,6 +8,7 @@ import { CliError, isCliError } from '../../services/Errors.js';
 import { HostApiClient } from '../../services/HostApiClient.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { apiLocalBaseUrl } from '../../lib/apiUrls.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 
@@ -143,6 +144,7 @@ export function startApiDaemon(
       if (!alive) {
         yield* apiFiles.deletePidFile(pidFilePath);
       } else {
+        yield* requireTrustedPidRecord({ record: existing, pidFilePath });
         return {
           started: false,
           pid: existing.pid,
@@ -236,6 +238,7 @@ export function ensureApiDaemon(
       if (existing) {
         const alive = yield* proc.isPidRunning(existing.pid);
         if (alive) {
+          yield* requireTrustedPidRecord({ record: existing, pidFilePath });
           return {
             started: false,
             pid: existing.pid,

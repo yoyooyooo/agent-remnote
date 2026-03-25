@@ -10,6 +10,7 @@ import { Process } from '../../services/Process.js';
 import { SupervisorState, type SupervisorStateFile } from '../../services/SupervisorState.js';
 import { WsClient } from '../../services/WsClient.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
+import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
 
 export const WS_HEALTH_TIMEOUT_MS = 2000;
@@ -172,6 +173,7 @@ export function startWsDaemon(params: {
       if (!alive) {
         yield* daemonFiles.deletePidFile(pidFilePath);
       } else {
+        yield* requireTrustedPidRecord({ record: existingPidFile, pidFilePath });
         return {
           started: false,
           pid: existingPidFile.pid,
@@ -238,6 +240,7 @@ export function ensureWsDaemon(params: {
       if (existingPidFile) {
         const alive = yield* proc.isPidRunning(existingPidFile.pid);
         if (alive) {
+          yield* requireTrustedPidRecord({ record: existingPidFile, pidFilePath });
           return {
             started: false,
             pid: existingPidFile.pid,
@@ -294,6 +297,7 @@ export function startWsSupervisor(
         yield* daemonFiles.deletePidFile(pidFilePath);
         yield* supervisorState.deleteStateFile(stateFilePath);
       } else {
+        yield* requireTrustedPidRecord({ record: existingPidFile, pidFilePath });
         return {
           started: false,
           pid: existingPidFile.pid,
@@ -370,6 +374,7 @@ export function ensureWsSupervisor(
       if (existingPidFile) {
         const alive = yield* proc.isPidRunning(existingPidFile.pid);
         if (alive) {
+          yield* requireTrustedPidRecord({ record: existingPidFile, pidFilePath });
           return {
             started: false,
             pid: existingPidFile.pid,
