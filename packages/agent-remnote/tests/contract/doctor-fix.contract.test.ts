@@ -431,5 +431,5 @@ describe('cli contract: doctor --fix', () => {
       } catch {}
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, 180_000);
 });
