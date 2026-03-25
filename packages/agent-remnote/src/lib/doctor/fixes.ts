@@ -21,14 +21,14 @@ import { currentRuntimeBuildInfo } from '../runtimeBuildInfo.js';
 import type { DoctorFix, DoctorRestartSummary } from './types.js';
 import { WsClient } from '../../services/WsClient.js';
 
-function stopTrustedRuntime(params: {
+function stopTrustedRuntime<R>(params: {
   readonly service: 'daemon' | 'api' | 'plugin';
   readonly pid: number;
   readonly pidFilePath: string;
   readonly stateFilePath: string;
   readonly stopWaitMs: number;
-  readonly cleanup: Effect.Effect<void, CliError, any>;
-}): Effect.Effect<void, CliError, Process | any> {
+  readonly cleanup: Effect.Effect<void, CliError, R>;
+}): Effect.Effect<void, CliError, Process | R> {
   return Effect.gen(function* () {
     const proc = yield* Process;
     yield* proc.kill(params.pid, 'SIGTERM');
@@ -151,8 +151,13 @@ export function applyDoctorFixes(): Effect.Effect<
       }
     }
 
+    const resolvedPluginStateFile = resolveManagedStateFile({
+      pidFilePath: pluginPidFile,
+      defaultStateFilePath: pluginFiles.defaultStateFile(),
+      candidate: pluginPidInfo?.state_file,
+    });
     const pluginStateInfo = yield* pluginFiles
-      .readStateFile(pluginPidInfo?.state_file ?? pluginFiles.defaultStateFile())
+      .readStateFile(resolvedPluginStateFile)
       .pipe(Effect.orElseSucceed(() => undefined));
 
     fixes.push({
@@ -219,34 +224,36 @@ export function applyDoctorFixes(): Effect.Effect<
         candidate: daemonPidInfo.state_file,
       });
       restartAttempted.push('daemon');
-      const stoppedAndStarted = yield* Effect.gen(function* () {
-        yield* stopTrustedRuntime({
-          service: 'daemon',
-          pid: daemonPidInfo.pid,
-          pidFilePath: daemonPidFile,
-          stateFilePath: daemonStateFile,
-          stopWaitMs: WS_STOP_WAIT_DEFAULT_MS,
-          cleanup: Effect.gen(function* () {
-            yield* daemonFiles.deletePidFile(daemonPidFile);
-            yield* supervisorState.deleteStateFile(daemonStateFile);
-            yield* cleanupStatuslineArtifacts(resolveStatuslineArtifactPaths({ cfg, pidInfo: daemonPidInfo }));
-          }),
-        });
-        return yield* startWsSupervisor({
+      const stopped = yield* stopTrustedRuntime({
+        service: 'daemon',
+        pid: daemonPidInfo.pid,
+        pidFilePath: daemonPidFile,
+        stateFilePath: daemonStateFile,
+        stopWaitMs: WS_STOP_WAIT_DEFAULT_MS,
+        cleanup: Effect.gen(function* () {
+          yield* daemonFiles.deletePidFile(daemonPidFile);
+          yield* supervisorState.deleteStateFile(daemonStateFile);
+          yield* cleanupStatuslineArtifacts(resolveStatuslineArtifactPaths({ cfg, pidInfo: daemonPidInfo }));
+        }),
+      }).pipe(Effect.either);
+      if (stopped._tag === 'Right') {
+        changed = true;
+        const started = yield* startWsSupervisor({
           waitMs: WS_START_WAIT_DEFAULT_MS,
           pidFile: daemonPidFile,
           logFile: daemonPidInfo.log_file,
-        });
-      }).pipe(Effect.either);
-      if (stoppedAndStarted._tag === 'Right') {
-        if (stoppedAndStarted.right.started) {
-          restartRestarted.push('daemon');
-          changed = true;
+        }).pipe(Effect.either);
+        if (started._tag === 'Right') {
+          if (started.right.started) {
+            restartRestarted.push('daemon');
+          } else {
+            restartSkipped.push('daemon_already_healthy_after_restart_attempt');
+          }
         } else {
-          restartSkipped.push('daemon_already_healthy_after_restart_attempt');
+          restartFailed.push({ service: 'daemon', error: started.left.message });
         }
       } else {
-        restartFailed.push({ service: 'daemon', error: stoppedAndStarted.left.message });
+        restartFailed.push({ service: 'daemon', error: stopped.left.message });
       }
     } else if (daemonPidInfo?.build?.build_id && daemonPidInfo.build.build_id !== current.build_id) {
       restartSkipped.push('daemon_restart_not_safe');
@@ -264,36 +271,39 @@ export function applyDoctorFixes(): Effect.Effect<
         candidate: apiPidInfo.state_file,
       });
       restartAttempted.push('api');
-      const stoppedAndStarted = yield* Effect.gen(function* () {
-        yield* stopTrustedRuntime({
-          service: 'api',
-          pid: apiPidInfo.pid,
-          pidFilePath: apiPidFile,
-          stateFilePath: apiStateFile,
-          stopWaitMs: API_STOP_WAIT_DEFAULT_MS,
-          cleanup: Effect.gen(function* () {
-            yield* apiFiles.deletePidFile(apiPidFile);
-            yield* apiFiles.deleteStateFile(apiStateFile);
-          }),
-        });
-        return yield* startApiDaemon({
+      const stopped = yield* stopTrustedRuntime({
+        service: 'api',
+        pid: apiPidInfo.pid,
+        pidFilePath: apiPidFile,
+        stateFilePath: apiStateFile,
+        stopWaitMs: API_STOP_WAIT_DEFAULT_MS,
+        cleanup: Effect.gen(function* () {
+          yield* apiFiles.deletePidFile(apiPidFile);
+          yield* apiFiles.deleteStateFile(apiStateFile);
+        }),
+      }).pipe(Effect.either);
+      if (stopped._tag === 'Right') {
+        changed = true;
+        const started = yield* startApiDaemon({
           host: apiPidInfo.host,
           port: apiPidInfo.port,
+          basePath: apiPidInfo.base_path,
           waitMs: API_START_WAIT_DEFAULT_MS,
           pidFile: apiPidFile,
           logFile: apiPidInfo.log_file,
           stateFile: apiStateFile,
-        });
-      }).pipe(Effect.either);
-      if (stoppedAndStarted._tag === 'Right') {
-        if (stoppedAndStarted.right.started) {
-          restartRestarted.push('api');
-          changed = true;
+        }).pipe(Effect.either);
+        if (started._tag === 'Right') {
+          if (started.right.started) {
+            restartRestarted.push('api');
+          } else {
+            restartSkipped.push('api_already_healthy_after_restart_attempt');
+          }
         } else {
-          restartSkipped.push('api_already_healthy_after_restart_attempt');
+          restartFailed.push({ service: 'api', error: started.left.message });
         }
       } else {
-        restartFailed.push({ service: 'api', error: stoppedAndStarted.left.message });
+        restartFailed.push({ service: 'api', error: stopped.left.message });
       }
     } else if (apiPidInfo?.build?.build_id && apiPidInfo.build.build_id !== current.build_id) {
       restartSkipped.push('api_restart_not_safe');
@@ -317,36 +327,38 @@ export function applyDoctorFixes(): Effect.Effect<
         candidate: pluginPidInfo.state_file,
       });
       restartAttempted.push('plugin');
-      const stoppedAndStarted = yield* Effect.gen(function* () {
-        yield* stopTrustedRuntime({
-          service: 'plugin',
-          pid: pluginPidInfo.pid,
-          pidFilePath: pluginPidFile,
-          stateFilePath: pluginStateFile,
-          stopWaitMs: PLUGIN_SERVER_STOP_WAIT_DEFAULT_MS,
-          cleanup: Effect.gen(function* () {
-            yield* pluginFiles.deletePidFile(pluginPidFile);
-            yield* pluginFiles.deleteStateFile(pluginStateFile);
-          }),
-        });
-        return yield* startPluginServer({
+      const stopped = yield* stopTrustedRuntime({
+        service: 'plugin',
+        pid: pluginPidInfo.pid,
+        pidFilePath: pluginPidFile,
+        stateFilePath: pluginStateFile,
+        stopWaitMs: PLUGIN_SERVER_STOP_WAIT_DEFAULT_MS,
+        cleanup: Effect.gen(function* () {
+          yield* pluginFiles.deletePidFile(pluginPidFile);
+          yield* pluginFiles.deleteStateFile(pluginStateFile);
+        }),
+      }).pipe(Effect.either);
+      if (stopped._tag === 'Right') {
+        changed = true;
+        const started = yield* startPluginServer({
           host: pluginPidInfo.host,
           port: pluginPidInfo.port,
           waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
           pidFile: pluginPidFile,
           logFile: pluginPidInfo.log_file,
           stateFile: pluginStateFile,
-        });
-      }).pipe(Effect.either);
-      if (stoppedAndStarted._tag === 'Right') {
-        if (stoppedAndStarted.right.started) {
-          restartRestarted.push('plugin');
-          changed = true;
+        }).pipe(Effect.either);
+        if (started._tag === 'Right') {
+          if (started.right.started) {
+            restartRestarted.push('plugin');
+          } else {
+            restartSkipped.push('plugin_already_healthy_after_restart_attempt');
+          }
         } else {
-          restartSkipped.push('plugin_already_healthy_after_restart_attempt');
+          restartFailed.push({ service: 'plugin', error: started.left.message });
         }
       } else {
-        restartFailed.push({ service: 'plugin', error: stoppedAndStarted.left.message });
+        restartFailed.push({ service: 'plugin', error: stopped.left.message });
       }
     } else if (pluginRuntimeMismatch || pluginArtifactMismatch) {
       restartSkipped.push('plugin_restart_not_safe');

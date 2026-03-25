@@ -28,6 +28,7 @@ export type ApiDaemonStartResult = {
 export type ApiStartParams = {
   readonly host?: string | undefined;
   readonly port?: number | undefined;
+  readonly basePath?: string | undefined;
   readonly waitMs: number;
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
@@ -132,7 +133,7 @@ export function startApiDaemon(
 
     const host = params.host ?? cfg.apiHost ?? '0.0.0.0';
     const port = params.port ?? cfg.apiPort ?? 3000;
-    const basePath = cfg.apiBasePath ?? '/v1';
+    const basePath = params.basePath ?? cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? apiFiles.defaultStateFile());
