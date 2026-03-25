@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
+import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
@@ -22,7 +23,12 @@ export const stackStopCommand = Command.make('stop', {}, () =>
 
     const apiPidFile = resolveUserFilePath(apiFiles.defaultPidFile());
     const apiPidInfo = yield* apiFiles.readPidFile(apiPidFile);
-    let apiStopped = true;
+    const apiStateFile = resolveManagedStateFile({
+      pidFilePath: apiPidFile,
+      defaultStateFilePath: apiFiles.defaultStateFile(),
+      candidate: apiPidInfo?.state_file,
+    });
+    let apiStopped = false;
     if (apiPidInfo && (yield* proc.isPidRunning(apiPidInfo.pid))) {
       yield* requireTrustedPidRecord({ record: apiPidInfo, pidFilePath: apiPidFile });
       yield* proc.kill(apiPidInfo.pid, 'SIGTERM');
@@ -36,15 +42,21 @@ export const stackStopCommand = Command.make('stop', {}, () =>
           );
         }
       }
+      apiStopped = true;
+    } else {
+      apiStopped = true;
     }
     yield* apiFiles.deletePidFile(apiPidFile).pipe(Effect.catchAll(() => Effect.void));
-    yield* apiFiles
-      .deleteStateFile(apiFiles.defaultStateFile())
-      .pipe(Effect.catchAll(() => Effect.void));
+    yield* apiFiles.deleteStateFile(apiStateFile).pipe(Effect.catchAll(() => Effect.void));
 
     const daemonPidFile = resolveUserFilePath(daemonFiles.defaultPidFile());
     const daemonPidInfo = yield* daemonFiles.readPidFile(daemonPidFile);
-    let daemonStopped = true;
+    const daemonStateFile = resolveManagedStateFile({
+      pidFilePath: daemonPidFile,
+      defaultStateFilePath: resolveUserFilePath(path.join(path.dirname(daemonPidFile), 'ws.state.json')),
+      candidate: daemonPidInfo?.state_file,
+    });
+    let daemonStopped = false;
     if (daemonPidInfo && (yield* proc.isPidRunning(daemonPidInfo.pid))) {
       yield* requireTrustedPidRecord({ record: daemonPidInfo, pidFilePath: daemonPidFile });
       yield* proc.kill(daemonPidInfo.pid, 'SIGTERM');
@@ -58,11 +70,12 @@ export const stackStopCommand = Command.make('stop', {}, () =>
           );
         }
       }
+      daemonStopped = true;
+    } else {
+      daemonStopped = true;
     }
     yield* daemonFiles.deletePidFile(daemonPidFile).pipe(Effect.catchAll(() => Effect.void));
-    yield* supervisorState
-      .deleteStateFile(resolveUserFilePath(path.join(path.dirname(daemonPidFile), 'ws.state.json')))
-      .pipe(Effect.catchAll(() => Effect.void));
+    yield* supervisorState.deleteStateFile(daemonStateFile).pipe(Effect.catchAll(() => Effect.void));
 
     yield* writeSuccess({
       data: { stopped: true, api_stopped: apiStopped, daemon_stopped: daemonStopped },

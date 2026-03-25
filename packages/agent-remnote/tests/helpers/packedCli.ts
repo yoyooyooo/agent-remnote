@@ -13,6 +13,10 @@ export type SpawnResult = {
 
 const PACK_CACHE_ROOT = path.join(os.tmpdir(), 'agent-remnote-pack-cache');
 
+function npmCommand(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
 function repoRoot(): string {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -95,6 +99,15 @@ async function spawnAndCapture(
       } catch {}
     }, timeoutMs);
 
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolve({
+        exitCode: 1,
+        stdout,
+        stderr: [stderr, String((error as any)?.message || error)].filter(Boolean).join('\n'),
+      });
+    });
+
     child.on('close', (code) => {
       clearTimeout(timer);
       resolve({ exitCode: typeof code === 'number' ? code : 1, stdout, stderr });
@@ -119,13 +132,22 @@ async function ensurePackedCliCache(): Promise<string> {
   } catch {}
 
   let lockHeld = false;
+  const lockDeadline = Date.now() + 30_000;
   for (;;) {
+    if (Date.now() > lockDeadline) {
+      throw new Error(`Timed out waiting for pack cache lock: ${cacheLock}`);
+    }
     try {
       await fs.mkdir(cacheLock);
       lockHeld = true;
       break;
     } catch (error: any) {
       if (error?.code !== 'EEXIST') throw error;
+      const stat = await fs.stat(cacheLock).catch(() => undefined);
+      if (stat && Date.now() - stat.mtimeMs > 30_000) {
+        await fs.rm(cacheLock, { recursive: true, force: true });
+        continue;
+      }
       try {
         await fs.access(cacheTarball);
         return cacheTarball;
@@ -142,7 +164,7 @@ async function ensurePackedCliCache(): Promise<string> {
 
     const buildDir = await fs.mkdtemp(path.join(cacheRoot, 'build-'));
     try {
-      const res = await spawnAndCapture('npm', ['pack', '--json', '--pack-destination', buildDir, './packages/agent-remnote'], {
+      const res = await spawnAndCapture(npmCommand(), ['pack', '--json', '--pack-destination', buildDir, './packages/agent-remnote'], {
         timeoutMs: 180_000,
       });
       if (res.exitCode !== 0) {
@@ -180,7 +202,7 @@ export async function packAgentRemnoteCli(): Promise<{ readonly workDir: string;
 
 export async function installPackedCli(tarballPath: string): Promise<{ readonly installDir: string; readonly cliPath: string }> {
   const installDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-install-'));
-  const res = await spawnAndCapture('npm', ['install', '--prefix', installDir, tarballPath], {
+  const res = await spawnAndCapture(npmCommand(), ['install', '--prefix', installDir, tarballPath], {
     timeoutMs: 180_000,
   });
   if (res.exitCode !== 0) {

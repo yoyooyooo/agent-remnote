@@ -10,6 +10,7 @@ import { Process } from '../../services/Process.js';
 import { UserConfigFile } from '../../services/UserConfigFile.js';
 import { getBuiltinScenarioPackage } from '../builtin-scenarios/index.js';
 import { currentExpectedPluginBuildInfo } from '../pluginBuildInfo.js';
+import { isTrustedPidRecord } from '../pidTrust.js';
 import { resolvePluginDistPath, resolvePluginZipPath } from '../pluginArtifacts.js';
 import { currentRuntimeBuildInfo } from '../runtimeBuildInfo.js';
 import type { DoctorCheck } from './types.js';
@@ -31,7 +32,6 @@ export function collectDoctorChecks(): Effect.Effect<
     const daemonFiles = yield* DaemonFiles;
     const apiFiles = yield* ApiDaemonFiles;
     const pluginFiles = yield* PluginServerFiles;
-    const proc = yield* Process;
     const userConfig = yield* UserConfigFile;
     const fsAccess = yield* FsAccess;
 
@@ -39,7 +39,7 @@ export function collectDoctorChecks(): Effect.Effect<
 
     const daemonPidFile = daemonFiles.defaultPidFile();
     const daemonPidInfo = yield* daemonFiles.readPidFile(daemonPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (daemonPidInfo?.pid && !(yield* proc.isPidRunning(daemonPidInfo.pid))) {
+    if (daemonPidInfo?.pid && !(yield* isTrustedPidRecord(daemonPidInfo))) {
       staleArtifacts.push({
         service: 'daemon',
         pidFile: daemonPidFile,
@@ -50,7 +50,7 @@ export function collectDoctorChecks(): Effect.Effect<
 
     const apiPidFile = apiFiles.defaultPidFile();
     const apiPidInfo = yield* apiFiles.readPidFile(apiPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (apiPidInfo?.pid && !(yield* proc.isPidRunning(apiPidInfo.pid))) {
+    if (apiPidInfo?.pid && !(yield* isTrustedPidRecord(apiPidInfo))) {
       staleArtifacts.push({
         service: 'api',
         pidFile: apiPidFile,
@@ -61,7 +61,7 @@ export function collectDoctorChecks(): Effect.Effect<
 
     const pluginPidFile = pluginFiles.defaultPidFile();
     const pluginPidInfo = yield* pluginFiles.readPidFile(pluginPidFile).pipe(Effect.orElseSucceed(() => undefined));
-    if (pluginPidInfo?.pid && !(yield* proc.isPidRunning(pluginPidInfo.pid))) {
+    if (pluginPidInfo?.pid && !(yield* isTrustedPidRecord(pluginPidInfo))) {
       staleArtifacts.push({
         service: 'plugin',
         pidFile: pluginPidFile,

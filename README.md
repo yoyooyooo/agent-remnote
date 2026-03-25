@@ -578,6 +578,30 @@ npm run dev -- --help
 npm run check
 ```
 
+### 7) Turbo shortcuts
+
+For monorepo-wide local validation:
+
+```bash
+npm run test:turbo
+npm run typecheck:turbo
+npm run lint:turbo
+```
+
+For branch-local incremental runs against `origin/master`:
+
+```bash
+npm run test:turbo:affected
+npm run typecheck:turbo:affected
+npm run lint:turbo:affected
+```
+
+If `origin/master` is stale locally, fetch first:
+
+```bash
+git fetch origin master
+```
+
 ## Release
 
 This repo uses Changesets for npm releases.

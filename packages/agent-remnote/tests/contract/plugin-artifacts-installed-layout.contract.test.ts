@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import net from 'node:net';
+import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import Database from 'better-sqlite3';
 
@@ -53,8 +54,8 @@ describe('cli contract: plugin artifacts in installed package layout', () => {
     installDir = installed.installDir;
     cliPath = installed.cliPath;
     port = await getFreePort();
-    remnoteDb = `${installDir}/remnote.db`;
-    storeDb = `${installDir}/store.sqlite`;
+    remnoteDb = path.join(installDir, 'remnote.db');
+    storeDb = path.join(installDir, 'store.sqlite');
     createMinimalRemnoteDb(remnoteDb);
   }, 240_000);
 
@@ -64,34 +65,39 @@ describe('cli contract: plugin artifacts in installed package layout', () => {
   });
 
   it('serves plugin artifacts from an installed package', async () => {
-    const pidFile = `${installDir}/plugin.pid`;
-    const logFile = `${installDir}/plugin.log`;
-    const stateFile = `${installDir}/plugin.state.json`;
+    const pidFile = path.join(installDir, 'plugin.pid');
+    const logFile = path.join(installDir, 'plugin.log');
+    const stateFile = path.join(installDir, 'plugin.state.json');
 
     const startRes = await runInstalledCli({
       cliPath,
       args: ['--json', 'plugin', 'start', '--port', String(port), '--pid-file', pidFile, '--log-file', logFile, '--state-file', stateFile],
       timeoutMs: 30_000,
     });
-    expect(startRes.exitCode).toBe(0);
-    expect(startRes.stderr).toBe('');
-    const parsed = JSON.parse(startRes.stdout.trim());
-    expect(parsed.ok).toBe(true);
-    expect(parsed.data.base_url).toBe(`http://127.0.0.1:${port}`);
+    const shouldStop = startRes.exitCode === 0;
+    try {
+      expect(startRes.exitCode).toBe(0);
+      expect(startRes.stderr).toBe('');
+      const parsed = JSON.parse(startRes.stdout.trim());
+      expect(parsed.ok).toBe(true);
+      expect(parsed.data.base_url).toBe(`http://127.0.0.1:${port}`);
 
-    const manifestRes = await fetch(`http://127.0.0.1:${port}/manifest.json`);
-    expect(manifestRes.status).toBe(200);
-
-    const stopRes = await runInstalledCli({
-      cliPath,
-      args: ['--json', 'plugin', 'stop', '--pid-file', pidFile, '--state-file', stateFile],
-      timeoutMs: 30_000,
-    });
-    expect(stopRes.exitCode).toBe(0);
-    expect(stopRes.stderr).toBe('');
-    const stopped = JSON.parse(stopRes.stdout.trim());
-    expect(stopped.ok).toBe(true);
-    expect(stopped.data.stopped).toBe(true);
+      const manifestRes = await fetch(`http://127.0.0.1:${port}/manifest.json`);
+      expect(manifestRes.status).toBe(200);
+    } finally {
+      if (shouldStop) {
+        const stopRes = await runInstalledCli({
+          cliPath,
+          args: ['--json', 'plugin', 'stop', '--pid-file', pidFile, '--state-file', stateFile],
+          timeoutMs: 30_000,
+        });
+        expect(stopRes.exitCode).toBe(0);
+        expect(stopRes.stderr).toBe('');
+        const stopped = JSON.parse(stopRes.stdout.trim());
+        expect(stopped.ok).toBe(true);
+        expect(stopped.data.stopped).toBe(true);
+      }
+    }
   });
 
   it('reports package checks from an installed package via doctor', async () => {

@@ -41,9 +41,6 @@ const cli = Command.run(rootCommand, {
   version,
 });
 
-const jsonRequested = process.argv.includes('--json');
-const debugRequested = process.argv.includes('--debug');
-
 function canonicalizeArgv(argv: readonly string[]): string[] {
   const out = [...argv];
   for (let i = 0; i < out.length; i += 1) {
@@ -119,6 +116,10 @@ const ROOT_VALUE_FLAGS = new Set([
   '--config-file',
   ...BUILTIN_VALUE_FLAGS,
 ]);
+
+const rootCliConfig = parseRootConfigFromArgv(argv);
+const jsonRequested = rootCliConfig.get('json') === 'true';
+const debugRequested = rootCliConfig.get('debug') === 'true';
 
 function parseRootConfigFromArgv(argv: readonly string[]): Map<string, string> {
   const tokens = argv.slice(2);
