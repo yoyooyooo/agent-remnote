@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   startWsSupervisor: vi.fn(),
   startApiDaemon: vi.fn(),
   startPluginServer: vi.fn(),
+  runStackTakeover: vi.fn(),
   currentExpectedPluginBuildInfo: vi.fn(),
 }));
 
@@ -40,6 +41,14 @@ vi.mock('../../src/lib/pluginBuildInfo.js', async () => {
   return {
     ...actual,
     currentExpectedPluginBuildInfo: mocks.currentExpectedPluginBuildInfo,
+  };
+});
+
+vi.mock('../../src/commands/stack/takeover.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/commands/stack/takeover.js')>('../../src/commands/stack/takeover.js');
+  return {
+    ...actual,
+    runStackTakeover: mocks.runStackTakeover,
   };
 });
 
@@ -94,6 +103,7 @@ describe('doctor fixes (unit)', () => {
     mocks.startWsSupervisor.mockReset();
     mocks.startApiDaemon.mockReset();
     mocks.startPluginServer.mockReset();
+    mocks.runStackTakeover.mockReset();
     mocks.currentExpectedPluginBuildInfo.mockReset();
   });
 
@@ -406,5 +416,169 @@ describe('doctor fixes (unit)', () => {
 
     const pluginMismatch = checks.find((item) => item.id === 'runtime.version_mismatch');
     expect(JSON.stringify(pluginMismatch?.details ?? [])).not.toContain('plugin-artifact');
+  });
+
+  it('realigns trusted owner mismatches through stack takeover', async () => {
+    const tmpHome = path.join(os.tmpdir(), `agent-remnote-doctor-owner-realign-${Date.now()}`);
+    const cfg = makeConfig(tmpHome);
+    const wsPid = path.join(tmpHome, '.agent-remnote', 'ws.pid');
+    const apiPid = path.join(tmpHome, '.agent-remnote', 'api.pid');
+    const pluginPid = path.join(tmpHome, '.agent-remnote', 'plugin-server.pid');
+
+    mocks.currentExpectedPluginBuildInfo.mockReturnValue(undefined);
+    mocks.runStackTakeover.mockReturnValue(
+      Effect.succeed({
+        previous_claim: {
+          claimed_channel: 'stable',
+          claimed_owner_id: 'stable',
+          runtime_root: path.join(tmpHome, '.agent-remnote'),
+          control_plane_root: path.join(tmpHome, '.agent-remnote'),
+          port_class: 'canonical',
+          updated_by: 'initial_bootstrap',
+          updated_at: 0,
+        },
+        next_claim: {
+          claimed_channel: 'stable',
+          claimed_owner_id: 'stable',
+          runtime_root: path.join(tmpHome, '.agent-remnote'),
+          control_plane_root: path.join(tmpHome, '.agent-remnote'),
+          port_class: 'canonical',
+          updated_by: 'doctor_fix',
+          updated_at: Date.now(),
+        },
+        claim_file: path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json'),
+        stopped_services: ['daemon', 'api', 'plugin'],
+        restarted_services: ['stable-launcher'],
+        skipped_services: [],
+        failed_services: [],
+        remnote_reload_required: false,
+        warnings: [],
+        next_actions: [],
+      }),
+    );
+
+    const layer = Layer.mergeAll(
+      Layer.succeed(AppConfig, cfg),
+      Layer.succeed(DaemonFiles, {
+        defaultPidFile: () => wsPid,
+        defaultLogFile: () => path.join(tmpHome, '.agent-remnote', 'ws.log'),
+        readPidFile: () =>
+          Effect.succeed({
+            pid: 101,
+            mode: 'supervisor',
+            state_file: path.join(tmpHome, '.agent-remnote', 'ws.state.json'),
+            log_file: path.join(tmpHome, '.agent-remnote', 'ws.log'),
+            owner: {
+              owner_channel: 'dev',
+              owner_id: 'dev',
+              install_source: 'source_tree',
+              runtime_root: path.join(tmpHome, '.agent-remnote', 'dev', 'fixture'),
+              port_class: 'canonical',
+              launcher_ref: 'source:/tmp/worktree',
+            },
+            cmd: [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts'), 'daemon', 'supervisor'],
+          } as any),
+        writePidFile: () => Effect.void,
+        deletePidFile: () => Effect.void,
+      } as any),
+      Layer.succeed(ApiDaemonFiles, {
+        defaultPidFile: () => apiPid,
+        defaultLogFile: () => path.join(tmpHome, '.agent-remnote', 'api.log'),
+        defaultStateFile: () => path.join(tmpHome, '.agent-remnote', 'api.state.json'),
+        readPidFile: () =>
+          Effect.succeed({
+            pid: 202,
+            host: '127.0.0.1',
+            port: 3000,
+            base_path: '/v1',
+            log_file: path.join(tmpHome, '.agent-remnote', 'api.log'),
+            state_file: path.join(tmpHome, '.agent-remnote', 'api.state.json'),
+            owner: {
+              owner_channel: 'dev',
+              owner_id: 'dev',
+              install_source: 'source_tree',
+              runtime_root: path.join(tmpHome, '.agent-remnote', 'dev', 'fixture'),
+              port_class: 'canonical',
+              launcher_ref: 'source:/tmp/worktree',
+            },
+            cmd: [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts'), 'api', 'serve'],
+          } as any),
+        writePidFile: () => Effect.void,
+        deletePidFile: () => Effect.void,
+        readStateFile: () => Effect.succeed(undefined),
+        writeStateFile: () => Effect.void,
+        deleteStateFile: () => Effect.void,
+      } as any),
+      Layer.succeed(PluginServerFiles, {
+        defaultPidFile: () => pluginPid,
+        defaultLogFile: () => path.join(tmpHome, '.agent-remnote', 'plugin-server.log'),
+        defaultStateFile: () => path.join(tmpHome, '.agent-remnote', 'plugin-server.state.json'),
+        readPidFile: () =>
+          Effect.succeed({
+            pid: 303,
+            host: '127.0.0.1',
+            port: 8080,
+            log_file: path.join(tmpHome, '.agent-remnote', 'plugin-server.log'),
+            state_file: path.join(tmpHome, '.agent-remnote', 'plugin-server.state.json'),
+            owner: {
+              owner_channel: 'dev',
+              owner_id: 'dev',
+              install_source: 'source_tree',
+              runtime_root: path.join(tmpHome, '.agent-remnote', 'dev', 'fixture'),
+              port_class: 'canonical',
+              launcher_ref: 'source:/tmp/worktree',
+            },
+            cmd: [process.execPath, '--import', 'tsx', path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts'), 'plugin', 'serve'],
+          } as any),
+        writePidFile: () => Effect.void,
+        deletePidFile: () => Effect.void,
+        readStateFile: () => Effect.succeed(undefined),
+        writeStateFile: () => Effect.void,
+        deleteStateFile: () => Effect.void,
+      } as any),
+      Layer.succeed(SupervisorState, {
+        defaultStateFile: () => path.join(tmpHome, '.agent-remnote', 'ws.state.json'),
+        readStateFile: () => Effect.succeed(undefined),
+        writeStateFile: () => Effect.void,
+        deleteStateFile: () => Effect.void,
+      } as any),
+      Layer.succeed(Process, {
+        isPidRunning: () => Effect.succeed(true),
+        getCommandLine: () => Effect.succeed(`${process.execPath} --import tsx ${path.join(os.tmpdir(), 'agent-remnote', 'src', 'main.ts')} daemon supervisor`),
+        spawnDetached: () => Effect.succeed(999),
+        kill: () => Effect.void,
+        waitForExit: () => Effect.succeed(true),
+      } as any),
+      Layer.succeed(UserConfigFile, {
+        repair: () =>
+          Effect.succeed({
+            configFile: cfg.configFile,
+            changed: false,
+            before: { valid: true },
+            after: { valid: true },
+          }),
+      } as any),
+      Layer.succeed(StatusLineFile, {
+        write: () => Effect.succeed({ wrote: true, textFilePath: cfg.statusLineFile }),
+      } as any),
+      Layer.succeed(WsClient, {
+        health: () => Effect.fail({ _tag: 'CliError', code: 'WS_UNAVAILABLE', message: 'offline', exitCode: 1 } as any),
+        queryClients: () => Effect.succeed({ clients: [], activeWorkerConnId: undefined }),
+      } as any),
+      Layer.succeed(HostApiClient, {
+        health: () => Effect.fail({ _tag: 'CliError', code: 'API_UNAVAILABLE', message: 'offline', exitCode: 1 } as any),
+      } as any),
+    );
+
+    const previousHome = process.env.HOME;
+    process.env.HOME = tmpHome;
+    const result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+
+    const fix = result.fixes.find((item) => item.id === 'runtime.realign_fixed_owner_claimed_services');
+    expect(fix?.ok).toBe(true);
+    expect(fix?.changed).toBe(true);
+    expect(mocks.runStackTakeover).toHaveBeenCalledWith('stable');
   });
 });

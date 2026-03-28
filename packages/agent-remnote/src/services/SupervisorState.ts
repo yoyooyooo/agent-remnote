@@ -7,7 +7,7 @@ import path from 'node:path';
 import { CliError, isCliError } from './Errors.js';
 import type { SupervisorStateFile } from '../kernel/supervisor/model.js';
 export type { SupervisorLastExit, SupervisorStateFile, SupervisorStatus } from '../kernel/supervisor/model.js';
-import { homeDir } from '../lib/paths.js';
+import { defaultRuntimePath } from '../lib/runtime-ownership/paths.js';
 
 export interface SupervisorStateService {
   readonly defaultStateFile: () => string;
@@ -23,7 +23,7 @@ function ensureDir(p: string): Promise<void> {
 }
 
 function defaultStateFile(): string {
-  return path.join(homeDir(), '.agent-remnote', 'ws.state.json');
+  return defaultRuntimePath('ws.state.json');
 }
 
 async function writeJsonAtomic(filePath: string, json: unknown): Promise<void> {

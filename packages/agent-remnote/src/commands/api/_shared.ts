@@ -11,6 +11,10 @@ import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { apiLocalBaseUrl } from '../../lib/apiUrls.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { assertMayUseCanonicalPort } from '../../lib/runtime-ownership/claim.js';
+import type { RuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
+import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
 
 export const API_HEALTH_TIMEOUT_MS = 2000;
 export const API_START_WAIT_DEFAULT_MS = 15_000;
@@ -33,6 +37,8 @@ export type ApiStartParams = {
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
   readonly stateFile?: string | undefined;
+  readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
+  readonly envOverride?: NodeJS.ProcessEnv | undefined;
 };
 
 function childCommandLine(params: {
@@ -71,10 +77,12 @@ function toPidFileValue(params: {
   readonly logFile: string;
   readonly stateFile: string;
   readonly cmd: readonly string[];
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
 }): ApiPidFile {
   return {
     pid: params.pid,
     build: currentRuntimeBuildInfo(),
+    owner: params.owner ?? currentRuntimeOwnerDescriptor(),
     started_at: params.startedAt,
     host: params.host,
     port: params.port,
@@ -133,6 +141,18 @@ export function startApiDaemon(
 
     const host = params.host ?? cfg.apiHost ?? '0.0.0.0';
     const port = params.port ?? cfg.apiPort ?? 3000;
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalPort({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical api port policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
     const basePath = params.basePath ?? cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
@@ -190,7 +210,12 @@ export function startApiDaemon(
             }),
     });
 
-    const pid = yield* proc.spawnDetached({ command: cmd.command, args: cmd.args, logFile: logFilePath });
+    const pid = yield* proc.spawnDetached({
+      command: cmd.command,
+      args: cmd.args,
+      logFile: logFilePath,
+      env: params.envOverride ? { ...process.env, ...params.envOverride } : undefined,
+    });
     yield* apiFiles.writePidFile(
       pidFilePath,
       toPidFileValue({
@@ -202,6 +227,7 @@ export function startApiDaemon(
         logFile: logFilePath,
         stateFile: stateFilePath,
         cmd: [cmd.command, ...cmd.args],
+        owner: params.ownerOverride,
       }),
     );
 
@@ -227,6 +253,18 @@ export function ensureApiDaemon(
     const proc = yield* Process;
 
     const port = params.port ?? cfg.apiPort ?? 3000;
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalPort({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical api port policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
     const basePath = cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());

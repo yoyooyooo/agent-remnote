@@ -5,12 +5,15 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
-import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import { resolveUserFilePath } from '../lib/paths.js';
 import type { RuntimeBuildInfo } from '../lib/runtimeBuildInfo.js';
+import type { RuntimeOwnerDescriptor } from '../lib/runtime-ownership/ownerDescriptor.js';
+import { defaultRuntimePath } from '../lib/runtime-ownership/paths.js';
 
 export type ApiPidFile = {
   readonly pid: number;
   readonly build?: RuntimeBuildInfo | undefined;
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
   readonly started_at?: number | undefined;
   readonly host?: string | undefined;
   readonly port?: number | undefined;
@@ -24,6 +27,7 @@ export type ApiStateFile = {
   readonly running: boolean;
   readonly pid: number;
   readonly build?: RuntimeBuildInfo | undefined;
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
   readonly host: string;
   readonly port: number;
   readonly basePath: string;
@@ -54,19 +58,19 @@ function ensureDir(p: string): Promise<void> {
 function defaultPidFile(): string {
   const envPidFile = process.env.REMNOTE_API_PID_FILE;
   if (typeof envPidFile === 'string' && envPidFile.trim()) return resolveUserFilePath(envPidFile);
-  return path.join(homeDir(), '.agent-remnote', 'api.pid');
+  return defaultRuntimePath('api.pid');
 }
 
 function defaultLogFile(): string {
   const envLogFile = process.env.REMNOTE_API_LOG_FILE;
   if (typeof envLogFile === 'string' && envLogFile.trim()) return resolveUserFilePath(envLogFile);
-  return path.join(homeDir(), '.agent-remnote', 'api.log');
+  return defaultRuntimePath('api.log');
 }
 
 function defaultStateFile(): string {
   const envStateFile = process.env.REMNOTE_API_STATE_FILE;
   if (typeof envStateFile === 'string' && envStateFile.trim()) return resolveUserFilePath(envStateFile);
-  return path.join(homeDir(), '.agent-remnote', 'api.state.json');
+  return defaultRuntimePath('api.state.json');
 }
 
 function parseJson<T>(raw: string, filePath: string): T {

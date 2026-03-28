@@ -13,6 +13,8 @@ import { currentExpectedPluginBuildInfo } from '../pluginBuildInfo.js';
 import { isTrustedPidRecord } from '../pidTrust.js';
 import { resolvePluginDistPath, resolvePluginZipPath } from '../pluginArtifacts.js';
 import { currentRuntimeBuildInfo } from '../runtimeBuildInfo.js';
+import { readFixedOwnerClaim } from '../runtime-ownership/claim.js';
+import { resolveRuntimeOwnershipContext } from '../runtime-ownership/profile.js';
 import type { DoctorCheck } from './types.js';
 
 type RuntimeArtifactDetail = {
@@ -36,6 +38,7 @@ export function collectDoctorChecks(): Effect.Effect<
     const fsAccess = yield* FsAccess;
 
     const staleArtifacts: RuntimeArtifactDetail[] = [];
+    const fixedOwner = readFixedOwnerClaim(resolveRuntimeOwnershipContext());
 
     const daemonPidFile = daemonFiles.defaultPidFile();
     const daemonPidInfo = yield* daemonFiles.readPidFile(daemonPidFile).pipe(Effect.orElseSucceed(() => undefined));
@@ -118,6 +121,18 @@ export function collectDoctorChecks(): Effect.Effect<
     const pathOk = pidWritable && logWritable && storeWritable.ok;
 
     return [
+      {
+        id: 'runtime.fixed_owner_claim_present',
+        ok: true,
+        severity: 'info',
+        summary: fixedOwner.exists ? 'Canonical fixed owner claim file is present' : 'Canonical fixed owner claim is using bootstrap default',
+        details: {
+          file: fixedOwner.file,
+          source: fixedOwner.exists ? 'file' : 'bootstrap_default',
+          claim: fixedOwner.claim,
+        },
+        repairable: false,
+      },
       {
         id: 'runtime.stale_pid_or_state',
         ok: staleArtifacts.length === 0,

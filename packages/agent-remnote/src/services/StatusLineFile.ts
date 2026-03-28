@@ -5,7 +5,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
-import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import { resolveUserFilePath } from '../lib/paths.js';
+import { defaultRuntimePath } from '../lib/runtime-ownership/paths.js';
 
 export interface StatusLineFileService {
   readonly defaultTextFile: () => string;
@@ -22,11 +23,11 @@ export interface StatusLineFileService {
 export class StatusLineFile extends Context.Tag('StatusLineFile')<StatusLineFile, StatusLineFileService>() {}
 
 function defaultTextFile(): string {
-  return path.join(homeDir(), '.agent-remnote', 'status-line.txt');
+  return defaultRuntimePath('status-line.txt');
 }
 
 function defaultJsonFile(): string {
-  return path.join(homeDir(), '.agent-remnote', 'status-line.json');
+  return defaultRuntimePath('status-line.json');
 }
 
 function ensureDir(p: string): Promise<void> {

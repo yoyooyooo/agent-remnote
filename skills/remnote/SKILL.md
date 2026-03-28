@@ -38,6 +38,8 @@ description: 'Use this skill for anything the user wants to do inside RemNote or
 - 用户给了明确 `remId` / `parentRemId` 时，直接写
 - `powerup` 的读命令可以直接用，写命令不要作为默认 Agent 主路径
 - 结构化数据写入默认走 `table ...`
+- 固定 URL / 固定端口问题优先走 `config print`、`stack status`、`doctor --fix`、`stack takeover`
+- source worktree 默认是 isolated `dev` profile；不要把它当作 canonical `stable` owner
 
 ## Progressive Disclosure
 
@@ -77,6 +79,9 @@ description: 'Use this skill for anything the user wants to do inside RemNote or
 - 需要处理 `sent=0`、`TXN_TIMEOUT`、错误 parent、typed property 边界
 - 需要在 `apiBaseUrl` 模式下判断 remote vs host-only
 - 需要选择读路径、help-first、plugin/daemon/queue 排障
+- 需要判断当前是 `stable` 还是 isolated `dev` profile
+- 需要处理 canonical fixed-owner claim、`stack takeover --channel dev|stable`
+- 需要处理 direct `daemon/api/plugin start|ensure` 被 claim guard 拒绝的情况
 
 ### 5. Scenario Surface
 

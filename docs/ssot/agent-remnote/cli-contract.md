@@ -269,8 +269,25 @@ Wave 1 runtime shape：
   - pid：`~/.agent-remnote/plugin-server.pid`
   - log：`~/.agent-remnote/plugin-server.log`
   - state：`~/.agent-remnote/plugin-server.state.json`
-- `plugin ensure` / `plugin start` 默认目标地址仍为 `127.0.0.1:8080`
-- 当前**不**属于 `stack ensure/status/stop` 的默认编排范围
+- `plugin ensure` / `plugin start` 在 canonical stable owner 下默认目标地址为 `127.0.0.1:8080`
+- source worktree 下默认进入 isolated profile，默认 plugin 端口必须是 deterministic isolated port，而不是 canonical `8080`
+- 当前已属于 `stack ensure/status/stop` 的默认编排范围
+
+### `stack ensure|status|stop|takeover`
+
+- `stack ensure`：默认收口 `daemon + api + plugin`
+- `stack status`：必须暴露
+  - `resolved_local`
+  - `fixed_owner_claim`
+  - `services.daemon`
+  - `services.api`
+  - `services.plugin`
+  - `ownership_conflicts[]`
+- `stack stop`：默认停止当前本地 bundle 的 `daemon + api + plugin`
+- `stack takeover --channel dev|stable`：
+  - `dev`：切换 canonical fixed-owner claim 到 `dev`，并 best-effort 拉起 canonical dev bundle
+  - `stable`：切换 claim 到 `stable`，停止当前 dev bundle，并在可用时调用 stable launcher
+- direct `daemon/api/plugin start|ensure` 若目标是 canonical ports，也必须 obey fixed-owner claim policy，不能绕过 `stack` 抢占 canonical owner
 
 ## 6) `config` 命令组契约
 
@@ -281,6 +298,15 @@ Wave 1 runtime shape：
 - `config unset --key <key>`：删除单个配置项；若文件清空可直接删除配置文件
 - `config validate`：校验用户配置文件的 JSON 结构与已知 key 语义，返回 `valid` 布尔值与 `errors[]`
 - `config print`：输出最终解析后的运行时配置，包含默认值、用户配置、环境变量与 CLI 参数覆盖后的结果
+  - 必须额外暴露：
+    - `runtime_profile`
+    - `runtime_port_class`
+    - `install_source`
+    - `control_plane_root`
+    - `runtime_root`
+    - `worktree_root`
+    - `fixed_owner_claim_file`
+    - `fixed_owner_claim`
 - 用户配置文件路径优先级：`--config-file` > `REMNOTE_CONFIG_FILE` > `~/.agent-remnote/config.json`
 - remote API base URL 优先级：`--api-base-url` > `REMNOTE_API_BASE_URL` > 用户配置文件中的 `apiBaseUrl` > direct mode
 - API host 优先级：`--api-host` > `REMNOTE_API_HOST` > 用户配置文件中的 `apiHost` > 默认 `0.0.0.0`
@@ -319,8 +345,12 @@ Wave 1 runtime shape：
   - `changed`
   - `fixes[]`
   - `restart_summary`
+  - `fixed_owner_claim_file`
+  - `fixed_owner_claim`
 - `doctor --fix` 是 `doctor` 的安全修复模式：
   - 允许清理 stale daemon/api/plugin pid/state 文件
+  - 允许在 canonical fixed-owner claim 缺失时持久化 stable bootstrap claim
+  - 允许在 trusted live owner 与 fixed-owner claim 明确冲突时，按 claim 触发 deterministic realignment
   - 允许在 pid 归属可信且状态文件位于受管路径时，自动重启 build metadata 明确不匹配的 daemon/api/plugin 运行时
   - 允许把支持的用户配置形态重写成 canonical keys
   - 允许汇报 `restart_summary`，其中必须区分 `restarted` / `skipped` / `failed`

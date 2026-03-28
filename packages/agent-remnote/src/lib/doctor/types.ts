@@ -1,4 +1,5 @@
 export type DoctorCheckId =
+  | 'runtime.fixed_owner_claim_present'
   | 'runtime.stale_pid_or_state'
   | 'runtime.version_mismatch'
   | 'config.migration_needed'
@@ -19,7 +20,9 @@ export type DoctorCheck = {
 };
 
 export type DoctorFixId =
+  | 'runtime.persist_fixed_owner_claim'
   | 'runtime.cleanup_stale_artifacts'
+  | 'runtime.realign_fixed_owner_claimed_services'
   | 'runtime.restart_mismatched_services'
   | 'config.rewrite_canonical_user_config';
 

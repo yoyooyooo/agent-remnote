@@ -47,6 +47,7 @@ export const apiStatusCommand = Command.make('status', { pidFile, stateFile }, (
         running,
         pid: pid ?? null,
         build: pidInfo?.build ?? state?.build ?? null,
+        owner: pidInfo?.owner ?? state?.owner ?? null,
         pid_file: pidFilePath,
         log_file: pidInfo?.log_file ?? cfg.apiLogFile ?? apiFiles.defaultLogFile(),
         state_file: pidInfo?.state_file ?? stateFilePath,

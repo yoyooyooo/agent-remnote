@@ -46,7 +46,15 @@ describe('cli contract: stack status version warnings', () => {
 
       const res = await runCli(
         ['--json', '--daemon-url', 'ws://localhost:0/ws', '--api-port', '1', 'stack', 'status'],
-        { env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' }, timeoutMs: 20_000 },
+        {
+          env: {
+            HOME: tmpHome,
+            REMNOTE_TMUX_REFRESH: '0',
+            REMNOTE_DAEMON_PID_FILE: wsPid,
+            REMNOTE_API_PID_FILE: apiPid,
+          },
+          timeoutMs: 20_000,
+        },
       );
 
       expect(res.exitCode).toBe(0);

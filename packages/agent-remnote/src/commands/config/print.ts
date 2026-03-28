@@ -4,6 +4,8 @@ import * as Effect from 'effect/Effect';
 import { AppConfig } from '../../services/AppConfig.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
+import { readFixedOwnerClaim } from '../../lib/runtime-ownership/claim.js';
+import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
 export const configPrintCommand = Command.make('print', {}, () =>
@@ -11,6 +13,8 @@ export const configPrintCommand = Command.make('print', {}, () =>
     const cfg = yield* AppConfig;
     const daemonFiles = yield* DaemonFiles;
     const supervisorState = yield* SupervisorState;
+    const ownership = resolveRuntimeOwnershipContext();
+    const fixedOwner = readFixedOwnerClaim(ownership);
 
     const daemonPidFile = daemonFiles.defaultPidFile();
     const daemonLogFile = daemonFiles.defaultLogFile();
@@ -20,6 +24,14 @@ export const configPrintCommand = Command.make('print', {}, () =>
       format: cfg.format,
       quiet: cfg.quiet,
       debug: cfg.debug,
+      runtime_profile: cfg.runtimeProfile,
+      runtime_port_class: cfg.runtimePortClass,
+      install_source: cfg.installSource,
+      control_plane_root: cfg.controlPlaneRoot,
+      runtime_root: cfg.runtimeRoot,
+      worktree_root: cfg.worktreeRoot,
+      fixed_owner_claim_file: fixedOwner.file,
+      fixed_owner_claim: fixedOwner.claim,
       config_file: cfg.configFile,
       remnote_db: cfg.remnoteDb,
       store_db: cfg.storeDb,
@@ -50,6 +62,13 @@ export const configPrintCommand = Command.make('print', {}, () =>
       `- format: ${data.format}`,
       `- quiet: ${data.quiet}`,
       `- debug: ${data.debug}`,
+      `- runtime_profile: ${data.runtime_profile ?? ''}`,
+      `- runtime_port_class: ${data.runtime_port_class ?? ''}`,
+      `- install_source: ${data.install_source ?? ''}`,
+      `- control_plane_root: ${data.control_plane_root ?? ''}`,
+      `- runtime_root: ${data.runtime_root ?? ''}`,
+      `- worktree_root: ${data.worktree_root ?? ''}`,
+      `- fixed_owner_claim_file: ${data.fixed_owner_claim_file}`,
       `- config_file: ${data.config_file}`,
       `- remnote_db: ${data.remnote_db ?? ''}`,
       `- store_db: ${data.store_db}`,
