@@ -150,18 +150,27 @@ export function withFixedOwnerClaimLock<A, E, R>(
     const now = Date.now();
     const acquiredAt = typeof meta?.acquired_at === 'number' && Number.isFinite(meta.acquired_at) ? meta.acquired_at : undefined;
     const metaExpired = acquiredAt !== undefined && now - acquiredAt > FIXED_OWNER_CLAIM_LOCK_STALE_MS;
-    const ownerDead = typeof meta?.pid === 'number' && !isPidAlive(meta.pid);
+    const ownerPid = typeof meta?.pid === 'number' ? meta.pid : undefined;
+    const ownerAlive = ownerPid !== undefined && isPidAlive(ownerPid);
+    const ownerDead = ownerPid !== undefined && !ownerAlive;
+    if (ownerAlive) {
+      return {
+        reclaimable: false,
+        reason: 'live_lock',
+        meta,
+      } as const;
+    }
     try {
       const stat = fs.statSync(lockPath);
       const mtimeExpired = now - stat.mtimeMs > FIXED_OWNER_CLAIM_LOCK_STALE_MS;
       return {
-        reclaimable: ownerDead || metaExpired || mtimeExpired,
+        reclaimable: ownerDead || ((ownerPid === undefined || acquiredAt === undefined) && mtimeExpired) || (ownerPid === undefined && metaExpired),
         reason: ownerDead ? 'pid_not_running' : metaExpired ? 'metadata_expired' : mtimeExpired ? 'mtime_expired' : 'live_lock',
         meta,
       } as const;
     } catch {
       return {
-        reclaimable: ownerDead || metaExpired,
+        reclaimable: ownerDead || (ownerPid === undefined && metaExpired),
         reason: ownerDead ? 'pid_not_running' : metaExpired ? 'metadata_expired' : 'live_lock',
         meta,
       } as const;

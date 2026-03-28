@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { CliError, isCliError } from '../../services/Errors.js';
 import { API_START_WAIT_DEFAULT_MS, ensureApiDaemon } from '../api/_shared.js';
-import { desiredFixedOwnerClaim, readFixedOwnerClaim, withFixedOwnerClaimLock, writeFixedOwnerClaim } from '../../lib/runtime-ownership/claim.js';
+import { desiredFixedOwnerClaim, readFixedOwnerClaim, type FixedOwnerClaim, withFixedOwnerClaimLock, writeFixedOwnerClaim } from '../../lib/runtime-ownership/claim.js';
 import { resolveStableLauncherSpec } from '../../lib/runtime-ownership/launcher.js';
 import { ownerDescriptorForClaim } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
@@ -50,6 +50,69 @@ function scrubStableLauncherEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+function ownerOverrideEnvForClaim(params: {
+  readonly claim: FixedOwnerClaim;
+  readonly ownership: ReturnType<typeof resolveRuntimeOwnershipContext>;
+}) {
+  const ownerOverride = ownerDescriptorForClaim({
+    claim: params.claim,
+    currentRuntimeRoot: params.claim.claimed_channel === 'dev' ? params.claim.runtime_root : params.ownership.runtimeRoot,
+    repoRoot: params.claim.repo_root ?? params.ownership.repoRoot,
+    worktreeRoot: params.claim.worktree_root ?? params.ownership.worktreeRoot,
+  });
+  const envOverride = {
+    AGENT_REMNOTE_OWNER_CHANNEL: ownerOverride.owner_channel,
+    AGENT_REMNOTE_OWNER_INSTALL_SOURCE: ownerOverride.install_source,
+    AGENT_REMNOTE_OWNER_RUNTIME_ROOT: ownerOverride.runtime_root,
+    AGENT_REMNOTE_OWNER_REPO_ROOT: ownerOverride.repo_root ?? '',
+    AGENT_REMNOTE_OWNER_WORKTREE_ROOT: ownerOverride.worktree_root ?? '',
+    AGENT_REMNOTE_OWNER_PORT_CLASS: ownerOverride.port_class,
+    AGENT_REMNOTE_LAUNCHER_REF: ownerOverride.launcher_ref,
+    AGENT_REMNOTE_BYPASS_CLAIM_GUARD: '1',
+  } satisfies NodeJS.ProcessEnv;
+  return { ownerOverride, envOverride };
+}
+
+function ensureClaimedDevBundle(params: {
+  readonly claim: FixedOwnerClaim;
+  readonly ownership: ReturnType<typeof resolveRuntimeOwnershipContext>;
+  readonly restartedServices?: string[] | undefined;
+  readonly skippedServices?: string[] | undefined;
+}) {
+  const { ownerOverride, envOverride } = ownerOverrideEnvForClaim(params);
+  return Effect.gen(function* () {
+    const daemon = yield* ensureWsSupervisor({
+      waitMs: WS_START_WAIT_DEFAULT_MS,
+      wsUrlOverride: 'ws://localhost:6789/ws',
+      ownerOverride,
+      envOverride,
+      bypassCanonicalClaimGuard: true,
+    });
+    if (daemon.started) params.restartedServices?.push('daemon');
+    else params.skippedServices?.push('daemon');
+
+    const api = yield* ensureApiDaemon({
+      waitMs: API_START_WAIT_DEFAULT_MS,
+      port: 3000,
+      ownerOverride,
+      envOverride,
+      bypassCanonicalClaimGuard: true,
+    });
+    if (api.started) params.restartedServices?.push('api');
+    else params.skippedServices?.push('api');
+
+    const plugin = yield* ensurePluginServer({
+      waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
+      port: 8080,
+      ownerOverride,
+      envOverride,
+      bypassCanonicalClaimGuard: true,
+    });
+    if (plugin.started) params.restartedServices?.push('plugin');
+    else params.skippedServices?.push('plugin');
+  });
+}
+
 export function runStackTakeover(channel: 'stable' | 'dev') {
   const ownership = resolveRuntimeOwnershipContext();
   const transition = Effect.gen(function* () {
@@ -61,57 +124,19 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
     const restartedServices: string[] = [];
     const skippedServices: string[] = [];
     if (channel === 'dev') {
-      const ownerOverride = ownerDescriptorForClaim({
-        claim: nextClaim,
-        currentRuntimeRoot: ownership.runtimeRoot,
-        repoRoot: ownership.repoRoot,
-        worktreeRoot: ownership.worktreeRoot,
-      });
-      const envOverride = {
-        AGENT_REMNOTE_OWNER_CHANNEL: ownerOverride.owner_channel,
-        AGENT_REMNOTE_OWNER_INSTALL_SOURCE: ownerOverride.install_source,
-        AGENT_REMNOTE_OWNER_RUNTIME_ROOT: ownerOverride.runtime_root,
-        AGENT_REMNOTE_OWNER_REPO_ROOT: ownerOverride.repo_root ?? '',
-        AGENT_REMNOTE_OWNER_WORKTREE_ROOT: ownerOverride.worktree_root ?? '',
-        AGENT_REMNOTE_OWNER_PORT_CLASS: ownerOverride.port_class,
-        AGENT_REMNOTE_LAUNCHER_REF: ownerOverride.launcher_ref,
-        AGENT_REMNOTE_BYPASS_CLAIM_GUARD: '1',
-      } satisfies NodeJS.ProcessEnv;
       const rollbackNeeded = yield* Ref.make(true);
-      yield* Effect.gen(function* () {
-        const daemon = yield* ensureWsSupervisor({
-          waitMs: WS_START_WAIT_DEFAULT_MS,
-          wsUrlOverride: 'ws://localhost:6789/ws',
-          ownerOverride,
-          envOverride,
-          bypassCanonicalClaimGuard: true,
-        });
-        if (daemon.started) restartedServices.push('daemon');
-        else skippedServices.push('daemon');
-
-        const api = yield* ensureApiDaemon({
-          waitMs: API_START_WAIT_DEFAULT_MS,
-          port: 3000,
-          ownerOverride,
-          envOverride,
-          bypassCanonicalClaimGuard: true,
-        });
-        if (api.started) restartedServices.push('api');
-        else skippedServices.push('api');
-
-        const plugin = yield* ensurePluginServer({
-          waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
-          port: 8080,
-          ownerOverride,
-          envOverride,
-          bypassCanonicalClaimGuard: true,
-        });
-        if (plugin.started) restartedServices.push('plugin');
-        else skippedServices.push('plugin');
-
+      yield* ensureClaimedDevBundle({
+        claim: nextClaim,
+        ownership,
+        restartedServices,
+        skippedServices,
+      }).pipe(
+        Effect.zipRight(
+          Effect.gen(function* () {
         yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
         yield* Ref.set(rollbackNeeded, false);
-      }).pipe(
+          }),
+        ),
         Effect.onExit(() =>
           Ref.get(rollbackNeeded).pipe(
             Effect.flatMap((needed) =>
@@ -160,6 +185,11 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
       }).pipe(
         Effect.catchAll((error) =>
           persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: previous.claim }).pipe(
+            Effect.zipRight(
+              previous.claim.claimed_channel === 'dev'
+                ? ensureClaimedDevBundle({ claim: previous.claim, ownership })
+                : Effect.void,
+            ),
             Effect.matchEffect({
               onFailure: (rollbackError) =>
                 Effect.fail(
