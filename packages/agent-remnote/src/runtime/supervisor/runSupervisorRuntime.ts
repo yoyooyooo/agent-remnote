@@ -17,6 +17,7 @@ import { LogWriterFactory } from '../../services/LogWriter.js';
 import type { CliError } from '../../services/Errors.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 
 type SupervisorEvent =
   | { readonly _tag: 'ChildSpawned'; readonly pid: number | null; readonly startedAt: number }
@@ -63,6 +64,7 @@ function makePidFileValue(params: {
     mode: 'supervisor',
     pid: params.supervisorPid,
     build: currentRuntimeBuildInfo(),
+    owner: currentRuntimeOwnerDescriptor(),
     child_pid: params.childPid,
     child_started_at: params.childStartedAt,
     started_at: params.supervisorStartedAt,

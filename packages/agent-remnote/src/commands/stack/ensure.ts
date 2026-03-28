@@ -7,6 +7,7 @@ import { CliError } from '../../services/Errors.js';
 import { WsClient } from '../../services/WsClient.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { API_START_WAIT_DEFAULT_MS, ensureApiDaemon } from '../api/_shared.js';
+import { ensurePluginServer, PLUGIN_SERVER_START_WAIT_DEFAULT_MS } from '../plugin/_shared.js';
 import { ensureWsSupervisor, WS_START_WAIT_DEFAULT_MS } from '../ws/_shared.js';
 
 const workerTimeoutMs = Options.integer('worker-timeout-ms').pipe(Options.withDefault(15_000));
@@ -59,10 +60,11 @@ export const stackEnsureCommand = Command.make(
     Effect.gen(function* () {
       const daemon = yield* ensureWsSupervisor({ waitMs: WS_START_WAIT_DEFAULT_MS });
       const api = yield* ensureApiDaemon({ waitMs: API_START_WAIT_DEFAULT_MS });
+      const plugin = yield* ensurePluginServer({ waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS });
       const activeWorkerConnId = waitWorker ? yield* waitForActiveWorker({ timeoutMs: workerTimeoutMs }) : undefined;
 
       yield* writeSuccess({
-        data: { daemon, api, active_worker_conn_id: activeWorkerConnId ?? null },
+        data: { daemon, api, plugin, active_worker_conn_id: activeWorkerConnId ?? null },
         md: [
           `- daemon_started: ${daemon.started}`,
           `- daemon_pid: ${daemon.pid ?? ''}`,
@@ -71,6 +73,10 @@ export const stackEnsureCommand = Command.make(
           `- api_pid: ${api.pid ?? ''}`,
           `- api_pid_file: ${api.pid_file}`,
           `- api_base_url: ${api.base_url}`,
+          `- plugin_started: ${plugin.started}`,
+          `- plugin_pid: ${plugin.pid ?? ''}`,
+          `- plugin_pid_file: ${plugin.pid_file}`,
+          `- plugin_base_url: ${plugin.base_url}`,
           `- active_worker_conn_id: ${activeWorkerConnId ?? ''}`,
         ].join('\n'),
       });

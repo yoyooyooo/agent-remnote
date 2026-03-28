@@ -498,25 +498,40 @@ flowchart LR
 ## 常见问题 / 排障
 
 - `agent-remnote daemon ensure` 打印 `started: false`：可能表示“当前已经健康，无需启动”；用 `agent-remnote --json daemon status` 确认即可。
-- `agent-remnote stack ensure`：一条命令确保 `daemon + api` 都就绪。
+- `agent-remnote stack ensure`：一条命令确保当前 owner/profile 下的 `daemon + api + plugin` 都就绪。
+- `agent-remnote stack stop`：一条命令停止当前本地 `daemon + api + plugin` bundle。
+- `agent-remnote stack takeover --channel dev`：把 canonical fixed-owner claim 切到 `dev`，并 best-effort 拉起本地 dev bundle。
+- `agent-remnote stack takeover --channel stable`：把 canonical fixed-owner claim 切回 `stable`，停止当前 dev bundle；若配置了 stable launcher，则会触发它。
 - 如需等插件 worker 真正回到 active 状态：`agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000`
 - `daemon status` 里看不到 `remnote-plugin`：重新安装插件 Zip，并保持 RemNote 窗口打开。
 - Plugin RPC 失败 / 没有 `activeWorkerConnId`：点一下目标 RemNote 窗口，让 UI 活跃度刷新。
+- `agent-remnote --json config print`：查看当前解析出来的 `runtime_profile`、`runtime_port_class`、`control_plane_root`、`runtime_root`、`fixed_owner_claim`。
+- `agent-remnote --json stack status`：查看 `resolved_local`、`fixed_owner_claim`、每个 service 的 owner 状态，以及 `ownership_conflicts[]`。
 
 ## 配置（环境变量 / 参数）
 
 - RemNote DB（只读）：`--remnote-db` / `REMNOTE_DB`
-- Store DB：`--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`（默认 `~/.agent-remnote/store.sqlite`；legacy：`--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`）
-- WS 地址：`--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL`（或 `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`，默认端口 6789）
+- Store DB：`--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`
+  - 发布安装态默认：`~/.agent-remnote/store.sqlite`
+  - source worktree 默认：隔离的 `~/.agent-remnote/dev/<worktree-key>/store.sqlite`
+  - legacy：`--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`
+- WS 地址：`--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL`（或 `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`）
+  - 发布安装态默认端口：`6789`
+  - source worktree 默认端口：按解析后的 runtime root 派生 deterministic isolated port
 - Host API remote mode 来源：`--api-base-url` / `REMNOTE_API_BASE_URL` / 用户配置 `apiBaseUrl`
 - Host API 监听地址：`--api-host` / `REMNOTE_API_HOST` / 用户配置 `apiHost`（默认 `0.0.0.0`）
-- Host API 端口：`--api-port` / `PORT` / `REMNOTE_API_PORT` / 用户配置 `apiPort`（默认 `3000`）
+- Host API 端口：`--api-port` / `PORT` / `REMNOTE_API_PORT` / 用户配置 `apiPort`
+  - 发布安装态默认端口：`3000`
+  - source worktree 默认端口：按解析后的 runtime root 派生 deterministic isolated port
 - Host API 基础路径：`--api-base-path` / `REMNOTE_API_BASE_PATH` / 用户配置 `apiBasePath`（默认 `/v1`）
 - 用户配置文件覆盖：`--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state（仅 env）：`REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
-- WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`（默认 `~/.agent-remnote/ws.bridge.state.json`）
-- daemon pidfile（仅 env）：`REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`（默认 `~/.agent-remnote/ws.pid`）
-- daemon log file（仅 env）：`REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE`（默认 `~/.agent-remnote/ws.log`）
+- WS state file：`REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`
+  - 发布安装态默认：`~/.agent-remnote/ws.bridge.state.json`
+  - source worktree 默认：隔离 runtime root 下的 `ws.bridge.state.json`
+- daemon pidfile（仅 env）：`REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`
+- daemon log file（仅 env）：`REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE`
+- plugin pid/log/state（仅 env）：`REMNOTE_PLUGIN_SERVER_PID_FILE` / `REMNOTE_PLUGIN_SERVER_LOG_FILE` / `REMNOTE_PLUGIN_SERVER_STATE_FILE`
 - active worker（自动）：由最近的 RemNote UI 活跃度（selection/uiContext）决定；可用 `agent-remnote --json daemon status` 查看 `activeWorkerConnId`
 - repo：`--repo` / `AGENT_REMNOTE_REPO`
 - WS 调度器（仅 env）：`REMNOTE_WS_SCHEDULER`（设为 `0` 可关闭冲突调度；仅用于排障）
@@ -524,7 +539,7 @@ flowchart LR
 - statusLine 文件模式（仅 env）：`REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline（右下角 RN 段）：见 `docs/guides/tmux-statusline.md`
 
-可用 `agent-remnote config path` 查看当前用户配置文件路径，用 `config list/get/set/unset/validate` 管理用户配置文件；`config set` 支持 `apiBaseUrl`、`apiHost`、`apiPort`、`apiBasePath`；`config print` 可查看最终解析结果（含默认值与覆盖结果）。
+可用 `agent-remnote config path` 查看当前用户配置文件路径，用 `config list/get/set/unset/validate` 管理用户配置文件；`config set` 支持 `apiBaseUrl`、`apiHost`、`apiPort`、`apiBasePath`；`config print` 可查看最终解析出来的 profile/root/default/claim 结果（含覆盖值）。
 
 ## 从源码开发与调试（最后一环）
 

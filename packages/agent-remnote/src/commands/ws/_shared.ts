@@ -12,6 +12,10 @@ import { WsClient } from '../../services/WsClient.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { assertMayUseCanonicalWsUrl } from '../../lib/runtime-ownership/claim.js';
+import type { RuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
+import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 
 export const WS_HEALTH_TIMEOUT_MS = 2000;
 export const WS_START_WAIT_DEFAULT_MS = 15_000;
@@ -28,6 +32,9 @@ export type WsSupervisorStartParams = {
   readonly waitMs: number;
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
+  readonly wsUrlOverride?: string | undefined;
+  readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
+  readonly envOverride?: NodeJS.ProcessEnv | undefined;
 };
 
 function childCommandLine(params: { readonly wsUrl: string; readonly storeDb: string }): {
@@ -99,10 +106,12 @@ function toPidFileValue(params: {
   readonly wsBridgeStateFile: string;
   readonly statusLineFile: string;
   readonly statusLineJsonFile: string;
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
 }): WsPidFile {
   return {
     pid: params.pid,
     build: currentRuntimeBuildInfo(),
+    owner: params.owner ?? currentRuntimeOwnerDescriptor(),
     started_at: params.startedAt,
     ws_url: params.wsUrl,
     log_file: params.logFile,
@@ -157,6 +166,7 @@ export function startWsDaemon(params: {
   readonly waitMs: number;
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
+  readonly wsUrlOverride?: string | undefined;
 }): Effect.Effect<WsDaemonStartResult, CliError, AppConfig | WsClient | DaemonFiles | Process> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
@@ -164,8 +174,21 @@ export function startWsDaemon(params: {
     const proc = yield* Process;
     const ws = yield* WsClient;
 
+    const wsUrl = params.wsUrlOverride ?? cfg.wsUrl;
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalWsUrl({ ctx: resolveRuntimeOwnershipContext(), wsUrl }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical daemon ws url policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
@@ -183,7 +206,7 @@ export function startWsDaemon(params: {
       }
     }
 
-    const pre = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
+    const pre = yield* ws.health({ url: wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     if (Either.isRight(pre)) {
       return { started: false, pid_file: pidFilePath, log_file: logFilePath };
     }
@@ -285,10 +308,23 @@ export function startWsSupervisor(
     const supervisorState = yield* SupervisorState;
     const proc = yield* Process;
     const ws = yield* WsClient;
+    const wsUrl = params.wsUrlOverride ?? cfg.wsUrl;
 
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
     const stateFilePath = defaultStateFilePathFromPidFile(pidFilePath);
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalWsUrl({ ctx: resolveRuntimeOwnershipContext(), wsUrl }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical daemon ws url policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
@@ -307,7 +343,7 @@ export function startWsSupervisor(
       }
     }
 
-    const pre = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
+    const pre = yield* ws.health({ url: wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     if (Either.isRight(pre)) {
       return { started: false, pid_file: pidFilePath, log_file: logFilePath };
     }
@@ -315,7 +351,7 @@ export function startWsSupervisor(
     const cmd = yield* Effect.try({
       try: () =>
         supervisorCommandLine({
-          wsUrl: cfg.wsUrl,
+          wsUrl,
           storeDb: cfg.storeDb,
           pidFile: pidFilePath,
           logFile: logFilePath,
@@ -332,19 +368,25 @@ export function startWsSupervisor(
             }),
     });
 
-    const pid = yield* proc.spawnDetached({ command: cmd.command, args: cmd.args, logFile: logFilePath });
+    const pid = yield* proc.spawnDetached({
+      command: cmd.command,
+      args: cmd.args,
+      logFile: logFilePath,
+      env: params.envOverride ? { ...process.env, ...params.envOverride } : undefined,
+    });
 
     const now = Date.now();
     yield* daemonFiles.writePidFile(pidFilePath, {
       ...toPidFileValue({
         pid,
         startedAt: now,
-        wsUrl: cfg.wsUrl,
+        wsUrl,
         logFile: logFilePath,
         cmd: [cmd.command, ...cmd.args],
         wsBridgeStateFile: cfg.wsStateFile.path,
         statusLineFile: cfg.statusLineFile,
         statusLineJsonFile: cfg.statusLineJsonFile,
+        owner: params.ownerOverride,
       }),
       mode: 'supervisor',
       child_pid: null,
@@ -352,7 +394,7 @@ export function startWsSupervisor(
     });
     yield* supervisorState.writeStateFile(stateFilePath, toInitialSupervisorState(now));
 
-    yield* waitForHealth(cfg.wsUrl, params.waitMs);
+    yield* waitForHealth(wsUrl, params.waitMs);
 
     return { started: true, pid, pid_file: pidFilePath, log_file: logFilePath };
   });
@@ -364,7 +406,8 @@ export function ensureWsSupervisor(
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
     const ws = yield* WsClient;
-    const pre = yield* ws.health({ url: cfg.wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
+    const wsUrl = params.wsUrlOverride ?? cfg.wsUrl;
+    const pre = yield* ws.health({ url: wsUrl, timeoutMs: WS_HEALTH_TIMEOUT_MS }).pipe(Effect.either);
     if (Either.isRight(pre)) {
       const daemonFiles = yield* DaemonFiles;
       const proc = yield* Process;

@@ -38,6 +38,7 @@ import {
 import { apiContainerBaseUrl, apiLocalBaseUrl, normalizeApiBasePath } from '../../lib/apiUrls.js';
 import { normalizeCanonicalQueryRequest } from '../../lib/queryV2.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { AppConfig } from '../../services/AppConfig.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
@@ -885,6 +886,7 @@ export function runHttpApiRuntime(params?: {
       running: true,
       pid: process.pid,
       build: currentRuntimeBuildInfo(),
+      owner: currentRuntimeOwnerDescriptor(),
       host,
       port: actualPort,
       basePath,

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { CliError } from '../../services/Errors.js';
 import { DaemonFiles } from '../../services/DaemonFiles.js';
+import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { resolveManagedStateFile } from '../../lib/managedRuntimePaths.js';
 import { Process } from '../../services/Process.js';
 import { SupervisorState } from '../../services/SupervisorState.js';
@@ -12,12 +13,18 @@ import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 import { API_STOP_WAIT_DEFAULT_MS } from '../api/_shared.js';
+import { stopPluginServer } from '../plugin/stop.js';
 import { WS_STOP_WAIT_DEFAULT_MS } from '../ws/_shared.js';
 
-export const stackStopCommand = Command.make('stop', {}, () =>
-  Effect.gen(function* () {
+export function stopStackBundle(): Effect.Effect<
+  { readonly stopped: true; readonly api_stopped: boolean; readonly daemon_stopped: boolean; readonly plugin_stopped: boolean },
+  CliError,
+  ApiDaemonFiles | DaemonFiles | PluginServerFiles | Process | SupervisorState
+> {
+  return Effect.gen(function* () {
     const apiFiles = yield* ApiDaemonFiles;
     const daemonFiles = yield* DaemonFiles;
+    const pluginFiles = yield* PluginServerFiles;
     const proc = yield* Process;
     const supervisorState = yield* SupervisorState;
 
@@ -77,9 +84,30 @@ export const stackStopCommand = Command.make('stop', {}, () =>
     yield* daemonFiles.deletePidFile(daemonPidFile).pipe(Effect.catchAll(() => Effect.void));
     yield* supervisorState.deleteStateFile(daemonStateFile).pipe(Effect.catchAll(() => Effect.void));
 
+    const pluginPidFile = resolveUserFilePath(pluginFiles.defaultPidFile());
+    const pluginStateFile = resolveUserFilePath(pluginFiles.defaultStateFile());
+    const pluginResult = yield* stopPluginServer({
+      force: true,
+      pidFilePath: pluginPidFile,
+      stateFilePath: pluginStateFile,
+    });
+
+    return {
+      stopped: true as const,
+      api_stopped: apiStopped,
+      daemon_stopped: daemonStopped,
+      plugin_stopped: pluginResult.stopped,
+    };
+  });
+}
+
+export const stackStopCommand = Command.make('stop', {}, () =>
+  Effect.gen(function* () {
+    const result = yield* stopStackBundle();
+
     yield* writeSuccess({
-      data: { stopped: true, api_stopped: apiStopped, daemon_stopped: daemonStopped },
-      md: `- stopped: true\n- api_stopped: ${apiStopped}\n- daemon_stopped: ${daemonStopped}\n`,
+      data: result,
+      md: `- stopped: true\n- api_stopped: ${result.api_stopped}\n- daemon_stopped: ${result.daemon_stopped}\n- plugin_stopped: ${result.plugin_stopped}\n`,
     });
   }).pipe(Effect.catchAll(writeFailure)),
 );

@@ -46,7 +46,10 @@ parity note：
 
 ### 2) JSON state file（跨进程快照，非历史）
 
-- 默认路径：`~/.agent-remnote/ws.bridge.state.json`（可用 `REMNOTE_WS_STATE_FILE`/`WS_STATE_FILE` 覆盖；设为 `0` 可禁用）。
+- 默认路径：
+  - published install / canonical stable：`~/.agent-remnote/ws.bridge.state.json`
+  - source worktree / isolated dev：`~/.agent-remnote/dev/<worktree-key>/ws.bridge.state.json`
+  - 可用 `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` 覆盖；设为 `0` 可禁用。
 - 语义：**只保存“每个 client 的最后一次快照”**，不保存事件历史。
 - 生命周期：该文件是 best-effort 的“最后快照”。当 daemon 停止/自愈清理时，文件可能被删除；读取方必须把“文件不存在”视为 `down` 并降级处理。
 - 必备字段：

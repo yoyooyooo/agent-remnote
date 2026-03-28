@@ -12,6 +12,8 @@ npm i -g agent-remnote
 
 ```bash
 agent-remnote --json doctor
+agent-remnote --json config print
+agent-remnote --json stack status
 agent-remnote --json daemon status
 agent-remnote --json plugin current --compact
 agent-remnote plugin serve
@@ -77,11 +79,22 @@ The command prints a Vite-like `Local:` line in human mode. Add `--debug` to als
 Background lifecycle commands:
 
 ```bash
+agent-remnote stack ensure
+agent-remnote stack status
+agent-remnote stack stop
+agent-remnote stack takeover --channel dev
+agent-remnote stack takeover --channel stable
 agent-remnote plugin ensure
 agent-remnote plugin status
 agent-remnote plugin logs --lines 50
 agent-remnote plugin stop
 ```
+
+Current runtime defaults are profile-aware:
+
+- published install defaults to the canonical `stable` runtime root under `~/.agent-remnote`
+- source worktrees default to isolated `dev` runtime roots and isolated ports
+- `config print` and `stack status` expose `runtime_profile`, `runtime_root`, and `fixed_owner_claim`
 
 One-off override remains available with `--api-base-url`, `--api-host`, `--api-port`, `--api-base-path` or the matching env vars. Use `agent-remnote config path|list|get|set|unset|validate|print` to manage user config. `config set` supports `apiBaseUrl`, `apiHost`, `apiPort`, and `apiBasePath`.
 

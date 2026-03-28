@@ -2,6 +2,7 @@ import * as Effect from 'effect/Effect';
 
 import { API_START_WAIT_DEFAULT_MS, API_STOP_WAIT_DEFAULT_MS, startApiDaemon } from '../../commands/api/_shared.js';
 import { PLUGIN_SERVER_START_WAIT_DEFAULT_MS, PLUGIN_SERVER_STOP_WAIT_DEFAULT_MS, startPluginServer } from '../../commands/plugin/_shared.js';
+import { runStackTakeover } from '../../commands/stack/takeover.js';
 import { WS_START_WAIT_DEFAULT_MS, WS_STOP_WAIT_DEFAULT_MS, startWsSupervisor } from '../../commands/ws/_shared.js';
 import { ApiDaemonFiles } from '../../services/ApiDaemonFiles.js';
 import { AppConfig } from '../../services/AppConfig.js';
@@ -18,6 +19,8 @@ import { isTrustedPidRecord } from '../pidTrust.js';
 import { currentExpectedPluginBuildInfo } from '../pluginBuildInfo.js';
 import { cleanupStatuslineArtifacts, resolveStatuslineArtifactPaths } from '../statuslineArtifacts.js';
 import { currentRuntimeBuildInfo } from '../runtimeBuildInfo.js';
+import { matchesFixedOwnerClaim, readFixedOwnerClaim, writeFixedOwnerClaim } from '../runtime-ownership/claim.js';
+import { resolveRuntimeOwnershipContext } from '../runtime-ownership/profile.js';
 import type { DoctorFix, DoctorRestartSummary } from './types.js';
 import { WsClient } from '../../services/WsClient.js';
 
@@ -62,15 +65,64 @@ export function applyDoctorFixes(): Effect.Effect<
     const apiFiles = yield* ApiDaemonFiles;
     const pluginFiles = yield* PluginServerFiles;
     const supervisorState = yield* SupervisorState;
-    const proc = yield* Process;
     const userConfig = yield* UserConfigFile;
 
     let changed = false;
     const fixes: DoctorFix[] = [];
+    const ownership = resolveRuntimeOwnershipContext();
+    const fixedOwner = readFixedOwnerClaim(ownership);
 
     const cleaned: Array<{ service: string; pidFile: string; stateFile: string; pid: number }> = [];
     const cleanupFailures: Array<{ service: string; pidFile: string; stateFile: string; pid: number; error: string }> = [];
     const current = currentRuntimeBuildInfo();
+
+    if (!fixedOwner.exists) {
+      const persistResult = yield* Effect.try({
+        try: () =>
+          writeFixedOwnerClaim({
+            file: fixedOwner.file,
+            ctx: ownership,
+            claim: {
+              ...fixedOwner.claim,
+              updated_by: 'doctor_fix',
+              updated_at: Date.now(),
+            },
+          }),
+        catch: (error) =>
+          new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to persist canonical fixed owner claim',
+            exitCode: 1,
+            details: { file: fixedOwner.file, error: String((error as any)?.message || error) },
+          }),
+      }).pipe(Effect.either);
+      if (persistResult._tag === 'Right') {
+        changed = true;
+        fixes.push({
+          id: 'runtime.persist_fixed_owner_claim',
+          ok: true,
+          changed: true,
+          summary: 'Persisted canonical fixed owner claim using stable bootstrap defaults',
+          details: { file: fixedOwner.file, claim: { ...fixedOwner.claim, updated_by: 'doctor_fix' } },
+        });
+      } else {
+        fixes.push({
+          id: 'runtime.persist_fixed_owner_claim',
+          ok: false,
+          changed: false,
+          summary: 'Failed to persist canonical fixed owner claim',
+          details: { file: fixedOwner.file, error: persistResult.left.message },
+        });
+      }
+    } else {
+      fixes.push({
+        id: 'runtime.persist_fixed_owner_claim',
+        ok: true,
+        changed: false,
+        summary: 'Canonical fixed owner claim file already present',
+        details: { file: fixedOwner.file, claim: fixedOwner.claim },
+      });
+    }
 
     const daemonPidFile = daemonFiles.defaultPidFile();
     const daemonPidInfo = yield* daemonFiles.readPidFile(daemonPidFile).pipe(Effect.orElseSucceed(() => undefined));
@@ -201,6 +253,49 @@ export function applyDoctorFixes(): Effect.Effect<
         changed: false,
         summary: 'Failed to rewrite user config',
         details: { error: configRepair.left.message },
+      });
+    }
+
+    const daemonOwnerMismatch =
+      daemonPidInfo?.owner && (yield* isTrustedPidRecord(daemonPidInfo)) && !matchesFixedOwnerClaim({ claim: fixedOwner.claim, owner: daemonPidInfo.owner });
+    const apiOwnerMismatch =
+      apiPidInfo?.owner && (yield* isTrustedPidRecord(apiPidInfo)) && !matchesFixedOwnerClaim({ claim: fixedOwner.claim, owner: apiPidInfo.owner });
+    const pluginOwnerMismatch =
+      pluginPidInfo?.owner && (yield* isTrustedPidRecord(pluginPidInfo)) && !matchesFixedOwnerClaim({ claim: fixedOwner.claim, owner: pluginPidInfo.owner });
+
+    const ownerMismatchServices = [
+      daemonOwnerMismatch ? 'daemon' : null,
+      apiOwnerMismatch ? 'api' : null,
+      pluginOwnerMismatch ? 'plugin' : null,
+    ].filter(Boolean) as string[];
+
+    if (ownerMismatchServices.length > 0) {
+      const realign = yield* runStackTakeover(fixedOwner.claim.claimed_channel).pipe(Effect.either);
+      if (realign._tag === 'Right') {
+        changed = true;
+        fixes.push({
+          id: 'runtime.realign_fixed_owner_claimed_services',
+          ok: true,
+          changed: true,
+          summary: `Realigned ${ownerMismatchServices.join(', ')} toward fixed owner claim`,
+          details: realign.right,
+        });
+      } else {
+        fixes.push({
+          id: 'runtime.realign_fixed_owner_claimed_services',
+          ok: false,
+          changed: false,
+          summary: 'Failed to realign fixed-owner-claimed services',
+          details: { services: ownerMismatchServices, error: realign.left.message },
+        });
+      }
+    } else {
+      fixes.push({
+        id: 'runtime.realign_fixed_owner_claimed_services',
+        ok: true,
+        changed: false,
+        summary: 'No fixed-owner realignment was needed',
+        details: { services: [] },
       });
     }
 

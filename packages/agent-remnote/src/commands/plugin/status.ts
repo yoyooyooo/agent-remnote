@@ -35,6 +35,7 @@ export function getPluginStatus(params: {
       readonly running: boolean;
       readonly pid: number | null;
       readonly build: import('../../lib/runtimeBuildInfo.js').RuntimeBuildInfo | null;
+      readonly owner: import('../../lib/runtime-ownership/ownerDescriptor.js').RuntimeOwnerDescriptor | null;
       readonly pid_file: string;
       readonly log_file: string;
       readonly state_file: string;
@@ -97,6 +98,7 @@ export function getPluginStatus(params: {
         running,
         pid: pid ?? null,
         build: serviceBuild,
+        owner: pidInfo?.owner ?? state?.owner ?? null,
         pid_file: params.pidFilePath,
         log_file: pidInfo?.log_file ?? files.defaultLogFile(),
         state_file: effectiveStateFilePath,

@@ -16,6 +16,8 @@ import { CliError } from '../services/Errors.js';
 import { openStoreDb, readStoreSchemaStatus } from '../internal/public.js';
 import { applyDoctorFixes } from '../lib/doctor/fixes.js';
 import { collectDoctorChecks } from '../lib/doctor/checks.js';
+import { readFixedOwnerClaim } from '../lib/runtime-ownership/claim.js';
+import { resolveRuntimeOwnershipContext } from '../lib/runtime-ownership/profile.js';
 import { writeFailure, writeSuccess } from './_shared.js';
 import { WS_HEALTH_TIMEOUT_MS } from './ws/_shared.js';
 import * as Options from '@effect/cli/Options';
@@ -114,8 +116,11 @@ export const doctorCommand = Command.make('doctor', { fix: Options.boolean('fix'
     const fixResult = fix ? yield* applyDoctorFixes() : { fixes: [], changed: false, restartSummary: { attempted: [], restarted: [], skipped: [], failed: [] } };
     const snapshotAfter = fix ? yield* collectSnapshot() : snapshotBefore;
     const checks = fix ? yield* collectDoctorChecks() : checksBefore;
+    const fixedOwner = readFixedOwnerClaim(resolveRuntimeOwnershipContext());
 
     const data = {
+      fixed_owner_claim_file: fixedOwner.file,
+      fixed_owner_claim: fixedOwner.claim,
       queue: snapshotAfter.queue,
       remnote_db: snapshotAfter.remnote_db,
       ws: snapshotAfter.ws,
@@ -169,6 +174,7 @@ export const doctorCommand = Command.make('doctor', { fix: Options.boolean('fix'
       `- remnote_db: ${data.remnote_db.db_path ?? ''}`,
       `- remnote_db_resolution: ${data.remnote_db.resolution ?? ''}`,
       `- remnote_search_index_ok: ${data.remnote_db.has_search_index ?? ''}`,
+      `- fixed_owner_claimed_channel: ${data.fixed_owner_claim.claimed_channel}`,
       `- ws_ok: ${data.ws.ok}`,
       `- ws_url: ${data.ws.url}`,
       `- ws_rtt_ms: ${data.ws.rtt_ms ?? ''}`,

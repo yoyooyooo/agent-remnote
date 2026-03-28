@@ -27,3 +27,12 @@
 - Wave 1 business command 的 mode switch 只允许收口在
   `packages/agent-remnote/src/lib/business-semantics/modeParityRuntime.ts`
   及其 local / remote adapters
+
+## Runtime Ownership（当前定型）
+
+- canonical fixed-owner control plane 根目录仍是 `~/.agent-remnote`
+- 发布安装态默认是 canonical `stable` owner
+- source worktree 默认进入 isolated `dev` runtime root 与 deterministic isolated ports
+- `config print` / `stack status` / `doctor --json` 是当前 owner/profile/claim 的正式观察入口
+- `stack ensure|status|stop|takeover` 当前都围绕 `daemon + api + plugin` 的 bundle 工作
+- direct `daemon/api/plugin start|ensure` 若目标是 canonical ports，也必须 obey fixed-owner claim policy

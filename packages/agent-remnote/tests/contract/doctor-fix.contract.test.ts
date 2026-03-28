@@ -118,7 +118,15 @@ describe('cli contract: doctor --fix', () => {
       await fs.writeFile(pluginState, JSON.stringify({ running: true, pid: deadPid }, null, 2), 'utf8');
 
       const res = await runCli(['--json', '--remnote-db', remnoteDb, 'doctor', '--fix'], {
-        env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
+        env: {
+          HOME: tmpHome,
+          REMNOTE_TMUX_REFRESH: '0',
+          REMNOTE_DAEMON_PID_FILE: daemonPid,
+          REMNOTE_API_PID_FILE: apiPid,
+          REMNOTE_API_STATE_FILE: apiState,
+          REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
+          REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,
+        },
         timeoutMs: 30_000,
       });
 
@@ -253,7 +261,15 @@ describe('cli contract: doctor --fix', () => {
       await fs.writeFile(pluginState, JSON.stringify({ running: true, pid: dummy.pid }, null, 2), 'utf8');
 
       const res = await runCli(['--json', '--remnote-db', remnoteDb, 'doctor', '--fix'], {
-        env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
+        env: {
+          HOME: tmpHome,
+          REMNOTE_TMUX_REFRESH: '0',
+          REMNOTE_DAEMON_PID_FILE: daemonPid,
+          REMNOTE_API_PID_FILE: apiPid,
+          REMNOTE_API_STATE_FILE: apiState,
+          REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
+          REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,
+        },
         timeoutMs: 30_000,
       });
 
@@ -339,10 +355,38 @@ describe('cli contract: doctor --fix', () => {
     const pluginLog = path.join(stateDir, 'plugin-server.log');
     const pluginState = path.join(stateDir, 'plugin-server.state.json');
     const pluginPort = await getFreePort();
-    const env = { HOME: tmpHome, REMNOTE_STORE_DB: storeDb, REMNOTE_TMUX_REFRESH: '0' } as const;
+    const env = {
+      HOME: tmpHome,
+      REMNOTE_STORE_DB: storeDb,
+      REMNOTE_TMUX_REFRESH: '0',
+      REMNOTE_DAEMON_PID_FILE: daemonPid,
+      REMNOTE_API_PID_FILE: apiPid,
+      REMNOTE_API_STATE_FILE: apiState,
+      REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
+      REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,
+    } as const;
 
     try {
       createMinimalRemnoteDb(remnoteDb);
+      await fs.mkdir(stateDir, { recursive: true });
+      await fs.writeFile(
+        path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json'),
+        JSON.stringify(
+          {
+            claimed_channel: 'dev',
+            claimed_owner_id: 'dev',
+            runtime_root: stateDir,
+            control_plane_root: path.join(tmpHome, '.agent-remnote'),
+            port_class: 'canonical',
+            updated_by: 'stack_takeover',
+            updated_at: Date.now(),
+            launcher_ref: `source:${stateDir}`,
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
 
       const daemonStart = await runCli(['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, 'daemon', 'start', '--wait', '0', '--pid-file', daemonPid, '--log-file', daemonLog], {
         env,

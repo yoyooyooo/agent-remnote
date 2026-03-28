@@ -2,12 +2,17 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { checkPluginServerHealth, waitForPluginServerHealth } from '../../lib/pluginServerHealth.js';
+import type { RuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { PluginServerFiles, type PluginServerPidFile } from '../../services/PluginServerFiles.js';
 import { CliError, isCliError } from '../../services/Errors.js';
 import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { assertMayUseCanonicalPort } from '../../lib/runtime-ownership/claim.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
+import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
+import { defaultPluginPortForContext } from '../../lib/runtime-ownership/portClass.js';
 
 export const PLUGIN_SERVER_HEALTH_TIMEOUT_MS = 2000;
 export const PLUGIN_SERVER_START_WAIT_DEFAULT_MS = 15_000;
@@ -31,6 +36,8 @@ export type PluginServerStartParams = {
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
   readonly stateFile?: string | undefined;
+  readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
+  readonly envOverride?: NodeJS.ProcessEnv | undefined;
 };
 
 export function pluginServerLocalBaseUrl(host: string, port: number): string {
@@ -66,10 +73,12 @@ function toPidFileValue(params: {
   readonly logFile: string;
   readonly stateFile: string;
   readonly cmd: readonly string[];
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
 }): PluginServerPidFile {
   return {
     pid: params.pid,
     build: currentRuntimeBuildInfo(),
+    owner: params.owner ?? currentRuntimeOwnerDescriptor(),
     started_at: params.startedAt,
     host: params.host,
     port: params.port,
@@ -85,9 +94,22 @@ export function startPluginServer(
   return Effect.gen(function* () {
     const files = yield* PluginServerFiles;
     const proc = yield* Process;
+    const ownership = resolveRuntimeOwnershipContext();
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
-    const port = params.port ?? PLUGIN_SERVER_DEFAULT_PORT;
+    const port = params.port ?? defaultPluginPortForContext(ownership);
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalPort({ ctx: ownership, service: 'plugin', requestedPort: port }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical plugin port policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());
@@ -135,7 +157,12 @@ export function startPluginServer(
             }),
     });
 
-    const pid = yield* proc.spawnDetached({ command: cmd.command, args: cmd.args, logFile: logFilePath });
+    const pid = yield* proc.spawnDetached({
+      command: cmd.command,
+      args: cmd.args,
+      logFile: logFilePath,
+      env: params.envOverride ? { ...process.env, ...params.envOverride } : undefined,
+    });
     yield* files.writePidFile(
       pidFilePath,
       toPidFileValue({
@@ -146,6 +173,7 @@ export function startPluginServer(
         logFile: logFilePath,
         stateFile: stateFilePath,
         cmd: [cmd.command, ...cmd.args],
+        owner: params.ownerOverride,
       }),
     );
 
@@ -167,9 +195,22 @@ export function ensurePluginServer(
   return Effect.gen(function* () {
     const files = yield* PluginServerFiles;
     const proc = yield* Process;
+    const ownership = resolveRuntimeOwnershipContext();
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
-    const port = params.port ?? PLUGIN_SERVER_DEFAULT_PORT;
+    const port = params.port ?? defaultPluginPortForContext(ownership);
+    yield* Effect.try({
+      try: () => assertMayUseCanonicalPort({ ctx: ownership, service: 'plugin', requestedPort: port }),
+      catch: (error) =>
+        isCliError(error)
+          ? error
+          : new CliError({
+              code: 'INTERNAL',
+              message: 'Failed to validate canonical plugin port policy',
+              exitCode: 1,
+              details: { error: String((error as any)?.message || error) },
+            }),
+    });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());

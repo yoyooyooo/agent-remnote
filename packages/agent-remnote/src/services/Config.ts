@@ -2,12 +2,14 @@ import * as Config from 'effect/Config';
 import * as ConfigError from 'effect/ConfigError';
 import * as Effect from 'effect/Effect';
 import fs from 'node:fs';
-import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
-import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import { resolveUserFilePath } from '../lib/paths.js';
 import { pickClient, readJson } from '../lib/wsState.js';
 import { remnoteDbPathForWorkspaceId } from '../lib/remnote.js';
+import { defaultControlPlanePath, defaultRuntimePath } from '../lib/runtime-ownership/paths.js';
+import { resolveRuntimeOwnershipContext, type InstallSourceName, type RuntimeProfileName } from '../lib/runtime-ownership/profile.js';
+import { defaultApiPortForContext, defaultWsPortForContext, type RuntimePortClassName, runtimePortClassForContext } from '../lib/runtime-ownership/portClass.js';
 
 export type OutputFormat = 'json' | 'md' | 'ids';
 
@@ -15,6 +17,12 @@ export type ResolvedConfig = {
   readonly format: OutputFormat;
   readonly quiet: boolean;
   readonly debug: boolean;
+  readonly runtimeProfile?: RuntimeProfileName | undefined;
+  readonly installSource?: InstallSourceName | undefined;
+  readonly controlPlaneRoot?: string | undefined;
+  readonly runtimeRoot?: string | undefined;
+  readonly worktreeRoot?: string | undefined;
+  readonly runtimePortClass?: RuntimePortClassName | undefined;
   readonly configFile: string;
   readonly remnoteDb: string | undefined;
   readonly storeDb: string;
@@ -73,11 +81,11 @@ type RawConfig = {
 };
 
 function defaultStoreDbPath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'store.sqlite');
+  return defaultRuntimePath('store.sqlite');
 }
 
 function defaultUserConfigFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'config.json');
+  return defaultControlPlanePath('config.json');
 }
 
 function wsUrlFromPort(port: number): string {
@@ -85,27 +93,27 @@ function wsUrlFromPort(port: number): string {
 }
 
 function defaultWsStateFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'ws.bridge.state.json');
+  return defaultRuntimePath('ws.bridge.state.json');
 }
 
 function defaultStatusLineFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'status-line.txt');
+  return defaultRuntimePath('status-line.txt');
 }
 
 function defaultStatusLineJsonFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'status-line.json');
+  return defaultRuntimePath('status-line.json');
 }
 
 function defaultApiPidFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'api.pid');
+  return defaultRuntimePath('api.pid');
 }
 
 function defaultApiLogFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'api.log');
+  return defaultRuntimePath('api.log');
 }
 
 function defaultApiStateFilePath(): string {
-  return path.join(homeDir(), '.agent-remnote', 'api.state.json');
+  return defaultRuntimePath('api.state.json');
 }
 
 const ROOT_BOOL_FLAGS = new Set(['--json', '--md', '--ids', '--quiet', '--debug']);
@@ -330,7 +338,13 @@ const rawConfigSpec = Config.all({
   remnoteDb: Config.string('remnoteDb').pipe(Config.withDefault('')),
   storeDb: Config.string('storeDb').pipe(Config.withDefault(defaultStoreDbPath())),
   daemonUrl: Config.string('daemonUrl').pipe(Config.withDefault('')),
-  wsPort: Config.port('wsPort').pipe(Config.withDefault(6789)),
+  wsPort: Config.integer('wsPort').pipe(
+    Config.withDefault(-1),
+    Config.validate({
+      message: 'wsPort must be -1 or a valid port',
+      validation: (n) => Number.isInteger(n) && (n === -1 || (n > 0 && n <= 65535)),
+    }),
+  ),
   wsScheduler: Config.boolean('wsScheduler').pipe(Config.withDefault(true)),
   wsDispatchMaxBytes: Config.integer('wsDispatchMaxBytes').pipe(
     Config.withDefault(512_000),
@@ -613,6 +627,7 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
           ? {}
           : yield* Effect.fail(userConfigResult.left);
 
+    const ownership = resolveRuntimeOwnershipContext();
     const wsStateFile = resolveWsStateFile(raw.wsStateFile);
 
     const remnoteDb = optionalTrimmed(raw.remnoteDb)
@@ -621,8 +636,10 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
 
     const storeDb = resolveUserFilePath(raw.storeDb);
 
+    const runtimePortClass = runtimePortClassForContext(ownership);
     const daemonUrl = optionalTrimmed(raw.daemonUrl);
-    const wsUrl = daemonUrl ? daemonUrl : wsUrlFromPort(raw.wsPort);
+    const wsPort = raw.wsPort > 0 ? raw.wsPort : defaultWsPortForContext(ownership);
+    const wsUrl = daemonUrl ? daemonUrl : wsUrlFromPort(wsPort);
 
     const format = yield* Effect.try({
       try: () => pickFormat(raw),
@@ -641,7 +658,7 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
     const apiBaseUrl = apiBaseUrlRaw ? normalizeApiBaseUrl(apiBaseUrlRaw) : undefined;
     const apiHostRaw = optionalTrimmed(raw.apiHost ?? '') ?? optionalTrimmed(userConfig.apiHost ?? '') ?? '0.0.0.0';
     const apiHost = normalizeApiHost(apiHostRaw);
-    const apiPort = raw.apiPort && raw.apiPort > 0 ? raw.apiPort : (userConfig.apiPort ?? 3000);
+    const apiPort = raw.apiPort && raw.apiPort > 0 ? raw.apiPort : (userConfig.apiPort ?? defaultApiPortForContext(ownership));
     const apiBasePathRaw =
       optionalTrimmed(raw.apiBasePath ?? '') ?? optionalTrimmed(userConfig.apiBasePath ?? '') ?? '/v1';
     const apiBasePath = normalizeApiBasePath(apiBasePathRaw);
@@ -650,6 +667,12 @@ export function resolveConfig(): Effect.Effect<ResolvedConfig, CliError> {
       format,
       quiet: raw.quiet,
       debug: raw.debug,
+      runtimeProfile: ownership.runtimeProfile,
+      installSource: ownership.installSource,
+      controlPlaneRoot: ownership.controlPlaneRoot,
+      runtimeRoot: ownership.runtimeRoot,
+      worktreeRoot: ownership.worktreeRoot,
+      runtimePortClass,
       configFile,
       remnoteDb,
       storeDb,

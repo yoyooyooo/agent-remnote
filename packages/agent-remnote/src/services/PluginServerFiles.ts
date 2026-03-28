@@ -5,12 +5,15 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { CliError, isCliError } from './Errors.js';
-import { homeDir, resolveUserFilePath } from '../lib/paths.js';
+import { resolveUserFilePath } from '../lib/paths.js';
 import type { RuntimeBuildInfo } from '../lib/runtimeBuildInfo.js';
+import type { RuntimeOwnerDescriptor } from '../lib/runtime-ownership/ownerDescriptor.js';
+import { defaultRuntimePath } from '../lib/runtime-ownership/paths.js';
 
 export type PluginServerPidFile = {
   readonly pid: number;
   readonly build?: RuntimeBuildInfo | undefined;
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
   readonly started_at?: number | undefined;
   readonly host?: string | undefined;
   readonly port?: number | undefined;
@@ -23,6 +26,7 @@ export type PluginServerStateFile = {
   readonly running: boolean;
   readonly pid: number;
   readonly build?: RuntimeBuildInfo | undefined;
+  readonly owner?: RuntimeOwnerDescriptor | undefined;
   readonly plugin_build?: RuntimeBuildInfo | undefined;
   readonly host: string;
   readonly port: number;
@@ -52,19 +56,19 @@ function ensureDir(p: string): Promise<void> {
 function defaultPidFile(): string {
   const envPidFile = process.env.REMNOTE_PLUGIN_SERVER_PID_FILE;
   if (typeof envPidFile === 'string' && envPidFile.trim()) return resolveUserFilePath(envPidFile);
-  return path.join(homeDir(), '.agent-remnote', 'plugin-server.pid');
+  return defaultRuntimePath('plugin-server.pid');
 }
 
 function defaultLogFile(): string {
   const envLogFile = process.env.REMNOTE_PLUGIN_SERVER_LOG_FILE;
   if (typeof envLogFile === 'string' && envLogFile.trim()) return resolveUserFilePath(envLogFile);
-  return path.join(homeDir(), '.agent-remnote', 'plugin-server.log');
+  return defaultRuntimePath('plugin-server.log');
 }
 
 function defaultStateFile(): string {
   const envStateFile = process.env.REMNOTE_PLUGIN_SERVER_STATE_FILE;
   if (typeof envStateFile === 'string' && envStateFile.trim()) return resolveUserFilePath(envStateFile);
-  return path.join(homeDir(), '.agent-remnote', 'plugin-server.state.json');
+  return defaultRuntimePath('plugin-server.state.json');
 }
 
 function parseJson<T>(raw: string, filePath: string): T {

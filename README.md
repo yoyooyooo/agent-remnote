@@ -498,25 +498,40 @@ flowchart LR
 ## Troubleshooting
 
 - `agent-remnote daemon ensure` prints `started: false`: it can mean “already healthy, nothing to start”; use `agent-remnote --json daemon status` to confirm.
-- `agent-remnote stack ensure`: one command to make both `daemon + api` ready.
+- `agent-remnote stack ensure`: one command to make `daemon + api + plugin` ready for the current owner/profile.
+- `agent-remnote stack stop`: one command to stop the current local `daemon + api + plugin` bundle.
+- `agent-remnote stack takeover --channel dev`: switches the canonical fixed-owner claim to `dev` and best-effort starts the local dev bundle on canonical endpoints.
+- `agent-remnote stack takeover --channel stable`: switches the canonical fixed-owner claim back to `stable`, stops the current dev bundle, and uses the configured stable launcher when available.
 - If you want to wait until the plugin worker becomes active again: `agent-remnote stack ensure --wait-worker --worker-timeout-ms 15000`
 - No `remnote-plugin` client in `daemon status`: reinstall the plugin zip and keep a RemNote window open.
 - Plugin RPC fails / no `activeWorkerConnId`: click inside the target RemNote window to refresh UI activity.
+- `agent-remnote --json config print`: shows the resolved `runtime_profile`, `runtime_port_class`, `control_plane_root`, `runtime_root`, and current `fixed_owner_claim`.
+- `agent-remnote --json stack status`: shows `resolved_local`, `fixed_owner_claim`, per-service owner state, and `ownership_conflicts[]`.
 
 ## Configuration
 
 - RemNote DB (read-only): `--remnote-db` / `REMNOTE_DB`
-- Store DB: `--store-db` / `REMNOTE_STORE_DB` / `STORE_DB` (default: `~/.agent-remnote/store.sqlite`; legacy: `--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`)
-- WS endpoint: `--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL` (or `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`, default port 6789)
+- Store DB: `--store-db` / `REMNOTE_STORE_DB` / `STORE_DB`
+  - published install default: `~/.agent-remnote/store.sqlite`
+  - source worktree default: isolated `~/.agent-remnote/dev/<worktree-key>/store.sqlite`
+  - legacy: `--queue-db` / `REMNOTE_QUEUE_DB` / `QUEUE_DB`
+- WS endpoint: `--daemon-url` / `REMNOTE_DAEMON_URL` / `DAEMON_URL` (or `--ws-port` / `REMNOTE_WS_PORT` / `WS_PORT`)
+  - published install default port: `6789`
+  - source worktree default port: deterministic isolated port derived from the resolved runtime root
 - Host API remote mode sources: `--api-base-url` / `REMNOTE_API_BASE_URL` / user config `apiBaseUrl`
 - Host API listen host: `--api-host` / `REMNOTE_API_HOST` / user config `apiHost` (default `0.0.0.0`)
-- Host API port: `--api-port` / `PORT` / `REMNOTE_API_PORT` / user config `apiPort` (default `3000`)
+- Host API port: `--api-port` / `PORT` / `REMNOTE_API_PORT` / user config `apiPort`
+  - published install default port: `3000`
+  - source worktree default port: deterministic isolated port derived from the resolved runtime root
 - Host API base path: `--api-base-path` / `REMNOTE_API_BASE_PATH` / user config `apiBasePath` (default `/v1`)
 - User config file override: `--config-file` / `REMNOTE_CONFIG_FILE`
 - Host API pid/log/state (env-only): `REMNOTE_API_PID_FILE` / `REMNOTE_API_LOG_FILE` / `REMNOTE_API_STATE_FILE`
-- WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE` (default: `~/.agent-remnote/ws.bridge.state.json`)
-- Daemon pidfile (env-only): `REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE` (default: `~/.agent-remnote/ws.pid`)
-- Daemon log file (env-only): `REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE` (default: `~/.agent-remnote/ws.log`)
+- WS state file: `REMNOTE_WS_STATE_FILE` / `WS_STATE_FILE`
+  - published install default: `~/.agent-remnote/ws.bridge.state.json`
+  - source worktree default: isolated runtime root `ws.bridge.state.json`
+- Daemon pidfile (env-only): `REMNOTE_DAEMON_PID_FILE` / `DAEMON_PID_FILE`
+- Daemon log file (env-only): `REMNOTE_DAEMON_LOG_FILE` / `DAEMON_LOG_FILE`
+- Plugin pid/log/state (env-only): `REMNOTE_PLUGIN_SERVER_PID_FILE` / `REMNOTE_PLUGIN_SERVER_LOG_FILE` / `REMNOTE_PLUGIN_SERVER_STATE_FILE`
 - Active worker (auto): determined by recent RemNote UI activity (selection/uiContext); inspect via `agent-remnote --json daemon status` (`activeWorkerConnId`)
 - repo: `--repo` / `AGENT_REMNOTE_REPO`
 - WS scheduler (env-only): `REMNOTE_WS_SCHEDULER` (set to `0` to disable conflict-aware scheduling; debug only)
@@ -524,7 +539,7 @@ flowchart LR
 - status line file mode (env-only): `REMNOTE_STATUS_LINE_FILE` / `REMNOTE_STATUS_LINE_MIN_INTERVAL_MS` / `REMNOTE_STATUS_LINE_DEBUG` / `REMNOTE_STATUS_LINE_JSON_FILE`
 - tmux statusline (RN segment): see `docs/guides/tmux-statusline.md`
 
-Useful: `agent-remnote config path` shows the active user config path; `config list/get/set/unset/validate` manage the user config file; `config set` supports `apiBaseUrl`, `apiHost`, `apiPort`, and `apiBasePath`; `config print` shows the resolved values (including defaults and overrides).
+Useful: `agent-remnote config path` shows the active user config path; `config list/get/set/unset/validate` manage the user config file; `config set` supports `apiBaseUrl`, `apiHost`, `apiPort`, and `apiBasePath`; `config print` shows resolved profile/root/defaults/claim values (including overrides).
 
 ## Development & debugging (from source)
 

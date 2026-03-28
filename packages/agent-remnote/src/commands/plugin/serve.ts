@@ -12,6 +12,7 @@ import { Output } from '../../services/Output.js';
 import { PluginServerFiles } from '../../services/PluginServerFiles.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
+import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { writeFailure } from '../_shared.js';
 import { pluginServerLocalBaseUrl } from './_shared.js';
 
@@ -56,6 +57,7 @@ export const pluginServeCommand = Command.make('serve', { host, port, stateFile 
               running: true,
               pid: process.pid,
               build: currentRuntimeBuildInfo(),
+              owner: currentRuntimeOwnerDescriptor(),
               plugin_build: readPluginDistBuildInfo(distPath) ?? undefined,
               host,
               port,

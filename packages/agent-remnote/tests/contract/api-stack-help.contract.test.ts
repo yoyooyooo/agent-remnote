@@ -35,5 +35,6 @@ describe('cli contract: api/stack help', () => {
     expect(out).toContain('ensure');
     expect(out).toContain('stop');
     expect(out).toContain('status');
+    expect(out).toContain('takeover');
   });
 });

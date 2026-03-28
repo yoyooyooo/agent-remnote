@@ -213,6 +213,16 @@ RemNote 官方资料：
   - `~/.agent-remnote/ws.pid`
   - `~/.agent-remnote/ws.log`
 
+### Runtime Ownership / Fixed URL
+
+- canonical fixed-owner control plane 根目录仍是 `~/.agent-remnote`
+- 发布安装态默认是 canonical `stable` owner
+- source worktree 默认进入 isolated `dev` runtime root 与 isolated ports
+- `config print` / `stack status` 是当前 owner/profile/claim 的一等入口
+- `stack ensure/status/stop` 当前都收口 `daemon + api + plugin`
+- `stack takeover --channel dev|stable` 是显式 owner transfer 入口
+- direct `daemon/api/plugin start|ensure` 若目标是 canonical ports，也必须 obey fixed-owner claim policy
+
 ## 常用命令
 
 - CLI 开发：`npm run dev`
@@ -231,6 +241,8 @@ RemNote 官方资料：
 - 若当前在 git worktree 中调试，必须确认 shim 指向的是当前 worktree 的 repo 入口地址。
 - 若 shim 仍指向主工作区或其他 worktree，调试结果会落到错误的仓库上下文。
 - 开始本机调试前，先检查“当前 shell 所在 worktree”和“shim 实际指向的 repo 入口”是否一致。
+- source worktree 默认是 isolated `dev` profile；不要把当前 shell 在 worktree 里跑出的 `config print` / `stack status` 误读成 canonical `stable` owner 状态。
+- 若要接管固定 URL，必须显式执行 `stack takeover --channel dev`；调试结束后用 `stack takeover --channel stable` 回收。
 
 ### 修改插件逻辑后的桌面端重载
 

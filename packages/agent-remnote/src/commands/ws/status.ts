@@ -93,6 +93,7 @@ export const wsStatusCommand = Command.make('status', { pidFile }, ({ pidFile })
         running: supervisorRunning,
         pid: supervisorPid,
         build: pidInfo?.build ?? null,
+        owner: pidInfo?.owner ?? null,
         pid_file: pidFilePath,
         started_at: pidInfo?.started_at,
         log_file: pidInfo?.log_file,
