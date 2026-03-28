@@ -27,6 +27,14 @@ function fixedOwnerClaimLockPath(controlPlaneRoot: string): string {
   return path.join(controlPlaneRoot, 'fixed-owner-claim.lock');
 }
 
+const FIXED_OWNER_CLAIM_LOCK_STALE_MS = 60_000;
+const FIXED_OWNER_CLAIM_LOCK_META_FILE = 'meta.json';
+
+type FixedOwnerClaimLockMeta = {
+  readonly pid?: number | undefined;
+  readonly acquired_at?: number | undefined;
+};
+
 function defaultStableClaim(ctx: RuntimeOwnershipContext): FixedOwnerClaim {
   return {
     claimed_channel: 'stable',
@@ -107,29 +115,139 @@ export function withFixedOwnerClaimLock<A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | CliError, R> {
   const lockPath = fixedOwnerClaimLockPath(ctx.controlPlaneRoot);
-  return Effect.scoped(
-    Effect.acquireRelease(
-      Effect.try({
-        try: () => {
-          fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-          fs.mkdirSync(lockPath, { recursive: false });
-        },
-        catch: (error: any) => {
-          if (error?.code === 'EEXIST') {
-            return new CliError({
-              code: 'INTERNAL',
-              message: 'Another fixed-owner operation is already in progress',
-              exitCode: 1,
-              details: { lock_path: lockPath },
-            });
-          }
-          return new CliError({
+  const metaPath = path.join(lockPath, FIXED_OWNER_CLAIM_LOCK_META_FILE);
+
+  const writeMeta = () => {
+    const meta: FixedOwnerClaimLockMeta = {
+      pid: process.pid,
+      acquired_at: Date.now(),
+    };
+    fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
+  };
+
+  const readMeta = (): FixedOwnerClaimLockMeta | undefined => {
+    try {
+      const raw = fs.readFileSync(metaPath, 'utf8');
+      const parsed = JSON.parse(raw) as FixedOwnerClaimLockMeta;
+      return parsed && typeof parsed === 'object' ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const isPidAlive = (pid: number): boolean => {
+    if (!Number.isFinite(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error: any) {
+      return error?.code === 'EPERM';
+    }
+  };
+
+  const readLockState = () => {
+    const meta = readMeta();
+    const now = Date.now();
+    const acquiredAt = typeof meta?.acquired_at === 'number' && Number.isFinite(meta.acquired_at) ? meta.acquired_at : undefined;
+    const metaExpired = acquiredAt !== undefined && now - acquiredAt > FIXED_OWNER_CLAIM_LOCK_STALE_MS;
+    const ownerDead = typeof meta?.pid === 'number' && !isPidAlive(meta.pid);
+    try {
+      const stat = fs.statSync(lockPath);
+      const mtimeExpired = now - stat.mtimeMs > FIXED_OWNER_CLAIM_LOCK_STALE_MS;
+      return {
+        reclaimable: ownerDead || metaExpired || mtimeExpired,
+        reason: ownerDead ? 'pid_not_running' : metaExpired ? 'metadata_expired' : mtimeExpired ? 'mtime_expired' : 'live_lock',
+        meta,
+      } as const;
+    } catch {
+      return {
+        reclaimable: ownerDead || metaExpired,
+        reason: ownerDead ? 'pid_not_running' : metaExpired ? 'metadata_expired' : 'live_lock',
+        meta,
+      } as const;
+    }
+  };
+
+  const failLockBusy = () => {
+    const state = readLockState();
+    return new CliError({
+      code: 'INTERNAL',
+      message: 'Another fixed-owner operation is already in progress',
+      exitCode: 1,
+      details: {
+        lock_path: lockPath,
+        reason: state.reason,
+        owner_pid: state.meta?.pid,
+        acquired_at: state.meta?.acquired_at,
+      },
+    });
+  };
+
+  const acquire = () => {
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        fs.mkdirSync(lockPath, { recursive: false });
+        writeMeta();
+        return;
+      } catch (error: any) {
+        if (error?.code !== 'EEXIST') {
+          throw new CliError({
             code: 'INTERNAL',
             message: 'Failed to acquire fixed-owner claim lock',
             exitCode: 1,
             details: { lock_path: lockPath, error: String(error?.message || error) },
           });
-        },
+        }
+
+        const state = readLockState();
+        if (!state.reclaimable) throw failLockBusy();
+
+        try {
+          fs.rmSync(lockPath, { recursive: true, force: true });
+        } catch (rmError: any) {
+          throw new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to reclaim stale fixed-owner claim lock',
+            exitCode: 1,
+            details: {
+              lock_path: lockPath,
+              reason: state.reason,
+              error: String(rmError?.message || rmError),
+            },
+          });
+        }
+      }
+    }
+
+    try {
+      fs.mkdirSync(lockPath, { recursive: false });
+      writeMeta();
+    } catch (error: any) {
+      if (error?.code === 'EEXIST') throw failLockBusy();
+      throw new CliError({
+        code: 'INTERNAL',
+        message: 'Failed to acquire fixed-owner claim lock',
+        exitCode: 1,
+        details: { lock_path: lockPath, error: String(error?.message || error) },
+      });
+    }
+  };
+
+  return Effect.scoped(
+    Effect.acquireRelease(
+      Effect.try({
+        try: acquire,
+        catch: (error) =>
+          error instanceof CliError
+            ? error
+            : new CliError({
+                code: 'INTERNAL',
+                message: 'Failed to acquire fixed-owner claim lock',
+                exitCode: 1,
+                details: { lock_path: lockPath, error: String((error as any)?.message || error) },
+              }),
       }),
       () =>
         Effect.sync(() => {
@@ -158,8 +276,9 @@ export function assertMayUseCanonicalPort(params: {
   readonly ctx: RuntimeOwnershipContext;
   readonly service: 'api' | 'plugin' | 'daemon';
   readonly requestedPort: number;
+  readonly bypassGuard?: boolean | undefined;
 }): void {
-  if (process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD === '1') return;
+  if (params.bypassGuard || process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD === '1') return;
   const canonicalPort = params.service === 'api' ? 3000 : params.service === 'plugin' ? 8080 : 6789;
   if (params.requestedPort !== canonicalPort) return;
   if (params.ctx.runtimeProfile !== 'dev') return;
@@ -182,8 +301,9 @@ export function assertMayUseCanonicalPort(params: {
 export function assertMayUseCanonicalWsUrl(params: {
   readonly ctx: RuntimeOwnershipContext;
   readonly wsUrl: string;
+  readonly bypassGuard?: boolean | undefined;
 }): void {
-  if (process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD === '1') return;
+  if (params.bypassGuard || process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD === '1') return;
   let parsed: URL;
   try {
     parsed = new URL(params.wsUrl);
@@ -192,13 +312,14 @@ export function assertMayUseCanonicalWsUrl(params: {
   }
   const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'wss:' ? 443 : 80;
   if (!Number.isFinite(port)) return;
-  assertMayUseCanonicalPort({ ctx: params.ctx, service: 'daemon', requestedPort: port });
+  assertMayUseCanonicalPort({ ctx: params.ctx, service: 'daemon', requestedPort: port, bypassGuard: params.bypassGuard });
 }
 
 export function validateCanonicalPortUsage(params: {
   readonly ctx: RuntimeOwnershipContext;
   readonly service: 'api' | 'plugin' | 'daemon';
   readonly requestedPort: number;
+  readonly bypassGuard?: boolean | undefined;
 }): Effect.Effect<void, CliError> {
   return Effect.try({
     try: () => assertMayUseCanonicalPort(params),
@@ -217,6 +338,7 @@ export function validateCanonicalPortUsage(params: {
 export function validateCanonicalWsUrlUsage(params: {
   readonly ctx: RuntimeOwnershipContext;
   readonly wsUrl: string;
+  readonly bypassGuard?: boolean | undefined;
 }): Effect.Effect<void, CliError> {
   return Effect.try({
     try: () => assertMayUseCanonicalWsUrl(params),

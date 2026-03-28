@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 
 const mocks = vi.hoisted(() => ({
   ensureWsSupervisor: vi.fn(),
@@ -118,6 +119,81 @@ describe('stack takeover (unit)', () => {
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
+    }
+  });
+
+  it('restores the previous claim when stable launcher spawn fails', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-takeover-stable-rollback-'));
+    const tmpHome = path.join(tmpDir, 'home');
+    const previousHome = process.env.HOME;
+    const controlPlaneRoot = path.join(tmpHome, '.agent-remnote');
+    const claimFile = path.join(controlPlaneRoot, 'fixed-owner-claim.json');
+
+    try {
+      process.env.HOME = tmpHome;
+      await fs.mkdir(controlPlaneRoot, { recursive: true });
+      await fs.writeFile(
+        claimFile,
+        JSON.stringify(
+          {
+            claimed_channel: 'dev',
+            claimed_owner_id: 'dev',
+            runtime_root: path.join(controlPlaneRoot, 'dev', 'fixture'),
+            control_plane_root: controlPlaneRoot,
+            port_class: 'canonical',
+            updated_by: 'stack_takeover',
+            updated_at: 1,
+            worktree_root: '/tmp/example-worktree',
+            launcher_ref: 'source:/tmp/example-worktree',
+          },
+          null,
+          2,
+        ),
+      );
+
+      mocks.stopStackBundle.mockReturnValue(
+        Effect.succeed({
+          daemon_stopped: true,
+          api_stopped: true,
+          plugin_stopped: true,
+        }),
+      );
+      mocks.writeFixedOwnerClaim.mockImplementation(() => undefined);
+
+      const layer = Layer.mergeAll(
+        Layer.succeed(Process, {
+          isPidRunning: () => Effect.succeed(false),
+          getCommandLine: () => Effect.succeed(undefined),
+          spawnDetached: () =>
+            Effect.fail(
+              new CliError({
+                code: 'INTERNAL',
+                message: 'launcher boom',
+                exitCode: 1,
+              }),
+            ),
+          kill: () => Effect.void,
+          waitForExit: () => Effect.succeed(true),
+        } as any),
+        Layer.succeed(AppConfig, {} as any),
+        Layer.succeed(DaemonFiles, {} as any),
+        Layer.succeed(SupervisorState, {} as any),
+        Layer.succeed(ApiDaemonFiles, {} as any),
+        Layer.succeed(PluginServerFiles, {} as any),
+        Layer.succeed(WsClient, {} as any),
+        Layer.succeed(HostApiClient, {} as any),
+      );
+
+      const exit = await Effect.runPromiseExit(runStackTakeover('stable').pipe(Effect.provide(layer)));
+      expect(exit._tag).toBe('Failure');
+      expect(mocks.stopStackBundle).toHaveBeenCalledTimes(1);
+      expect(mocks.writeFixedOwnerClaim).toHaveBeenCalledTimes(2);
+      expect(mocks.writeFixedOwnerClaim.mock.calls[0]?.[0]?.claim).toMatchObject({ claimed_channel: 'stable' });
+      expect(mocks.writeFixedOwnerClaim.mock.calls[1]?.[0]?.claim).toMatchObject({ claimed_channel: 'dev' });
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
 });

@@ -18,21 +18,6 @@ import { writeFailure, writeSuccess } from '../_shared.js';
 
 const channel = Options.choice('channel', ['stable', 'dev'] as const);
 
-function withClaimGuardBypassed<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
-  const previousBypass = process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
-  return Effect.sync(() => {
-    process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = '1';
-  }).pipe(
-    Effect.zipRight(effect),
-    Effect.ensuring(
-      Effect.sync(() => {
-        if (previousBypass === undefined) delete process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
-        else process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = previousBypass;
-      }),
-    ),
-  );
-}
-
 function persistFixedOwnerClaim(params: {
   readonly file: string;
   readonly ctx: ReturnType<typeof resolveRuntimeOwnershipContext>;
@@ -93,47 +78,48 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
         AGENT_REMNOTE_BYPASS_CLAIM_GUARD: '1',
       } satisfies NodeJS.ProcessEnv;
       const rollbackNeeded = yield* Ref.make(true);
-      yield* withClaimGuardBypassed(
-        Effect.gen(function* () {
-          const daemon = yield* ensureWsSupervisor({
-            waitMs: WS_START_WAIT_DEFAULT_MS,
-            wsUrlOverride: 'ws://localhost:6789/ws',
-            ownerOverride,
-            envOverride,
-          });
-          if (daemon.started) restartedServices.push('daemon');
-          else skippedServices.push('daemon');
+      yield* Effect.gen(function* () {
+        const daemon = yield* ensureWsSupervisor({
+          waitMs: WS_START_WAIT_DEFAULT_MS,
+          wsUrlOverride: 'ws://localhost:6789/ws',
+          ownerOverride,
+          envOverride,
+          bypassCanonicalClaimGuard: true,
+        });
+        if (daemon.started) restartedServices.push('daemon');
+        else skippedServices.push('daemon');
 
-          const api = yield* ensureApiDaemon({
-            waitMs: API_START_WAIT_DEFAULT_MS,
-            port: 3000,
-            ownerOverride,
-            envOverride,
-          });
-          if (api.started) restartedServices.push('api');
-          else skippedServices.push('api');
+        const api = yield* ensureApiDaemon({
+          waitMs: API_START_WAIT_DEFAULT_MS,
+          port: 3000,
+          ownerOverride,
+          envOverride,
+          bypassCanonicalClaimGuard: true,
+        });
+        if (api.started) restartedServices.push('api');
+        else skippedServices.push('api');
 
-          const plugin = yield* ensurePluginServer({
-            waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
-            port: 8080,
-            ownerOverride,
-            envOverride,
-          });
-          if (plugin.started) restartedServices.push('plugin');
-          else skippedServices.push('plugin');
+        const plugin = yield* ensurePluginServer({
+          waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
+          port: 8080,
+          ownerOverride,
+          envOverride,
+          bypassCanonicalClaimGuard: true,
+        });
+        if (plugin.started) restartedServices.push('plugin');
+        else skippedServices.push('plugin');
 
-          yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
-          yield* Ref.set(rollbackNeeded, false);
-        }).pipe(
-          Effect.onExit(() =>
-            Ref.get(rollbackNeeded).pipe(
-              Effect.flatMap((needed) =>
-                needed
-                  ? stopStackBundle().pipe(
-                      Effect.catchAll(() => Effect.void),
-                    )
-                  : Effect.void,
-              ),
+        yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
+        yield* Ref.set(rollbackNeeded, false);
+      }).pipe(
+        Effect.onExit(() =>
+          Ref.get(rollbackNeeded).pipe(
+            Effect.flatMap((needed) =>
+              needed
+                ? stopStackBundle().pipe(
+                    Effect.catchAll(() => Effect.void),
+                  )
+                : Effect.void,
             ),
           ),
         ),
@@ -153,24 +139,45 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
       });
 
       yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
+      yield* Effect.gen(function* () {
+        const stopped = yield* stopStackBundle();
+        if (stopped.daemon_stopped) stoppedServices.push('daemon');
+        if (stopped.api_stopped) stoppedServices.push('api');
+        if (stopped.plugin_stopped) stoppedServices.push('plugin');
 
-      const stopped = yield* stopStackBundle();
-      if (stopped.daemon_stopped) stoppedServices.push('daemon');
-      if (stopped.api_stopped) stoppedServices.push('api');
-      if (stopped.plugin_stopped) stoppedServices.push('plugin');
-
-      if (launcher) {
-        yield* proc.spawnDetached({
-          command: launcher.command,
-          args: launcher.args,
-          cwd: launcher.cwd,
-          env: scrubStableLauncherEnv(),
-          logFile: path.join(ownership.controlPlaneRoot, 'stable-launcher.log'),
-        });
-        restartedServices.push('stable-launcher');
-      } else {
-        skippedServices.push('stable-launcher');
-      }
+        if (launcher) {
+          yield* proc.spawnDetached({
+            command: launcher.command,
+            args: launcher.args,
+            cwd: launcher.cwd,
+            env: scrubStableLauncherEnv(),
+            logFile: path.join(ownership.controlPlaneRoot, 'stable-launcher.log'),
+          });
+          restartedServices.push('stable-launcher');
+        } else {
+          skippedServices.push('stable-launcher');
+        }
+      }).pipe(
+        Effect.catchAll((error) =>
+          persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: previous.claim }).pipe(
+            Effect.matchEffect({
+              onFailure: (rollbackError) =>
+                Effect.fail(
+                  new CliError({
+                    code: 'INTERNAL',
+                    message: 'Failed to complete stable takeover and restore the previous fixed owner claim',
+                    exitCode: 1,
+                    details: {
+                      takeover_error: String((error as any)?.message || error),
+                      rollback_error: String((rollbackError as any)?.message || rollbackError),
+                    },
+                  }),
+                ),
+              onSuccess: () => Effect.fail(error),
+            }),
+          ),
+        ),
+      );
     }
 
     return {

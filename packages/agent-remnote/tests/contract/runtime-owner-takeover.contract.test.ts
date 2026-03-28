@@ -41,7 +41,10 @@ describe('cli contract: runtime owner takeover', () => {
       expect(parsed.data.previous_claim).toMatchObject({ claimed_channel: 'stable' });
       expect(parsed.data.next_claim).toMatchObject({ claimed_channel: 'dev', port_class: 'canonical' });
       expect(parsed.data.stopped_services).toEqual([]);
-      expect(parsed.data.restarted_services).toEqual([]);
+      const touched = new Set<string>([...parsed.data.restarted_services, ...parsed.data.skipped_services]);
+      expect(touched.has('daemon')).toBe(true);
+      expect(touched.has('api')).toBe(true);
+      expect(touched.has('plugin')).toBe(true);
 
       const onDisk = JSON.parse(await fs.readFile(claimFile, 'utf8'));
       expect(onDisk).toMatchObject({ claimed_channel: 'dev', updated_by: 'stack_takeover' });

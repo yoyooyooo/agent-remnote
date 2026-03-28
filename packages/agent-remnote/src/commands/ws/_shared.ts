@@ -35,6 +35,7 @@ export type WsSupervisorStartParams = {
   readonly wsUrlOverride?: string | undefined;
   readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
   readonly envOverride?: NodeJS.ProcessEnv | undefined;
+  readonly bypassCanonicalClaimGuard?: boolean | undefined;
 };
 
 function childCommandLine(params: { readonly wsUrl: string; readonly storeDb: string }): {
@@ -167,6 +168,7 @@ export function startWsDaemon(params: {
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
   readonly wsUrlOverride?: string | undefined;
+  readonly bypassCanonicalClaimGuard?: boolean | undefined;
 }): Effect.Effect<WsDaemonStartResult, CliError, AppConfig | WsClient | DaemonFiles | Process> {
   return Effect.gen(function* () {
     const cfg = yield* AppConfig;
@@ -177,7 +179,11 @@ export function startWsDaemon(params: {
     const wsUrl = params.wsUrlOverride ?? cfg.wsUrl;
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
-    yield* validateCanonicalWsUrlUsage({ ctx: resolveRuntimeOwnershipContext(), wsUrl });
+    yield* validateCanonicalWsUrlUsage({
+      ctx: resolveRuntimeOwnershipContext(),
+      wsUrl,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
@@ -302,7 +308,11 @@ export function startWsSupervisor(
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
     const stateFilePath = defaultStateFilePathFromPidFile(pidFilePath);
-    yield* validateCanonicalWsUrlUsage({ ctx: resolveRuntimeOwnershipContext(), wsUrl });
+    yield* validateCanonicalWsUrlUsage({
+      ctx: resolveRuntimeOwnershipContext(),
+      wsUrl,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
