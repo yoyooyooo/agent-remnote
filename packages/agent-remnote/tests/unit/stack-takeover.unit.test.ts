@@ -158,6 +158,13 @@ describe('stack takeover (unit)', () => {
           plugin_stopped: true,
         }),
       );
+      mocks.ensureWsSupervisor.mockReturnValue(Effect.succeed({ started: true, pid: 11, pid_file: 'a', log_file: 'b' }));
+      mocks.ensureApiDaemon.mockReturnValue(
+        Effect.succeed({ started: true, pid: 12, pid_file: 'a', log_file: 'b', state_file: 'c', base_url: 'http://127.0.0.1:3000/v1' }),
+      );
+      mocks.ensurePluginServer.mockReturnValue(
+        Effect.succeed({ started: true, pid: 13, pid_file: 'a', log_file: 'b', state_file: 'c', base_url: 'http://127.0.0.1:8080' }),
+      );
       mocks.writeFixedOwnerClaim.mockImplementation(() => undefined);
 
       const layer = Layer.mergeAll(
@@ -188,6 +195,9 @@ describe('stack takeover (unit)', () => {
       expect(exit._tag).toBe('Failure');
       expect(mocks.stopStackBundle).toHaveBeenCalledTimes(1);
       expect(mocks.writeFixedOwnerClaim).toHaveBeenCalledTimes(2);
+      expect(mocks.ensureWsSupervisor).toHaveBeenCalledTimes(1);
+      expect(mocks.ensureApiDaemon).toHaveBeenCalledTimes(1);
+      expect(mocks.ensurePluginServer).toHaveBeenCalledTimes(1);
       expect(mocks.writeFixedOwnerClaim.mock.calls[0]?.[0]?.claim).toMatchObject({ claimed_channel: 'stable' });
       expect(mocks.writeFixedOwnerClaim.mock.calls[1]?.[0]?.claim).toMatchObject({ claimed_channel: 'dev' });
     } finally {

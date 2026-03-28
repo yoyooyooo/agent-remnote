@@ -33,4 +33,24 @@ describe('runtime ownership claim lock', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('does not reclaim a live fixed-owner lock even when the lock directory looks old', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-fixed-owner-live-lock-'));
+    const lockDir = path.join(tmpDir, 'fixed-owner-claim.lock');
+    const staleAt = new Date(Date.now() - 10 * 60_000);
+
+    try {
+      await fs.mkdir(lockDir, { recursive: true });
+      await fs.writeFile(
+        path.join(lockDir, 'meta.json'),
+        JSON.stringify({ pid: process.pid, acquired_at: staleAt.getTime() }, null, 2),
+      );
+      await fs.utimes(lockDir, staleAt, staleAt);
+
+      await expect(Effect.runPromise(withFixedOwnerClaimLock(stableContext(tmpDir), Effect.succeed('ok')))).rejects.toBeDefined();
+      await expect(fs.stat(lockDir)).resolves.toBeDefined();
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
