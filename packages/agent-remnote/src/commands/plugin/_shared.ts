@@ -38,6 +38,7 @@ export type PluginServerStartParams = {
   readonly stateFile?: string | undefined;
   readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
   readonly envOverride?: NodeJS.ProcessEnv | undefined;
+  readonly bypassCanonicalClaimGuard?: boolean | undefined;
 };
 
 export function pluginServerLocalBaseUrl(host: string, port: number): string {
@@ -98,7 +99,12 @@ export function startPluginServer(
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
     const port = params.port ?? defaultPluginPortForContext(ownership);
-    yield* validateCanonicalPortUsage({ ctx: ownership, service: 'plugin', requestedPort: port });
+    yield* validateCanonicalPortUsage({
+      ctx: ownership,
+      service: 'plugin',
+      requestedPort: port,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());
@@ -188,7 +194,12 @@ export function ensurePluginServer(
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
     const port = params.port ?? defaultPluginPortForContext(ownership);
-    yield* validateCanonicalPortUsage({ ctx: ownership, service: 'plugin', requestedPort: port });
+    yield* validateCanonicalPortUsage({
+      ctx: ownership,
+      service: 'plugin',
+      requestedPort: port,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());

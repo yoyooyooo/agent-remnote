@@ -2,6 +2,8 @@
 
 本地调试当前建议按“stable 日用 + source worktree 隔离调试”来理解。
 
+权威命令清单仍以 `docs/ssot/agent-remnote/runtime-mode-and-command-parity.md` 为准。
+
 ## 当前规则
 
 - 发布安装态默认是 canonical `stable` owner

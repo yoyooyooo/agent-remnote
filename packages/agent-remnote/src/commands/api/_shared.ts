@@ -39,6 +39,7 @@ export type ApiStartParams = {
   readonly stateFile?: string | undefined;
   readonly ownerOverride?: RuntimeOwnerDescriptor | undefined;
   readonly envOverride?: NodeJS.ProcessEnv | undefined;
+  readonly bypassCanonicalClaimGuard?: boolean | undefined;
 };
 
 function childCommandLine(params: {
@@ -141,7 +142,12 @@ export function startApiDaemon(
 
     const host = params.host ?? cfg.apiHost ?? '0.0.0.0';
     const port = params.port ?? cfg.apiPort ?? 3000;
-    yield* validateCanonicalPortUsage({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port });
+    yield* validateCanonicalPortUsage({
+      ctx: resolveRuntimeOwnershipContext(),
+      service: 'api',
+      requestedPort: port,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
     const basePath = params.basePath ?? cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
@@ -242,7 +248,12 @@ export function ensureApiDaemon(
     const proc = yield* Process;
 
     const port = params.port ?? cfg.apiPort ?? 3000;
-    yield* validateCanonicalPortUsage({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port });
+    yield* validateCanonicalPortUsage({
+      ctx: resolveRuntimeOwnershipContext(),
+      service: 'api',
+      requestedPort: port,
+      bypassGuard: params.bypassCanonicalClaimGuard,
+    });
     const basePath = cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
