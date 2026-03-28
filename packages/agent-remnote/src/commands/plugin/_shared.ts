@@ -9,7 +9,7 @@ import { Process } from '../../services/Process.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
-import { assertMayUseCanonicalPort } from '../../lib/runtime-ownership/claim.js';
+import { validateCanonicalPortUsage } from '../../lib/runtime-ownership/claim.js';
 import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
 import { defaultPluginPortForContext } from '../../lib/runtime-ownership/portClass.js';
@@ -98,18 +98,7 @@ export function startPluginServer(
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
     const port = params.port ?? defaultPluginPortForContext(ownership);
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalPort({ ctx: ownership, service: 'plugin', requestedPort: port }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical plugin port policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalPortUsage({ ctx: ownership, service: 'plugin', requestedPort: port });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());
@@ -199,18 +188,7 @@ export function ensurePluginServer(
 
     const host = params.host ?? PLUGIN_SERVER_DEFAULT_HOST;
     const port = params.port ?? defaultPluginPortForContext(ownership);
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalPort({ ctx: ownership, service: 'plugin', requestedPort: port }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical plugin port policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalPortUsage({ ctx: ownership, service: 'plugin', requestedPort: port });
     const pidFilePath = resolveUserFilePath(params.pidFile ?? files.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? files.defaultLogFile());
     const stateFilePath = resolveUserFilePath(params.stateFile ?? files.defaultStateFile());

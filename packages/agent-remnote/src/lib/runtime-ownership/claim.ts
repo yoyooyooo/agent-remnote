@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import * as Effect from 'effect/Effect';
 
 import { CliError } from '../../services/Errors.js';
 import type { RuntimeOwnershipContext } from './profile.js';
@@ -149,4 +150,41 @@ export function assertMayUseCanonicalWsUrl(params: {
   const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'wss:' ? 443 : 80;
   if (!Number.isFinite(port)) return;
   assertMayUseCanonicalPort({ ctx: params.ctx, service: 'daemon', requestedPort: port });
+}
+
+export function validateCanonicalPortUsage(params: {
+  readonly ctx: RuntimeOwnershipContext;
+  readonly service: 'api' | 'plugin' | 'daemon';
+  readonly requestedPort: number;
+}): Effect.Effect<void, CliError> {
+  return Effect.try({
+    try: () => assertMayUseCanonicalPort(params),
+    catch: (error) =>
+      error instanceof CliError
+        ? error
+        : new CliError({
+            code: 'INTERNAL',
+            message: `Failed to validate canonical ${params.service} port policy`,
+            exitCode: 1,
+            details: { error: String((error as any)?.message || error) },
+          }),
+  });
+}
+
+export function validateCanonicalWsUrlUsage(params: {
+  readonly ctx: RuntimeOwnershipContext;
+  readonly wsUrl: string;
+}): Effect.Effect<void, CliError> {
+  return Effect.try({
+    try: () => assertMayUseCanonicalWsUrl(params),
+    catch: (error) =>
+      error instanceof CliError
+        ? error
+        : new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to validate canonical daemon ws url policy',
+            exitCode: 1,
+            details: { error: String((error as any)?.message || error) },
+          }),
+  });
 }

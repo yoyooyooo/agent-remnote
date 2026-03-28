@@ -12,7 +12,7 @@ import { WsClient } from '../../services/WsClient.js';
 import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
-import { assertMayUseCanonicalWsUrl } from '../../lib/runtime-ownership/claim.js';
+import { validateCanonicalWsUrlUsage } from '../../lib/runtime-ownership/claim.js';
 import type { RuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
 import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
@@ -177,18 +177,7 @@ export function startWsDaemon(params: {
     const wsUrl = params.wsUrlOverride ?? cfg.wsUrl;
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalWsUrl({ ctx: resolveRuntimeOwnershipContext(), wsUrl }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical daemon ws url policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalWsUrlUsage({ ctx: resolveRuntimeOwnershipContext(), wsUrl });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
@@ -313,18 +302,7 @@ export function startWsSupervisor(
     const pidFilePath = resolveUserFilePath(params.pidFile ?? daemonFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? daemonFiles.defaultLogFile());
     const stateFilePath = defaultStateFilePathFromPidFile(pidFilePath);
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalWsUrl({ ctx: resolveRuntimeOwnershipContext(), wsUrl }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical daemon ws url policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalWsUrlUsage({ ctx: resolveRuntimeOwnershipContext(), wsUrl });
 
     const existingPidFile = yield* daemonFiles.readPidFile(pidFilePath);
     if (existingPidFile) {
