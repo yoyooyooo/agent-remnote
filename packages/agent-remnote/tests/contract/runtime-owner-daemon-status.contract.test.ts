@@ -12,6 +12,7 @@ describe('cli contract: runtime owner daemon status', () => {
     const pidFile = path.join(tmpDir, 'ws.pid');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       await fs.writeFile(
         pidFile,
         JSON.stringify(

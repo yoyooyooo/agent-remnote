@@ -571,12 +571,16 @@ describe('doctor fixes (unit)', () => {
     );
 
     const previousHome = process.env.HOME;
-    process.env.HOME = tmpHome;
-    const result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
+    let result: any;
+    try {
+      process.env.HOME = tmpHome;
+      result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+    }
 
-    const fix = result.fixes.find((item) => item.id === 'runtime.realign_fixed_owner_claimed_services');
+    const fix = result!.fixes.find((item: any) => item.id === 'runtime.realign_fixed_owner_claimed_services');
     expect(fix?.ok).toBe(true);
     expect(fix?.changed).toBe(true);
     expect(mocks.runStackTakeover).toHaveBeenCalledWith('stable');

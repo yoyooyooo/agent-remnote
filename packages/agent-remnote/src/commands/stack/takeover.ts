@@ -17,6 +17,40 @@ import { writeFailure, writeSuccess } from '../_shared.js';
 
 const channel = Options.choice('channel', ['stable', 'dev'] as const);
 
+function withClaimGuardBypassed<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
+  const previousBypass = process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
+  return Effect.sync(() => {
+    process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = '1';
+  }).pipe(
+    Effect.zipRight(effect),
+    Effect.ensuring(
+      Effect.sync(() => {
+        if (previousBypass === undefined) delete process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
+        else process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = previousBypass;
+      }),
+    ),
+  );
+}
+
+function persistFixedOwnerClaim(params: {
+  readonly file: string;
+  readonly ctx: ReturnType<typeof resolveRuntimeOwnershipContext>;
+  readonly claim: ReturnType<typeof desiredFixedOwnerClaim>;
+}): Effect.Effect<void, CliError> {
+  return Effect.try({
+    try: () => writeFixedOwnerClaim({ file: params.file, ctx: params.ctx, claim: params.claim }),
+    catch: (error) =>
+      isCliError(error)
+        ? error
+        : new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to write fixed owner claim during stack takeover',
+            exitCode: 1,
+            details: { error: String((error as any)?.message || error), file: params.file },
+          }),
+  });
+}
+
 export function runStackTakeover(channel: 'stable' | 'dev') {
   return Effect.gen(function* () {
     const proc = yield* Process;
@@ -44,14 +78,11 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
         AGENT_REMNOTE_LAUNCHER_REF: ownerOverride.launcher_ref,
         AGENT_REMNOTE_BYPASS_CLAIM_GUARD: '1',
       } satisfies NodeJS.ProcessEnv;
-      const previousBypass = process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
-      yield* Effect.sync(() => {
-        process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = '1';
-      });
-      yield* Effect.gen(function* () {
-        const daemon = yield* ensureWsSupervisor({
-          waitMs: WS_START_WAIT_DEFAULT_MS,
-          wsUrlOverride: 'ws://localhost:6789/ws',
+      yield* withClaimGuardBypassed(
+        Effect.gen(function* () {
+          const daemon = yield* ensureWsSupervisor({
+            waitMs: WS_START_WAIT_DEFAULT_MS,
+            wsUrlOverride: 'ws://localhost:6789/ws',
           ownerOverride,
           envOverride,
         });
@@ -67,54 +98,25 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
         if (api.started) restartedServices.push('api');
         else skippedServices.push('api');
 
-        const plugin = yield* ensurePluginServer({
-          waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
-          port: 8080,
-          ownerOverride,
-          envOverride,
-        });
-        if (plugin.started) restartedServices.push('plugin');
-        else skippedServices.push('plugin');
-      }).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            if (previousBypass === undefined) delete process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
-            else process.env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD = previousBypass;
-          }),
+          const plugin = yield* ensurePluginServer({
+            waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
+            port: 8080,
+            ownerOverride,
+            envOverride,
+          });
+          if (plugin.started) restartedServices.push('plugin');
+          else skippedServices.push('plugin');
+          yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
+        }).pipe(
+          Effect.catchAll((error) =>
+            stopStackBundle().pipe(
+              Effect.catchAll(() => Effect.void),
+              Effect.zipRight(Effect.fail(error)),
+            ),
+          ),
         ),
       );
-
-      yield* Effect.try({
-        try: () => writeFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim }),
-        catch: (error) =>
-          isCliError(error)
-            ? error
-            : new CliError({
-                code: 'INTERNAL',
-                message: 'Failed to write fixed owner claim during stack takeover',
-                exitCode: 1,
-                details: { error: String((error as any)?.message || error), file: previous.file },
-              }),
-      });
     } else {
-      yield* Effect.try({
-        try: () => writeFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim }),
-        catch: (error) =>
-          isCliError(error)
-            ? error
-            : new CliError({
-                code: 'INTERNAL',
-                message: 'Failed to write fixed owner claim during stack takeover',
-                exitCode: 1,
-                details: { error: String((error as any)?.message || error), file: previous.file },
-              }),
-      });
-
-      const stopped = yield* stopStackBundle();
-      if (stopped.daemon_stopped) stoppedServices.push('daemon');
-      if (stopped.api_stopped) stoppedServices.push('api');
-      if (stopped.plugin_stopped) stoppedServices.push('plugin');
-
       const launcher = yield* Effect.try({
         try: () => resolveStableLauncherSpec(),
         catch: (error) =>
@@ -127,6 +129,13 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
                 details: { error: String((error as any)?.message || error) },
               }),
       });
+
+      yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
+
+      const stopped = yield* stopStackBundle();
+      if (stopped.daemon_stopped) stoppedServices.push('daemon');
+      if (stopped.api_stopped) stoppedServices.push('api');
+      if (stopped.plugin_stopped) stoppedServices.push('plugin');
 
       if (launcher) {
         yield* proc.spawnDetached({

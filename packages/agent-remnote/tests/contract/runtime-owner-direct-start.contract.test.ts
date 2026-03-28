@@ -17,6 +17,7 @@ describe('cli contract: runtime owner direct canonical starts', () => {
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', '--daemon-url', 'ws://localhost:6789/ws', 'daemon', 'start'], {
         env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 30_000,
@@ -38,6 +39,7 @@ describe('cli contract: runtime owner direct canonical starts', () => {
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'plugin', 'start', '--port', '8080'], {
         env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 30_000,
@@ -59,6 +61,7 @@ describe('cli contract: runtime owner direct canonical starts', () => {
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'api', 'start', '--port', '3000'], {
         env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0', REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite') },
         timeoutMs: 30_000,

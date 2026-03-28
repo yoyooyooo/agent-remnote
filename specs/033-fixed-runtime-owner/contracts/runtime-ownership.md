@@ -238,8 +238,10 @@ agent-remnote stack takeover --channel dev
 ### Transfer Guarantees
 
 - transfer 前必须读取 claim + live owner + trust state
-- transfer 前必须完成 target launcher validation
-- `--channel dev` 前必须完成 plugin artifact preflight
+- 当前实现：
+  - `--channel dev`：先 best-effort 启动 canonical dev bundle，成功后才持久化 `dev` claim
+  - `--channel stable`：先解析 stable launcher（显式 env 或 Volta shim fallback），再持久化 `stable` claim，随后停止当前 dev bundle，并在可用时触发 stable launcher
+- `--channel dev` 当前通过 `ensurePluginServer(...)` 的成功路径间接完成 plugin artifact preflight；若插件产物不可用，则会在 claim 持久化前失败
 - transfer 只会让一个 owner 持有 canonical fixed URL
 - transfer 结果必须报告：
   - `previous_claim`
@@ -252,9 +254,10 @@ agent-remnote stack takeover --channel dev
 ### Failure Rules
 
 - 若 live owner 不可信，transfer 默认 fail-fast
-- 若 target owner 无法启动，claim 不得 silently drift 到 broken final state
+- `--channel dev` 若 bundle 启动失败，claim 不得 silently drift 到 `dev`
+- `--channel stable` 若未配置 stable launcher 且也不存在 Volta shim fallback，命令会把 `stable-launcher` 记为 skipped，而不是伪造已启动
 - 若 plugin asset provider 变化但需要 RemNote reload，结果必须显式提示
-- 若 daemon/api/plugin 不能形成同一 owner bundle，transfer 不能报告成功
+- `--channel dev` 当前采用 best-effort bundle start：必须显式区分 `restarted_services` / `skipped_services` / `failed_services`
 
 ### Canonical Port Obedience
 
