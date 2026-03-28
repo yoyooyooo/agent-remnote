@@ -29,6 +29,7 @@ describe('cli contract: runtime owner takeover', () => {
     const claimFile = path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
         timeoutMs: 30_000,
@@ -63,6 +64,7 @@ describe('cli contract: runtime owner takeover', () => {
     };
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
         timeoutMs: 30_000,
@@ -89,6 +91,7 @@ describe('cli contract: runtime owner takeover', () => {
     const claimFile = path.join(controlPlaneRoot, 'fixed-owner-claim.json');
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       await fs.mkdir(controlPlaneRoot, { recursive: true });
       await fs.writeFile(
         claimFile,
@@ -143,6 +146,7 @@ describe('cli contract: runtime owner takeover', () => {
     };
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const devRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
         timeoutMs: 30_000,
@@ -188,6 +192,7 @@ describe('cli contract: runtime owner takeover', () => {
     };
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       await fs.writeFile(
         launcherScript,
         [
@@ -234,6 +239,7 @@ describe('cli contract: runtime owner takeover', () => {
     };
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       await fs.mkdir(binDir, { recursive: true });
       if (process.platform === 'win32') {
         await fs.writeFile(
