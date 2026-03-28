@@ -11,7 +11,7 @@ import { resolveUserFilePath } from '../../lib/paths.js';
 import { requireTrustedPidRecord } from '../../lib/pidTrust.js';
 import { apiLocalBaseUrl } from '../../lib/apiUrls.js';
 import { currentRuntimeBuildInfo } from '../../lib/runtimeBuildInfo.js';
-import { assertMayUseCanonicalPort } from '../../lib/runtime-ownership/claim.js';
+import { validateCanonicalPortUsage } from '../../lib/runtime-ownership/claim.js';
 import type { RuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { currentRuntimeOwnerDescriptor } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
@@ -141,18 +141,7 @@ export function startApiDaemon(
 
     const host = params.host ?? cfg.apiHost ?? '0.0.0.0';
     const port = params.port ?? cfg.apiPort ?? 3000;
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalPort({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical api port policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalPortUsage({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port });
     const basePath = params.basePath ?? cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
@@ -253,18 +242,7 @@ export function ensureApiDaemon(
     const proc = yield* Process;
 
     const port = params.port ?? cfg.apiPort ?? 3000;
-    yield* Effect.try({
-      try: () => assertMayUseCanonicalPort({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port }),
-      catch: (error) =>
-        isCliError(error)
-          ? error
-          : new CliError({
-              code: 'INTERNAL',
-              message: 'Failed to validate canonical api port policy',
-              exitCode: 1,
-              details: { error: String((error as any)?.message || error) },
-            }),
-    });
+    yield* validateCanonicalPortUsage({ ctx: resolveRuntimeOwnershipContext(), service: 'api', requestedPort: port });
     const basePath = cfg.apiBasePath ?? '/v1';
     const pidFilePath = resolveUserFilePath(params.pidFile ?? apiFiles.defaultPidFile());
     const logFilePath = resolveUserFilePath(params.logFile ?? apiFiles.defaultLogFile());
