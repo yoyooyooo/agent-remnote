@@ -1,11 +1,12 @@
 import { Command } from '@effect/cli';
 import * as Options from '@effect/cli/Options';
 import * as Effect from 'effect/Effect';
+import * as Ref from 'effect/Ref';
 import path from 'node:path';
 
 import { CliError, isCliError } from '../../services/Errors.js';
 import { API_START_WAIT_DEFAULT_MS, ensureApiDaemon } from '../api/_shared.js';
-import { desiredFixedOwnerClaim, readFixedOwnerClaim, writeFixedOwnerClaim } from '../../lib/runtime-ownership/claim.js';
+import { desiredFixedOwnerClaim, readFixedOwnerClaim, withFixedOwnerClaimLock, writeFixedOwnerClaim } from '../../lib/runtime-ownership/claim.js';
 import { resolveStableLauncherSpec } from '../../lib/runtime-ownership/launcher.js';
 import { ownerDescriptorForClaim } from '../../lib/runtime-ownership/ownerDescriptor.js';
 import { resolveRuntimeOwnershipContext } from '../../lib/runtime-ownership/profile.js';
@@ -51,10 +52,23 @@ function persistFixedOwnerClaim(params: {
   });
 }
 
+function scrubStableLauncherEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.AGENT_REMNOTE_OWNER_CHANNEL;
+  delete env.AGENT_REMNOTE_OWNER_INSTALL_SOURCE;
+  delete env.AGENT_REMNOTE_OWNER_RUNTIME_ROOT;
+  delete env.AGENT_REMNOTE_OWNER_REPO_ROOT;
+  delete env.AGENT_REMNOTE_OWNER_WORKTREE_ROOT;
+  delete env.AGENT_REMNOTE_OWNER_PORT_CLASS;
+  delete env.AGENT_REMNOTE_LAUNCHER_REF;
+  delete env.AGENT_REMNOTE_BYPASS_CLAIM_GUARD;
+  return env;
+}
+
 export function runStackTakeover(channel: 'stable' | 'dev') {
-  return Effect.gen(function* () {
+  const ownership = resolveRuntimeOwnershipContext();
+  const transition = Effect.gen(function* () {
     const proc = yield* Process;
-    const ownership = resolveRuntimeOwnershipContext();
     const previous = readFixedOwnerClaim(ownership);
     const nextClaim = desiredFixedOwnerClaim({ ctx: ownership, channel, updatedBy: 'stack_takeover' });
 
@@ -78,25 +92,26 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
         AGENT_REMNOTE_LAUNCHER_REF: ownerOverride.launcher_ref,
         AGENT_REMNOTE_BYPASS_CLAIM_GUARD: '1',
       } satisfies NodeJS.ProcessEnv;
+      const rollbackNeeded = yield* Ref.make(true);
       yield* withClaimGuardBypassed(
         Effect.gen(function* () {
           const daemon = yield* ensureWsSupervisor({
             waitMs: WS_START_WAIT_DEFAULT_MS,
             wsUrlOverride: 'ws://localhost:6789/ws',
-          ownerOverride,
-          envOverride,
-        });
-        if (daemon.started) restartedServices.push('daemon');
-        else skippedServices.push('daemon');
+            ownerOverride,
+            envOverride,
+          });
+          if (daemon.started) restartedServices.push('daemon');
+          else skippedServices.push('daemon');
 
-        const api = yield* ensureApiDaemon({
-          waitMs: API_START_WAIT_DEFAULT_MS,
-          port: 3000,
-          ownerOverride,
-          envOverride,
-        });
-        if (api.started) restartedServices.push('api');
-        else skippedServices.push('api');
+          const api = yield* ensureApiDaemon({
+            waitMs: API_START_WAIT_DEFAULT_MS,
+            port: 3000,
+            ownerOverride,
+            envOverride,
+          });
+          if (api.started) restartedServices.push('api');
+          else skippedServices.push('api');
 
           const plugin = yield* ensurePluginServer({
             waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
@@ -106,12 +121,19 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
           });
           if (plugin.started) restartedServices.push('plugin');
           else skippedServices.push('plugin');
+
           yield* persistFixedOwnerClaim({ file: previous.file, ctx: ownership, claim: nextClaim });
+          yield* Ref.set(rollbackNeeded, false);
         }).pipe(
-          Effect.catchAll((error) =>
-            stopStackBundle().pipe(
-              Effect.catchAll(() => Effect.void),
-              Effect.zipRight(Effect.fail(error)),
+          Effect.onExit(() =>
+            Ref.get(rollbackNeeded).pipe(
+              Effect.flatMap((needed) =>
+                needed
+                  ? stopStackBundle().pipe(
+                      Effect.catchAll(() => Effect.void),
+                    )
+                  : Effect.void,
+              ),
             ),
           ),
         ),
@@ -142,7 +164,7 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
           command: launcher.command,
           args: launcher.args,
           cwd: launcher.cwd,
-          env: process.env,
+          env: scrubStableLauncherEnv(),
           logFile: path.join(ownership.controlPlaneRoot, 'stable-launcher.log'),
         });
         restartedServices.push('stable-launcher');
@@ -164,6 +186,8 @@ export function runStackTakeover(channel: 'stable' | 'dev') {
       next_actions: [] as string[],
     };
   });
+
+  return withFixedOwnerClaimLock(ownership, transition);
 }
 
 export const stackTakeoverCommand = Command.make('takeover', { channel }, ({ channel }) =>
