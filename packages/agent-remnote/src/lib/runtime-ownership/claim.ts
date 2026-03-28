@@ -23,6 +23,10 @@ export function fixedOwnerClaimFilePath(controlPlaneRoot: string): string {
   return path.join(controlPlaneRoot, 'fixed-owner-claim.json');
 }
 
+function fixedOwnerClaimLockPath(controlPlaneRoot: string): string {
+  return path.join(controlPlaneRoot, 'fixed-owner-claim.lock');
+}
+
 function defaultStableClaim(ctx: RuntimeOwnershipContext): FixedOwnerClaim {
   return {
     claimed_channel: 'stable',
@@ -96,6 +100,45 @@ export function writeFixedOwnerClaim(params: {
   const file = params.file ?? fixedOwnerClaimFilePath(params.ctx.controlPlaneRoot);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(params.claim, null, 2)}\n`, 'utf8');
+}
+
+export function withFixedOwnerClaimLock<A, E, R>(
+  ctx: RuntimeOwnershipContext,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | CliError, R> {
+  const lockPath = fixedOwnerClaimLockPath(ctx.controlPlaneRoot);
+  return Effect.scoped(
+    Effect.acquireRelease(
+      Effect.try({
+        try: () => {
+          fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+          fs.mkdirSync(lockPath, { recursive: false });
+        },
+        catch: (error: any) => {
+          if (error?.code === 'EEXIST') {
+            return new CliError({
+              code: 'INTERNAL',
+              message: 'Another fixed-owner operation is already in progress',
+              exitCode: 1,
+              details: { lock_path: lockPath },
+            });
+          }
+          return new CliError({
+            code: 'INTERNAL',
+            message: 'Failed to acquire fixed-owner claim lock',
+            exitCode: 1,
+            details: { lock_path: lockPath, error: String(error?.message || error) },
+          });
+        },
+      }),
+      () =>
+        Effect.sync(() => {
+          try {
+            fs.rmSync(lockPath, { recursive: true, force: true });
+          } catch {}
+        }),
+    ).pipe(Effect.zipRight(effect)),
+  );
 }
 
 export function matchesFixedOwnerClaim(params: {
