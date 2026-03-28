@@ -310,7 +310,7 @@ export async function importMarkdownByIndent(
   indentSize = 2,
 ): Promise<any[]> {
   const created: any[] = [];
-  const baseStack: Array<{ level: number; id: string | null }> = [{ level: -1, id: parentId ?? null }];
+  const baseStack: IndentStackEntry[] = [{ level: -1, id: parentId ?? null, syntax: 'base' }];
   const lines = markdown.replace(/\r\n?/g, '\n').replace(/\t/g, '  ').split('\n');
 
   const hasIndent = lines.some((ln) => (ln.match(/^\s*/)?.[0] ?? '').length >= indentSize);
@@ -409,7 +409,7 @@ export async function importMarkdownByIndent(
         const rem = await createCodeBlockRem(codeBlock, fenceInfo, parent);
         if (rem) {
           created.push(rem);
-          pushStack(stack, level, rem._id);
+          pushStack(stack, level, rem._id, 'code');
         }
         continue;
       }
@@ -419,6 +419,7 @@ export async function importMarkdownByIndent(
       let text = line.slice(leadingSpaces);
       let markdownText = text;
       let todoStatus: 'Finished' | 'Unfinished' | null = null;
+      let syntax: IndentStackEntry['syntax'] = 'plain';
       // Strip optional list prefix.
       const listMatch = text.match(/^([*+-])\s+(.*)$/);
       if (listMatch) {
@@ -431,19 +432,15 @@ export async function importMarkdownByIndent(
         } else {
           markdownText = text;
         }
-        const top = stack[stack.length - 1];
-        if (level === 0 && top && top.level >= 0 && top.id) {
-          level = top.level + 1;
-        }
+        if (level === 0) level = deriveTopLevelListLevel(stack);
+        syntax = 'unordered_list_item';
       } else {
         const orderedMatch = text.match(/^(\d+\.)\s+(.*)$/);
         if (orderedMatch) {
           text = orderedMatch[2];
           markdownText = text;
-          const top = stack[stack.length - 1];
-          if (level === 0 && top && top.level >= 0 && top.id) {
-            level = top.level + 1;
-          }
+          if (level === 0) level = deriveTopLevelListLevel(stack);
+          syntax = 'ordered_list_item';
         }
       }
       const parent = findParentId(stack, level);
@@ -460,7 +457,7 @@ export async function importMarkdownByIndent(
           } catch {}
         }
         created.push(rem);
-        pushStack(stack, level, rem._id);
+        pushStack(stack, level, rem._id, syntax);
       }
       i += 1;
       if (created.length % 20 === 0) {
@@ -563,7 +560,11 @@ export async function importMarkdownByIndent(
         if (todo) {
           markdownText = todo.body;
           text = todo.body;
-          const rem = await createMarkdownRem(markdownText.replace(/^\s+/, ''), text.replace(/^\s+/, ''), parentId ?? null);
+          const rem = await createMarkdownRem(
+            markdownText.replace(/^\s+/, ''),
+            text.replace(/^\s+/, ''),
+            parentId ?? null,
+          );
           if (rem) {
             try {
               // @ts-ignore
@@ -598,15 +599,34 @@ export async function importMarkdownByIndent(
   return created;
 }
 
-function findParentId(stack: Array<{ level: number; id: string | null }>, level: number): string | null {
+type IndentStackEntry = {
+  level: number;
+  id: string | null;
+  syntax: 'base' | 'plain' | 'unordered_list_item' | 'ordered_list_item' | 'code';
+};
+
+function isListItemSyntax(syntax: IndentStackEntry['syntax']): boolean {
+  return syntax === 'unordered_list_item' || syntax === 'ordered_list_item';
+}
+
+function deriveTopLevelListLevel(stack: readonly IndentStackEntry[]): number {
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    const entry = stack[i];
+    if (isListItemSyntax(entry.syntax)) continue;
+    return Math.max(0, entry.level + 1);
+  }
+  return 0;
+}
+
+function findParentId(stack: Array<IndentStackEntry>, level: number): string | null {
   while (stack.length > 0 && stack[stack.length - 1].level >= level) {
     stack.pop();
   }
   return stack.length > 0 ? stack[stack.length - 1].id : null;
 }
 
-function pushStack(stack: Array<{ level: number; id: string | null }>, level: number, id: string) {
-  stack.push({ level, id });
+function pushStack(stack: Array<IndentStackEntry>, level: number, id: string, syntax: IndentStackEntry['syntax']) {
+  stack.push({ level, id, syntax });
 }
 
 function normalizeListIndentation(text: string): string {
