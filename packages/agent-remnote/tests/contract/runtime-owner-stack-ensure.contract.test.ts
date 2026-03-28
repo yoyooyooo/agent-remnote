@@ -26,6 +26,7 @@ describe('cli contract: runtime owner stack ensure', () => {
     };
 
     try {
+      await fs.mkdir(tmpHome, { recursive: true });
       const ensureRes = await runCli(['--json', 'stack', 'ensure'], {
         env,
         timeoutMs: 30_000,

@@ -126,11 +126,15 @@ describe('stack takeover (unit)', () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-takeover-stable-rollback-'));
     const tmpHome = path.join(tmpDir, 'home');
     const previousHome = process.env.HOME;
+    const previousLauncherCmd = process.env.AGENT_REMNOTE_STABLE_LAUNCHER_CMD;
+    const previousLauncherArgs = process.env.AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON;
     const controlPlaneRoot = path.join(tmpHome, '.agent-remnote');
     const claimFile = path.join(controlPlaneRoot, 'fixed-owner-claim.json');
 
     try {
       process.env.HOME = tmpHome;
+      process.env.AGENT_REMNOTE_STABLE_LAUNCHER_CMD = process.execPath;
+      process.env.AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON = '[]';
       await fs.mkdir(controlPlaneRoot, { recursive: true });
       await fs.writeFile(
         claimFile,
@@ -203,6 +207,10 @@ describe('stack takeover (unit)', () => {
     } finally {
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
+      if (previousLauncherCmd === undefined) delete process.env.AGENT_REMNOTE_STABLE_LAUNCHER_CMD;
+      else process.env.AGENT_REMNOTE_STABLE_LAUNCHER_CMD = previousLauncherCmd;
+      if (previousLauncherArgs === undefined) delete process.env.AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON;
+      else process.env.AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON = previousLauncherArgs;
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   });
