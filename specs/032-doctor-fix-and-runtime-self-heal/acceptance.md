@@ -2,7 +2,6 @@
 
 - `doctor --fix` reports checks, fixes, and after-state in JSON mode
 - stale runtime pid/state artifacts are removed safely
-- trusted live daemon/api/plugin version mismatches are auto-restarted safely
 - config normalization rewrites supported legacy shapes into canonical keys
 - conflicting or invalid config is reported but not silently rewritten
 - builtin scenario loading works in installed-layout tests

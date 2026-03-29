@@ -137,7 +137,7 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 30000);
 
   it('supports set, get, list, and unset roundtrip for apiHost', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-host-roundtrip-'));
@@ -174,7 +174,7 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 30000);
 
   it('supports set, get, list, and unset roundtrip for apiBasePath', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-base-path-roundtrip-'));
@@ -211,7 +211,7 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 30000);
 
   it('supports set, get, list, and unset roundtrip for apiBaseUrl', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-roundtrip-'));
@@ -267,7 +267,7 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 30000);
 
   it('lists nested api.baseUrl as canonical apiBaseUrl', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-alias-'));

@@ -73,20 +73,14 @@ export function collectDoctorChecks(): Effect.Effect<
       });
     }
 
-    const pluginStateInfo = yield* pluginFiles
-      .readStateFile(pluginPidInfo?.state_file ?? pluginFiles.defaultStateFile())
-      .pipe(Effect.orElseSucceed(() => undefined));
-
     const current = currentRuntimeBuildInfo();
     const expectedPlugin = currentExpectedPluginBuildInfo();
     const mismatches = [
       daemonPidInfo?.build?.build_id && daemonPidInfo.build.build_id !== current.build_id ? { service: 'daemon', live: daemonPidInfo.build.build_id } : null,
       apiPidInfo?.build?.build_id && apiPidInfo.build.build_id !== current.build_id ? { service: 'api', live: apiPidInfo.build.build_id } : null,
       pluginPidInfo?.build?.build_id && pluginPidInfo.build.build_id !== current.build_id ? { service: 'plugin', live: pluginPidInfo.build.build_id } : null,
-      expectedPlugin &&
-      pluginStateInfo?.plugin_build?.build_id &&
-      pluginStateInfo.plugin_build.build_id !== expectedPlugin.build_id
-        ? { service: 'plugin-artifact', live: pluginStateInfo.plugin_build.build_id, expected: expectedPlugin.build_id }
+      expectedPlugin && pluginPidInfo?.build?.build_id && pluginPidInfo.build.build_id !== expectedPlugin.build_id
+        ? { service: 'plugin-artifact', live: pluginPidInfo.build.build_id, expected: expectedPlugin.build_id }
         : null,
     ].filter(Boolean);
 

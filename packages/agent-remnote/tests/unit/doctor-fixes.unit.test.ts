@@ -107,7 +107,7 @@ describe('doctor fixes (unit)', () => {
     mocks.currentExpectedPluginBuildInfo.mockReset();
   });
 
-  it('auto-restarts trusted live runtime mismatches inside doctor --fix', async () => {
+  it('keeps restart summary disabled even when trusted runtime build mismatches exist', async () => {
     const tmpHome = path.join(os.tmpdir(), `agent-remnote-doctor-fixes-${Date.now()}`);
     const cfg = makeConfig(tmpHome);
     const wsPid = path.join(tmpHome, '.agent-remnote', 'ws.pid');
@@ -305,22 +305,15 @@ describe('doctor fixes (unit)', () => {
 
     const restartFix = result.fixes.find((item) => item.id === 'runtime.restart_mismatched_services');
     expect(result.changed).toBe(true);
-    expect(restartFix?.changed).toBe(true);
-    expect((restartFix?.details as any)?.restarted).toEqual(expect.arrayContaining(['daemon', 'api', 'plugin']));
+    expect(restartFix?.changed).toBe(false);
+    expect((restartFix?.details as any)?.restarted).toEqual([]);
+    expect((restartFix?.details as any)?.skipped).toEqual(['safe_restart_disabled']);
     expect((restartFix?.details as any)?.failed).toEqual([]);
-    expect(mocks.startApiDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({
-        basePath: '/v1',
-      }),
-    );
-    expect(deletedPidFiles).toEqual(expect.arrayContaining([wsPid, apiPid, pluginPid]));
-    expect(deletedStateFiles).toEqual(
-      expect.arrayContaining([
-        path.join(tmpHome, '.agent-remnote', 'ws.state.json'),
-        path.join(tmpHome, '.agent-remnote', 'api.state.json'),
-        stateFile,
-      ]),
-    );
+    expect(mocks.startWsSupervisor).not.toHaveBeenCalled();
+    expect(mocks.startApiDaemon).not.toHaveBeenCalled();
+    expect(mocks.startPluginServer).not.toHaveBeenCalled();
+    expect(deletedPidFiles).toEqual([]);
+    expect(deletedStateFiles).toEqual([]);
   });
 
   it('uses plugin state build info for plugin artifact mismatch checks', async () => {

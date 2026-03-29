@@ -244,6 +244,43 @@ RemNote 官方资料：
 - source worktree 默认是 isolated `dev` profile；不要把当前 shell 在 worktree 里跑出的 `config print` / `stack status` 误读成 canonical `stable` owner 状态。
 - 若要接管固定 URL，必须显式执行 `stack takeover --channel dev`；调试结束后用 `stack takeover --channel stable` 回收。
 
+### 主仓默认调试 workflow
+
+- 重要：当前主仓默认**不要假设**“源码调试”和“已安装 npm 版本”已经自动隔离。
+- 现实含义：
+  - 裸 `agent-remnote` 默认仍可能命中 canonical 端口与默认运行时文件。
+  - `config print` 当前也不会暴露 `runtime_profile` / `runtime_root` / `fixed_owner_claim` 这类自动隔离字段。
+  - 所以主仓 agent 若直接调用裸 `agent-remnote`，不能脑补它天然是“dev 隔离态”。
+- 默认规则：
+  - 验证已安装 npm 版本：用裸 `agent-remnote ...`
+  - 调试主仓源码：优先用 `bash scripts/remnote-dev ...`
+  - 启停隔离 runtime：优先用 `bash scripts/remnote-dev-stack ensure|status|stop`
+  - `npm run dev:isolated -- ...` 与 `npm run dev:isolated:stack -- ...` 是同一套入口的 npm 包装
+- 隔离实现：
+  - `scripts/remnote-dev` 会自动注入固定的 dev env，并把 `--daemon-url` / `--api-port` / `--repo` 带上
+  - `scripts/remnote-dev-stack` 会显式把 `daemon + api + plugin` 拉到隔离端口与隔离 pid/state/log/store 路径
+  - 默认 dev root：`$HOME/.agent-remnote-dev-main`
+  - 默认隔离端口：
+    - WS: `16789`
+    - API: `13000`
+    - plugin server: `18080`
+  - 如需改值，只改一次这些 env 即可：
+    - `AGENT_REMNOTE_DEV_ROOT`
+    - `REMNOTE_WS_PORT`
+    - `REMNOTE_API_PORT`
+    - `REMNOTE_PLUGIN_SERVER_PORT`
+
+- 推荐校验顺序：
+  - `bash scripts/remnote-dev --json config print`
+  - 确认 `ws_url`、`api_port`、`store_db`、pid/log/state 文件都落到 dev root
+  - `bash scripts/remnote-dev-stack ensure`
+  - 如需等待 worker：`bash scripts/remnote-dev-stack ensure --wait-worker --worker-timeout-ms 15000`
+- 调试意图路由规则：
+  - 需要“主仓源码行为”时，不要让 agent 直接调用裸 `agent-remnote`
+  - 裸 `agent-remnote` 只保留给“已安装 npm 版本验证”或用户明确要求的 stable 路径
+  - 若确实要让 shim 指向源码 worktree，必须先在任务上下文里写明，避免和 stable 验证混淆
+- 若你后续把 runtime-owner / fixed-owner 那套能力合进主仓，再更新本节，把“显式 env 隔离”降级为 fallback，而不是继续让 agent 依赖手工约定
+
 ### 修改插件逻辑后的桌面端重载
 
 - 若改动了 `packages/plugin/**`、WS 桥接接线、或任何依赖 RemNote 插件重新加载才能生效的逻辑，调试时要重载 RemNote 桌面端，让插件重新连接。
