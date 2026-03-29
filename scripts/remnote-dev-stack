@@ -25,6 +25,20 @@ const api = JSON.parse(apiRaw);
 const plugin = JSON.parse(pluginRaw);
 const ok = Boolean(daemon?.ok && api?.ok && plugin?.ok);
 const activeWorker = typeof activeWorkerRaw === 'string' && activeWorkerRaw.trim() ? activeWorkerRaw : null;
+const normalizedPlugin =
+  plugin?.data?.service?.running || plugin?.data?.state
+    ? plugin?.data ?? null
+    : {
+        ...(plugin?.data ?? {}),
+        plugin_server: {
+          ...(plugin?.data?.plugin_server ?? {}),
+          healthy: false,
+          base_url: `http://127.0.0.1:${Number(pluginPortRaw)}`,
+          host: '127.0.0.1',
+          port: Number(pluginPortRaw),
+          error: 'isolated plugin server is not running',
+        },
+      };
 const payload = {
   ok,
   data: {
@@ -36,7 +50,7 @@ const payload = {
     active_worker_conn_id: activeWorker,
     daemon: daemon?.data ?? null,
     api: api?.data ?? null,
-    plugin: plugin?.data ?? null,
+    plugin: normalizedPlugin,
   },
 };
 console.log(JSON.stringify(payload, null, 2));
@@ -82,7 +96,11 @@ case "$command_name" in
           shift
           ;;
         --worker-timeout-ms)
-          worker_timeout_ms="${2:-15000}"
+          if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
+            echo "Missing value for --worker-timeout-ms" >&2
+            exit 2
+          fi
+          worker_timeout_ms="$2"
           shift 2
           ;;
         *)

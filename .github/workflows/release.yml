@@ -1,6 +1,11 @@
 name: Release
 
 on:
+  # Keep release bound directly to pushes on the default branch.
+  # This repo previously observed merged changes not reliably yielding a
+  # follow-up release run under workflow_run chaining, so the release workflow
+  # self-verifies with `npm run ci:release` and publishes from the pushed
+  # master/main revision instead of waiting on a separate workflow_run event.
   push:
     branches:
       - master

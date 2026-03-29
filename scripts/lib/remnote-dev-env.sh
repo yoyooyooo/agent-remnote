@@ -29,7 +29,7 @@ remnote_dev_has_arg() {
   shift
   local item
   for item in "$@"; do
-    if [[ "$item" == "$needle" ]]; then
+    if [[ "$item" == "$needle" || "$item" == "$needle="* ]]; then
       return 0
     fi
   done

@@ -61,5 +61,9 @@
   },
   "patchedDependencies": {
     "@effect/cli@0.73.1": "patches/@effect%2Fcli@0.73.1.patch"
+  },
+  "volta": {
+    "node": "22.22.0",
+    "npm": "11.5.1"
   }
 }
