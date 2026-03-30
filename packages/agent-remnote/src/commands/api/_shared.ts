@@ -32,6 +32,7 @@ export type ApiDaemonStartResult = {
 export type ApiStartParams = {
   readonly host?: string | undefined;
   readonly port?: number | undefined;
+  readonly basePath?: string | undefined;
   readonly waitMs: number;
   readonly pidFile?: string | undefined;
   readonly logFile?: string | undefined;
