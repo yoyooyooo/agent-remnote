@@ -304,7 +304,7 @@ describe('doctor fixes (unit)', () => {
     const result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
 
     const restartFix = result.fixes.find((item) => item.id === 'runtime.restart_mismatched_services');
-    expect(result.changed).toBe(true);
+    expect(result.changed).toBe(false);
     expect(restartFix?.changed).toBe(false);
     expect((restartFix?.details as any)?.restarted).toEqual([]);
     expect((restartFix?.details as any)?.skipped).toEqual(['safe_restart_disabled']);
