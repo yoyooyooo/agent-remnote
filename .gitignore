@@ -1,6 +1,4 @@
 node_modules
-.worktrees
-worktrees
 *.log
 dist
 .DS_Store

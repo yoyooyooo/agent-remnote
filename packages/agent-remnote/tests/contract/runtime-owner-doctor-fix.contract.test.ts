@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
 
+import { acquireCanonicalRuntimeLock } from '../helpers/canonicalRuntimeLock.js';
+import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
 
 function createMinimalRemnoteDb(dbPath: string) {
@@ -23,6 +25,20 @@ function createMinimalRemnoteDb(dbPath: string) {
 }
 
 describe('cli contract: runtime owner doctor --fix', () => {
+  let releaseLock: (() => Promise<void>) | undefined;
+
+  beforeAll(async () => {
+    await ensurePluginArtifacts();
+  }, 240_000);
+
+  beforeAll(async () => {
+    releaseLock = await acquireCanonicalRuntimeLock();
+  }, 240_000);
+
+  afterAll(async () => {
+    await releaseLock?.();
+  });
+
   it('persists the canonical stable fixed-owner claim when missing', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-doctor-fix-'));
     const tmpHome = path.join(tmpDir, 'home');
@@ -231,5 +247,5 @@ describe('cli contract: runtime owner doctor --fix', () => {
       await runCli(['--json', 'stack', 'stop'], { env, timeoutMs: 30_000 }).catch(() => undefined);
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 });
