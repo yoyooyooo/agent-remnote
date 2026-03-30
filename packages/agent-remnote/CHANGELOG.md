@@ -1,5 +1,16 @@
 # agent-remnote
 
+## 1.5.2
+
+### Patch Changes
+
+- 520b202: Fix standalone `rem create --markdown` so multi-root list content keeps
+  top-level sections as siblings instead of nesting later roots under the
+  previous branch.
+
+  Add a regression test covering the plugin markdown tree import path used by the
+  standalone create flow.
+
 ## 1.5.1
 
 ### Patch Changes
