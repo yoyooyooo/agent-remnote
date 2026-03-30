@@ -3,12 +3,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolvePluginDistPath } from '../../src/lib/pluginArtifacts.js';
-import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
+import { ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS, ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 
 describe('cli contract: plugin artifacts', () => {
   beforeAll(async () => {
     await ensurePluginArtifacts();
-  });
+  }, ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS);
 
   it('resolves a plugin dist directory with manifest.json', () => {
     const distPath = resolvePluginDistPath();

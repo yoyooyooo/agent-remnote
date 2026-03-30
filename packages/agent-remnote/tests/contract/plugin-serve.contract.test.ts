@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import path from 'node:path';
 
-import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
+import { ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS, ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 
 async function getFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -56,7 +56,7 @@ describe('cli contract: plugin serve', () => {
 
   beforeAll(async () => {
     await ensurePluginArtifacts();
-  });
+  }, ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     for (const child of children) {

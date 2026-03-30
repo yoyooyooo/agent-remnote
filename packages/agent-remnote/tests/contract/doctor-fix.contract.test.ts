@@ -6,7 +6,7 @@ import { promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
 
-import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
+import { ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS, ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
 
 function createMinimalRemnoteDb(dbPath: string) {
@@ -64,7 +64,7 @@ async function getFreePort(): Promise<number> {
 describe('cli contract: doctor --fix', () => {
   beforeAll(async () => {
     await ensurePluginArtifacts();
-  });
+  }, ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS);
 
   it('repairs stale runtime artifacts and rewrites canonical config', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-doctor-fix-'));

@@ -4,7 +4,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { promises as fs } from 'node:fs';
 
-import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
+import { ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS, ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
 
 async function getFreePort(): Promise<number> {
@@ -25,7 +25,7 @@ async function getFreePort(): Promise<number> {
 describe('cli contract: plugin lifecycle', () => {
   beforeAll(async () => {
     await ensurePluginArtifacts();
-  });
+  }, ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS);
 
   it('starts the plugin server in background, reports status, logs, restart, and stops cleanly', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-plugin-server-'));

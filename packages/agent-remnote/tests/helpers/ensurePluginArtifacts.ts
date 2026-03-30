@@ -17,6 +17,8 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export const ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS = 60_000;
+
 export async function ensurePluginArtifacts(): Promise<void> {
   const root = repoRoot();
   if (artifactsReady(root)) return;
