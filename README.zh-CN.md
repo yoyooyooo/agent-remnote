@@ -443,10 +443,9 @@ agent-remnote --json plugin restart
 `doctor --fix` 的默认安全边界：
 
 - 清理 stale daemon / api / plugin pid 或 state 文件
-- 当 daemon / api / plugin 是可信的 agent-remnote 运行时且 build metadata 明确不匹配时，安全自动重启它们
 - 把支持的用户配置形态重写成 canonical keys
 - 把发布包完整性检查留在 `doctor` 诊断输出中汇报
-- 汇报 `restart_summary`，其中会包含可信自动重启结果和不安全场景的跳过结果
+- 汇报 `restart_summary`，但默认不自动重启后台服务
 
 `doctor --fix` 不会修改 queue 内容、`remnote.db` 或用户内容数据。
 

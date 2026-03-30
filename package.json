@@ -12,6 +12,8 @@
     "build:turbo": "turbo run build",
     "build:turbo:affected": "turbo run build --filter='...[origin/master]'",
     "dev": "npm run dev --workspace agent-remnote",
+    "dev:isolated": "bash ./scripts/remnote-dev",
+    "dev:isolated:stack": "bash ./scripts/remnote-dev-stack",
     "dev:ws": "npm run dev --workspace agent-remnote -- daemon serve",
     "dev:ws:debug": "REMNOTE_WS_DEBUG=1 npm run dev --workspace agent-remnote -- daemon serve",
     "dev:ws:debug:file": "REMNOTE_WS_DEBUG=1 REMNOTE_WS_LOGFILE=~/.agent-remnote/ws-debug.log npm run dev --workspace agent-remnote -- daemon serve",

@@ -351,9 +351,8 @@ Wave 1 runtime shape：
   - 允许清理 stale daemon/api/plugin pid/state 文件
   - 允许在 canonical fixed-owner claim 缺失时持久化 stable bootstrap claim
   - 允许在 trusted live owner 与 fixed-owner claim 明确冲突时，按 claim 触发 deterministic realignment
-  - 允许在 pid 归属可信且状态文件位于受管路径时，自动重启 build metadata 明确不匹配的 daemon/api/plugin 运行时
   - 允许把支持的用户配置形态重写成 canonical keys
-  - 允许汇报 `restart_summary`，其中必须区分 `restarted` / `skipped` / `failed`
+  - 允许汇报 `restart_summary`，但默认不自动重启 runtime 服务
   - 禁止修改 queue 内容、`remnote.db` 与用户内容数据
 
 ## 9) packaged runtime guarantees

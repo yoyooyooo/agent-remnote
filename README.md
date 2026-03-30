@@ -443,10 +443,9 @@ agent-remnote --json plugin restart
 `doctor --fix` stays inside the safe repair boundary:
 
 - cleans stale daemon/api/plugin pid or state files
-- safely restarts trusted live daemon/api/plugin runtimes when their build metadata is mismatched
 - rewrites supported user config shapes into canonical keys
 - leaves package integrity checks to diagnostic checks reported by `doctor`
-- reports `restart_summary`, including trusted auto-restarts and skipped unsafe cases
+- reports `restart_summary` without auto-restarting background services
 
 `doctor --fix` does not modify queue contents, `remnote.db`, or user content.
 

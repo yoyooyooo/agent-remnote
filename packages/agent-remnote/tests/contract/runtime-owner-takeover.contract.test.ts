@@ -38,6 +38,26 @@ async function getFreePort(): Promise<number> {
   });
 }
 
+function isolatedRuntimeEnv(home: string, extras: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return {
+    HOME: home,
+    PORT: '',
+    REMNOTE_TMUX_REFRESH: '0',
+    REMNOTE_API_BASE_URL: '',
+    REMNOTE_API_HOST: '',
+    REMNOTE_API_PORT: '',
+    REMNOTE_API_BASE_PATH: '',
+    REMNOTE_WS_PORT: '',
+    WS_PORT: '',
+    REMNOTE_DAEMON_URL: '',
+    DAEMON_URL: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_CMD: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: '',
+    VOLTA_HOME: '',
+    ...extras,
+  };
+}
+
 describe('cli contract: runtime owner takeover', () => {
   it('transfers the canonical claim from stable to dev when no live services block the change', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-'));
@@ -49,13 +69,10 @@ describe('cli contract: runtime owner takeover', () => {
     try {
       await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
-        env: {
-          HOME: tmpHome,
-          PORT: '',
-          REMNOTE_TMUX_REFRESH: '0',
+        env: isolatedRuntimeEnv(tmpHome, {
           REMNOTE_WS_PORT: String(wsPort),
           REMNOTE_API_PORT: String(apiPort),
-        },
+        }),
         timeoutMs: 30_000,
       });
 
@@ -76,21 +93,18 @@ describe('cli contract: runtime owner takeover', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   it('starts the local dev bundle after takeover to dev', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-start-'));
     const tmpHome = path.join(tmpDir, 'home');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
-    };
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
@@ -145,13 +159,10 @@ describe('cli contract: runtime owner takeover', () => {
       );
 
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
-        env: {
-          HOME: tmpHome,
-          PORT: '',
-          REMNOTE_TMUX_REFRESH: '0',
+        env: isolatedRuntimeEnv(tmpHome, {
           REMNOTE_WS_PORT: String(wsPort),
           REMNOTE_API_PORT: String(apiPort),
-        },
+        }),
         timeoutMs: 30_000,
       });
 
@@ -171,21 +182,18 @@ describe('cli contract: runtime owner takeover', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   it('reclaims to stable by stopping the current dev bundle', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-stable-stop-'));
     const tmpHome = path.join(tmpDir, 'home');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
-    };
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
@@ -227,16 +235,13 @@ describe('cli contract: runtime owner takeover', () => {
     const launcherScript = path.join(tmpDir, 'stable-launcher.js');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
       AGENT_REMNOTE_STABLE_LAUNCHER_CMD: process.execPath,
       AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: JSON.stringify([launcherScript, markerFile]),
-    };
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
