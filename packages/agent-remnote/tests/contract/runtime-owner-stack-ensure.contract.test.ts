@@ -22,6 +22,26 @@ async function getFreePort(): Promise<number> {
   });
 }
 
+function isolatedRuntimeEnv(home: string, extras: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  return {
+    HOME: home,
+    PORT: '',
+    REMNOTE_TMUX_REFRESH: '0',
+    REMNOTE_API_BASE_URL: '',
+    REMNOTE_API_HOST: '',
+    REMNOTE_API_PORT: '',
+    REMNOTE_API_BASE_PATH: '',
+    REMNOTE_WS_PORT: '',
+    WS_PORT: '',
+    REMNOTE_DAEMON_URL: '',
+    DAEMON_URL: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_CMD: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: '',
+    VOLTA_HOME: '',
+    ...extras,
+  };
+}
+
 describe('cli contract: runtime owner stack ensure', () => {
   it('starts plugin server as part of the local dev bundle', async () => {
     await ensurePluginArtifacts();
@@ -34,17 +54,14 @@ describe('cli contract: runtime owner stack ensure', () => {
     const pluginState = path.join(tmpDir, 'plugin-server.state.json');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: storeDb,
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
       REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
       REMNOTE_PLUGIN_SERVER_LOG_FILE: pluginLog,
       REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,
-    };
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });

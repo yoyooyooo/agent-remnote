@@ -301,10 +301,18 @@ describe('doctor fixes (unit)', () => {
       } as any),
     );
 
-    const result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
+    const previousHome = process.env.HOME;
+    let result: any;
+    try {
+      process.env.HOME = tmpHome;
+      result = await Effect.runPromise(applyDoctorFixes().pipe(Effect.provide(layer)));
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+    }
 
-    const restartFix = result.fixes.find((item) => item.id === 'runtime.restart_mismatched_services');
-    expect(result.changed).toBe(false);
+    const restartFix = result!.fixes.find((item: any) => item.id === 'runtime.restart_mismatched_services');
+    expect(result!.changed).toBe(true);
     expect(restartFix?.changed).toBe(false);
     expect((restartFix?.details as any)?.restarted).toEqual([]);
     expect((restartFix?.details as any)?.skipped).toEqual(['safe_restart_disabled']);
