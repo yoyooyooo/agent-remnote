@@ -1,5 +1,24 @@
 # agent-remnote
 
+## 1.6.0
+
+### Minor Changes
+
+- bd511db: Add fixed runtime owner governance for stable and dev profiles, including
+  runtime-scoped pid/state paths, ownership metadata in lifecycle status, and the
+  new `stack takeover` flow for deterministic runtime handoff.
+
+### Patch Changes
+
+- 520b202: Fix standalone `rem create --markdown` so multi-root list content keeps
+  top-level sections as siblings instead of nesting later roots under the
+  previous branch.
+
+  Add a regression test covering the plugin markdown tree import path used by the
+  standalone create flow.
+
+- 4c9c5ec: Improve doctor/runtime self-heal behavior and add isolated dev runtime wrappers for local source debugging.
+
 ## 1.4.0
 
 ### Minor Changes
