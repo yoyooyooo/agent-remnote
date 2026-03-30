@@ -11,13 +11,28 @@ function parseJsonLine(text: string): any {
   return JSON.parse(trimmed);
 }
 
+function isolatedConfigEnv(home: string): NodeJS.ProcessEnv {
+  return {
+    HOME: home,
+    PORT: '',
+    REMNOTE_API_BASE_URL: '',
+    REMNOTE_API_HOST: '',
+    REMNOTE_API_PORT: '',
+    REMNOTE_API_BASE_PATH: '',
+    REMNOTE_WS_PORT: '',
+    WS_PORT: '',
+    REMNOTE_DAEMON_URL: '',
+    DAEMON_URL: '',
+  };
+}
+
 describe('cli contract: config user file', () => {
   it('prints the active user config path', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-path-'));
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
-      const res = await runCli(['--json', 'config', 'path'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'path'], { env: isolatedConfigEnv(tmpHome) });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
@@ -36,7 +51,7 @@ describe('cli contract: config user file', () => {
     try {
       const res = await runCli(
         ['--json', '--api-host', '127.0.0.1', '--api-port', '3010', '--api-base-path', 'v2', 'config', 'print'],
-        { env: { HOME: tmpDir } },
+        { env: isolatedConfigEnv(tmpDir) },
       );
 
       expect(res.exitCode).toBe(0);
@@ -68,15 +83,13 @@ describe('cli contract: config user file', () => {
           '--value',
           'http://127.0.0.1:3001',
         ],
-        { env: { HOME: tmpDir } },
+        { env: isolatedConfigEnv(tmpDir) },
       );
       expect(setRes.exitCode).toBe(0);
       expect(setRes.stderr).toBe('');
       expect(parseJsonLine(setRes.stdout).data.config_file).toBe(path.normalize(configFile));
 
-      const getRes = await runCli(['--json', '--config-file', configFile, 'config', 'get', '--key', 'apiBaseUrl'], {
-        env: { HOME: tmpDir },
-      });
+      const getRes = await runCli(['--json', '--config-file', configFile, 'config', 'get', '--key', 'apiBaseUrl'], { env: isolatedConfigEnv(tmpDir) });
       expect(getRes.exitCode).toBe(0);
       expect(getRes.stderr).toBe('');
       expect(parseJsonLine(getRes.stdout).data).toMatchObject({
@@ -94,9 +107,7 @@ describe('cli contract: config user file', () => {
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
-      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiPort', '--value', '3001'], {
-        env: { HOME: tmpHome },
-      });
+      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiPort', '--value', '3001'], { env: isolatedConfigEnv(tmpHome) });
       expect(setRes.exitCode).toBe(0);
       expect(setRes.stderr).toBe('');
       expect(parseJsonLine(setRes.stdout).data).toMatchObject({
@@ -104,7 +115,7 @@ describe('cli contract: config user file', () => {
         value: 3001,
       });
 
-      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiPort'], { env: { HOME: tmpHome } });
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiPort'], { env: isolatedConfigEnv(tmpHome) });
       expect(getRes.exitCode).toBe(0);
       expect(getRes.stderr).toBe('');
       expect(parseJsonLine(getRes.stdout).data).toMatchObject({
@@ -113,21 +124,21 @@ describe('cli contract: config user file', () => {
         exists: true,
       });
 
-      const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      const listRes = await runCli(['--json', 'config', 'list'], { env: isolatedConfigEnv(tmpHome) });
       expect(listRes.exitCode).toBe(0);
       expect(listRes.stderr).toBe('');
       expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiPort: 3001,
       });
 
-      const printRes = await runCli(['--json', 'config', 'print'], { env: { HOME: tmpHome } });
+      const printRes = await runCli(['--json', 'config', 'print'], { env: isolatedConfigEnv(tmpHome) });
       expect(printRes.exitCode).toBe(0);
       expect(printRes.stderr).toBe('');
       expect(parseJsonLine(printRes.stdout).data).toMatchObject({
         api_port: 3001,
       });
 
-      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiPort'], { env: { HOME: tmpHome } });
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiPort'], { env: isolatedConfigEnv(tmpHome) });
       expect(unsetRes.exitCode).toBe(0);
       expect(unsetRes.stderr).toBe('');
       expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({
@@ -137,21 +148,19 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 60_000);
 
   it('supports set, get, list, and unset roundtrip for apiHost', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-host-roundtrip-'));
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
-      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiHost', '--value', '127.0.0.1'], {
-        env: { HOME: tmpHome },
-      });
+      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiHost', '--value', '127.0.0.1'], { env: isolatedConfigEnv(tmpHome) });
       expect(setRes.exitCode).toBe(0);
       expect(setRes.stderr).toBe('');
       expect(parseJsonLine(setRes.stdout).data).toMatchObject({ key: 'apiHost', value: '127.0.0.1' });
 
-      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiHost'], { env: { HOME: tmpHome } });
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiHost'], { env: isolatedConfigEnv(tmpHome) });
       expect(getRes.exitCode).toBe(0);
       expect(getRes.stderr).toBe('');
       expect(parseJsonLine(getRes.stdout).data).toMatchObject({
@@ -160,35 +169,33 @@ describe('cli contract: config user file', () => {
         exists: true,
       });
 
-      const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      const listRes = await runCli(['--json', 'config', 'list'], { env: isolatedConfigEnv(tmpHome) });
       expect(listRes.exitCode).toBe(0);
       expect(listRes.stderr).toBe('');
       expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiHost: '127.0.0.1',
       });
 
-      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiHost'], { env: { HOME: tmpHome } });
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiHost'], { env: isolatedConfigEnv(tmpHome) });
       expect(unsetRes.exitCode).toBe(0);
       expect(unsetRes.stderr).toBe('');
       expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({ key: 'apiHost', removed: true });
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 60_000);
 
   it('supports set, get, list, and unset roundtrip for apiBasePath', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-base-path-roundtrip-'));
     const tmpHome = path.join(tmpDir, 'home');
 
     try {
-      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiBasePath', '--value', 'v2'], {
-        env: { HOME: tmpHome },
-      });
+      const setRes = await runCli(['--json', 'config', 'set', '--key', 'apiBasePath', '--value', 'v2'], { env: isolatedConfigEnv(tmpHome) });
       expect(setRes.exitCode).toBe(0);
       expect(setRes.stderr).toBe('');
       expect(parseJsonLine(setRes.stdout).data).toMatchObject({ key: 'apiBasePath', value: '/v2' });
 
-      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiBasePath'], { env: { HOME: tmpHome } });
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiBasePath'], { env: isolatedConfigEnv(tmpHome) });
       expect(getRes.exitCode).toBe(0);
       expect(getRes.stderr).toBe('');
       expect(parseJsonLine(getRes.stdout).data).toMatchObject({
@@ -197,21 +204,21 @@ describe('cli contract: config user file', () => {
         exists: true,
       });
 
-      const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      const listRes = await runCli(['--json', 'config', 'list'], { env: isolatedConfigEnv(tmpHome) });
       expect(listRes.exitCode).toBe(0);
       expect(listRes.stderr).toBe('');
       expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiBasePath: '/v2',
       });
 
-      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBasePath'], { env: { HOME: tmpHome } });
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBasePath'], { env: isolatedConfigEnv(tmpHome) });
       expect(unsetRes.exitCode).toBe(0);
       expect(unsetRes.stderr).toBe('');
       expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({ key: 'apiBasePath', removed: true });
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 60_000);
 
   it('supports set, get, list, and unset roundtrip for apiBaseUrl', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-roundtrip-'));
@@ -221,7 +228,7 @@ describe('cli contract: config user file', () => {
     try {
       const setRes = await runCli(
         ['--json', 'config', 'set', '--key', 'apiBaseUrl', '--value', 'http://host.docker.internal:3000'],
-        { env: { HOME: tmpHome } },
+        { env: isolatedConfigEnv(tmpHome) },
       );
       expect(setRes.exitCode).toBe(0);
       expect(setRes.stderr).toBe('');
@@ -231,7 +238,7 @@ describe('cli contract: config user file', () => {
         config_file: path.normalize(configFile),
       });
 
-      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiBaseUrl'], { env: { HOME: tmpHome } });
+      const getRes = await runCli(['--json', 'config', 'get', '--key', 'apiBaseUrl'], { env: isolatedConfigEnv(tmpHome) });
       expect(getRes.exitCode).toBe(0);
       expect(getRes.stderr).toBe('');
       expect(parseJsonLine(getRes.stdout).data).toMatchObject({
@@ -240,14 +247,14 @@ describe('cli contract: config user file', () => {
         exists: true,
       });
 
-      const listRes = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      const listRes = await runCli(['--json', 'config', 'list'], { env: isolatedConfigEnv(tmpHome) });
       expect(listRes.exitCode).toBe(0);
       expect(listRes.stderr).toBe('');
       expect(parseJsonLine(listRes.stdout).data.values).toMatchObject({
         apiBaseUrl: 'http://host.docker.internal:3000',
       });
 
-      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBaseUrl'], { env: { HOME: tmpHome } });
+      const unsetRes = await runCli(['--json', 'config', 'unset', '--key', 'apiBaseUrl'], { env: isolatedConfigEnv(tmpHome) });
       expect(unsetRes.exitCode).toBe(0);
       expect(unsetRes.stderr).toBe('');
       expect(parseJsonLine(unsetRes.stdout).data).toMatchObject({
@@ -255,9 +262,7 @@ describe('cli contract: config user file', () => {
         removed: true,
       });
 
-      const getAfterUnsetRes = await runCli(['--json', 'config', 'get', '--key', 'apiBaseUrl'], {
-        env: { HOME: tmpHome },
-      });
+      const getAfterUnsetRes = await runCli(['--json', 'config', 'get', '--key', 'apiBaseUrl'], { env: isolatedConfigEnv(tmpHome) });
       expect(getAfterUnsetRes.exitCode).toBe(0);
       expect(getAfterUnsetRes.stderr).toBe('');
       expect(parseJsonLine(getAfterUnsetRes.stdout).data).toMatchObject({
@@ -267,7 +272,7 @@ describe('cli contract: config user file', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 60_000);
 
   it('lists nested api.baseUrl as canonical apiBaseUrl', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-config-alias-'));
@@ -279,7 +284,7 @@ describe('cli contract: config user file', () => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configFile, '{\n  "api": { "baseUrl": "http://127.0.0.1:3001" }\n}\n', 'utf8');
 
-      const res = await runCli(['--json', 'config', 'list'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'list'], { env: isolatedConfigEnv(tmpHome) });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
@@ -301,7 +306,7 @@ describe('cli contract: config user file', () => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configFile, '{\n  "apiPort": 70000\n}\n', 'utf8');
 
-      const res = await runCli(['--json', 'config', 'validate'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'validate'], { env: isolatedConfigEnv(tmpHome) });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
@@ -325,7 +330,7 @@ describe('cli contract: config user file', () => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configFile, '{\n  "apiHost": 123\n}\n', 'utf8');
 
-      const res = await runCli(['--json', 'config', 'validate'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'validate'], { env: isolatedConfigEnv(tmpHome) });
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
       expect(parseJsonLine(res.stdout).data).toMatchObject({ valid: false, config_file: path.normalize(configFile) });
@@ -345,7 +350,7 @@ describe('cli contract: config user file', () => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configFile, '{\n  "apiBaseUrl": 123\n}\n', 'utf8');
 
-      const res = await runCli(['--json', 'config', 'validate'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'validate'], { env: isolatedConfigEnv(tmpHome) });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
@@ -369,7 +374,7 @@ describe('cli contract: config user file', () => {
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(configFile, '{\n  "apiBaseUrl": "not-a-url"\n}\n', 'utf8');
 
-      const res = await runCli(['--json', 'config', 'validate'], { env: { HOME: tmpHome } });
+      const res = await runCli(['--json', 'config', 'validate'], { env: isolatedConfigEnv(tmpHome) });
 
       expect(res.exitCode).toBe(0);
       expect(res.stderr).toBe('');
@@ -395,7 +400,7 @@ describe('cli contract: config user file', () => {
       await fs.writeFile(configFile, '{\n  "apiPort": 3001,\n  "api": { "port": 3002 }\n}\n', 'utf8');
 
       const res = await runCli(['--json', '--remnote-db', missingDb, 'search', '--query', 'hello'], {
-        env: { HOME: tmpHome },
+        env: isolatedConfigEnv(tmpHome),
       });
 
       expect(res.exitCode).toBe(2);

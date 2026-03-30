@@ -17,6 +17,12 @@ import { WS_START_WAIT_DEFAULT_MS, ensureWsSupervisor } from '../ws/_shared.js';
 import { writeFailure, writeSuccess } from '../_shared.js';
 
 const channel = Options.choice('channel', ['stable', 'dev'] as const);
+const TAKEOVER_PLUGIN_START_WAIT_MS = Math.max(PLUGIN_SERVER_START_WAIT_DEFAULT_MS, 60_000);
+
+function parseEnvPort(raw: string | undefined, fallback: number): number {
+  const value = Number.parseInt(String(raw ?? '').trim(), 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
 
 function persistFixedOwnerClaim(params: {
   readonly file: string;
@@ -80,10 +86,13 @@ function ensureClaimedDevBundle(params: {
   readonly skippedServices?: string[] | undefined;
 }) {
   const { ownerOverride, envOverride } = ownerOverrideEnvForClaim(params);
+  const wsPort = parseEnvPort(process.env.REMNOTE_WS_PORT ?? process.env.WS_PORT, 6789);
+  const apiPort = parseEnvPort(process.env.REMNOTE_API_PORT ?? process.env.PORT, 3000);
+  const pluginPort = parseEnvPort(process.env.REMNOTE_PLUGIN_SERVER_PORT, 8080);
   return Effect.gen(function* () {
     const daemon = yield* ensureWsSupervisor({
       waitMs: WS_START_WAIT_DEFAULT_MS,
-      wsUrlOverride: 'ws://localhost:6789/ws',
+      wsUrlOverride: `ws://localhost:${wsPort}/ws`,
       ownerOverride,
       envOverride,
       bypassCanonicalClaimGuard: true,
@@ -93,7 +102,7 @@ function ensureClaimedDevBundle(params: {
 
     const api = yield* ensureApiDaemon({
       waitMs: API_START_WAIT_DEFAULT_MS,
-      port: 3000,
+      port: apiPort,
       ownerOverride,
       envOverride,
       bypassCanonicalClaimGuard: true,
@@ -102,8 +111,8 @@ function ensureClaimedDevBundle(params: {
     else params.skippedServices?.push('api');
 
     const plugin = yield* ensurePluginServer({
-      waitMs: PLUGIN_SERVER_START_WAIT_DEFAULT_MS,
-      port: 8080,
+      waitMs: TAKEOVER_PLUGIN_START_WAIT_MS,
+      port: pluginPort,
       ownerOverride,
       envOverride,
       bypassCanonicalClaimGuard: true,

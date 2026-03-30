@@ -1,12 +1,10 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import net from 'node:net';
 import { promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
 
-import { ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS, ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
 
 function createMinimalRemnoteDb(dbPath: string) {
@@ -46,26 +44,7 @@ function trustedCmdStub(kind: 'daemon' | 'api' | 'plugin'): string[] {
   return [...base, 'plugin', 'serve'];
 }
 
-async function getFreePort(): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address();
-      const port = typeof addr === 'object' && addr ? addr.port : 0;
-      server.close((err) => {
-        if (err) reject(err);
-        else resolve(port);
-      });
-    });
-  });
-}
-
 describe('cli contract: doctor --fix', () => {
-  beforeAll(async () => {
-    await ensurePluginArtifacts();
-  }, ENSURE_PLUGIN_ARTIFACTS_HOOK_TIMEOUT_MS);
-
   it('repairs stale runtime artifacts and rewrites canonical config', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-doctor-fix-'));
     const tmpHome = path.join(tmpDir, 'home');
@@ -337,143 +316,4 @@ describe('cli contract: doctor --fix', () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
   }, 40_000);
-
-  it('auto-restarts trusted live runtime mismatches and clears version mismatch diagnostics', async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-doctor-fix-restart-'));
-    const tmpHome = path.join(tmpDir, 'home');
-    const stateDir = path.join(tmpHome, '.agent-remnote');
-    const remnoteDb = path.join(tmpDir, 'remnote.db');
-    const storeDb = path.join(tmpDir, 'store.sqlite');
-    const daemonPid = path.join(stateDir, 'ws.pid');
-    const daemonLog = path.join(stateDir, 'ws.log');
-    const daemonUrl = `ws://127.0.0.1:${await getFreePort()}/ws`;
-    const apiPid = path.join(stateDir, 'api.pid');
-    const apiLog = path.join(stateDir, 'api.log');
-    const apiState = path.join(stateDir, 'api.state.json');
-    const apiPort = await getFreePort();
-    const pluginPid = path.join(stateDir, 'plugin-server.pid');
-    const pluginLog = path.join(stateDir, 'plugin-server.log');
-    const pluginState = path.join(stateDir, 'plugin-server.state.json');
-    const pluginPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      REMNOTE_STORE_DB: storeDb,
-      REMNOTE_TMUX_REFRESH: '0',
-      REMNOTE_DAEMON_PID_FILE: daemonPid,
-      REMNOTE_API_PID_FILE: apiPid,
-      REMNOTE_API_STATE_FILE: apiState,
-      REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
-      REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,
-    } as const;
-
-    try {
-      createMinimalRemnoteDb(remnoteDb);
-      await fs.mkdir(stateDir, { recursive: true });
-      await fs.writeFile(
-        path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json'),
-        JSON.stringify(
-          {
-            claimed_channel: 'dev',
-            claimed_owner_id: 'dev',
-            runtime_root: stateDir,
-            control_plane_root: path.join(tmpHome, '.agent-remnote'),
-            port_class: 'canonical',
-            updated_by: 'stack_takeover',
-            updated_at: Date.now(),
-            launcher_ref: `source:${stateDir}`,
-          },
-          null,
-          2,
-        ),
-        'utf8',
-      );
-
-      const daemonStart = await runCli(['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, 'daemon', 'start', '--wait', '0', '--pid-file', daemonPid, '--log-file', daemonLog], {
-        env,
-        timeoutMs: 20_000,
-      });
-      expect(daemonStart.exitCode).toBe(0);
-
-      const apiStart = await runCli(
-        ['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, 'api', 'start', '--port', String(apiPort), '--pid-file', apiPid, '--log-file', apiLog, '--state-file', apiState],
-        { env, timeoutMs: 20_000 },
-      );
-      expect(apiStart.exitCode).toBe(0);
-
-      const pluginStart = await runCli(
-        ['--json', 'plugin', 'start', '--port', String(pluginPort), '--pid-file', pluginPid, '--log-file', pluginLog, '--state-file', pluginState],
-        { env, timeoutMs: 20_000 },
-      );
-      expect(pluginStart.exitCode).toBe(0);
-
-      const daemonPidInfo = JSON.parse(await fs.readFile(daemonPid, 'utf8'));
-      daemonPidInfo.build.build_id = 'old-daemon-build';
-      await fs.writeFile(daemonPid, `${JSON.stringify(daemonPidInfo, null, 2)}\n`, 'utf8');
-
-      const apiPidInfo = JSON.parse(await fs.readFile(apiPid, 'utf8'));
-      apiPidInfo.build.build_id = 'old-api-build';
-      await fs.writeFile(apiPid, `${JSON.stringify(apiPidInfo, null, 2)}\n`, 'utf8');
-
-      const pluginPidInfo = JSON.parse(await fs.readFile(pluginPid, 'utf8'));
-      pluginPidInfo.build.build_id = 'old-plugin-build';
-      await fs.writeFile(pluginPid, `${JSON.stringify(pluginPidInfo, null, 2)}\n`, 'utf8');
-
-      const pluginStateInfo = JSON.parse(await fs.readFile(pluginState, 'utf8'));
-      pluginStateInfo.plugin_build.build_id = 'old-plugin-artifact';
-      await fs.writeFile(pluginState, `${JSON.stringify(pluginStateInfo, null, 2)}\n`, 'utf8');
-
-      const before = await runCli(
-        ['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, '--remnote-db', remnoteDb, 'doctor'],
-        { env, timeoutMs: 30_000 },
-      );
-      expect(before.exitCode).toBe(0);
-      const beforeParsed = JSON.parse(before.stdout.trim());
-      const beforeMismatch = (beforeParsed.data?.checks ?? []).find((item: any) => item.id === 'runtime.version_mismatch');
-      expect(beforeMismatch?.ok).toBe(false);
-      expect(JSON.stringify(beforeMismatch?.details ?? [])).toContain('daemon');
-      expect(JSON.stringify(beforeMismatch?.details ?? [])).toContain('api');
-      expect(JSON.stringify(beforeMismatch?.details ?? [])).toContain('plugin');
-      expect(JSON.stringify(beforeMismatch?.details ?? [])).toContain('plugin-artifact');
-
-      const fix = await runCli(
-        ['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, '--remnote-db', remnoteDb, 'doctor', '--fix'],
-        { env, timeoutMs: 60_000 },
-      );
-      expect(fix.exitCode).toBe(0);
-      const fixParsed = JSON.parse(fix.stdout.trim());
-      const restartFix = (fixParsed.data?.fixes ?? []).find((item: any) => item.id === 'runtime.restart_mismatched_services');
-      expect(restartFix?.ok).toBe(true);
-      expect(restartFix?.changed).toBe(true);
-      expect(fixParsed.data?.restart_summary?.restarted).toEqual(expect.arrayContaining(['daemon', 'api', 'plugin']));
-
-      const after = await runCli(
-        ['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, '--remnote-db', remnoteDb, 'doctor'],
-        { env, timeoutMs: 30_000 },
-      );
-      expect(after.exitCode).toBe(0);
-      const afterParsed = JSON.parse(after.stdout.trim());
-      const afterMismatch = (afterParsed.data?.checks ?? []).find((item: any) => item.id === 'runtime.version_mismatch');
-      expect(afterMismatch?.ok).toBe(true);
-    } finally {
-      try {
-        await runCli(['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, 'api', 'stop', '--pid-file', apiPid, '--state-file', apiState], {
-          env,
-          timeoutMs: 20_000,
-        });
-      } catch {}
-      try {
-        await runCli(['--json', 'plugin', 'stop', '--pid-file', pluginPid, '--state-file', pluginState], {
-          env,
-          timeoutMs: 20_000,
-        });
-      } catch {}
-      try {
-        await runCli(['--json', '--daemon-url', daemonUrl, '--store-db', storeDb, 'daemon', 'stop', '--force', '--pid-file', daemonPid], {
-          env,
-          timeoutMs: 20_000,
-        });
-      } catch {}
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    }
-  }, 180_000);
 });

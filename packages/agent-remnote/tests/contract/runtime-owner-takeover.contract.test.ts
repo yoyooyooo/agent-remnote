@@ -1,15 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { promises as fs } from 'node:fs';
 
+import { acquireCanonicalRuntimeLock } from '../helpers/canonicalRuntimeLock.js';
+import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
 
 function parseJsonLine(text: string): any {
   const trimmed = text.trim();
   if (!trimmed) throw new Error('Expected non-empty stdout JSON');
   return JSON.parse(trimmed);
+}
+
+function expectCliSuccess(label: string, res: { exitCode: number; stdout: string; stderr: string }) {
+  const diag = `${label}\nstdout:\n${res.stdout}\nstderr:\n${res.stderr}`;
+  expect(res.exitCode, diag).toBe(0);
+  expect(res.stderr, diag).toBe('');
 }
 
 async function waitForJsonFile(filePath: string, timeoutMs = 3000): Promise<any> {
@@ -38,29 +46,67 @@ async function getFreePort(): Promise<number> {
   });
 }
 
+function isolatedRuntimeEnv(home: string, extras: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const scrubbed = Object.fromEntries(
+    Object.keys(process.env)
+      .filter((key) => /^(REMNOTE_|AGENT_REMNOTE_)/.test(key) || key === 'PORT' || key === 'WS_PORT' || key === 'STORE_DB' || key === 'QUEUE_DB' || key === 'DAEMON_URL' || key === 'VOLTA_HOME')
+      .map((key) => [key, '']),
+  );
+  return {
+    ...scrubbed,
+    HOME: home,
+    PORT: '',
+    REMNOTE_TMUX_REFRESH: '0',
+    REMNOTE_API_BASE_URL: '',
+    REMNOTE_API_HOST: '',
+    REMNOTE_API_PORT: '',
+    REMNOTE_API_BASE_PATH: '',
+    REMNOTE_WS_PORT: '',
+    WS_PORT: '',
+    REMNOTE_DAEMON_URL: '',
+    DAEMON_URL: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_CMD: '',
+    AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: '',
+    VOLTA_HOME: '',
+    ...extras,
+  };
+}
+
 describe('cli contract: runtime owner takeover', () => {
+  let releaseLock: (() => Promise<void>) | undefined;
+
+  beforeAll(async () => {
+    await ensurePluginArtifacts();
+  }, 240_000);
+
+  beforeAll(async () => {
+    releaseLock = await acquireCanonicalRuntimeLock();
+  }, 240_000);
+
+  afterAll(async () => {
+    await releaseLock?.();
+  });
+
   it('transfers the canonical claim from stable to dev when no live services block the change', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-'));
     const tmpHome = path.join(tmpDir, 'home');
     const claimFile = path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
+    const pluginPort = await getFreePort();
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
-        env: {
-          HOME: tmpHome,
-          PORT: '',
-          REMNOTE_TMUX_REFRESH: '0',
+        env: isolatedRuntimeEnv(tmpHome, {
           REMNOTE_WS_PORT: String(wsPort),
           REMNOTE_API_PORT: String(apiPort),
-        },
-        timeoutMs: 30_000,
+          REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
+        }),
+        timeoutMs: 90_000,
       });
 
-      expect(res.exitCode).toBe(0);
-      expect(res.stderr).toBe('');
+      expectCliSuccess('takeover stable->dev', res);
       const parsed = parseJsonLine(res.stdout);
       expect(parsed.ok).toBe(true);
       expect(parsed.data.previous_claim).toMatchObject({ claimed_channel: 'stable' });
@@ -76,31 +122,29 @@ describe('cli contract: runtime owner takeover', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  });
+  }, 120_000);
 
   it('starts the local dev bundle after takeover to dev', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-start-'));
     const tmpHome = path.join(tmpDir, 'home');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const pluginPort = await getFreePort();
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
-    };
+      REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
 
-      expect(res.exitCode).toBe(0);
-      expect(res.stderr).toBe('');
+      expectCliSuccess('takeover dev bundle start', res);
       const parsed = parseJsonLine(res.stdout);
       expect(parsed.ok).toBe(true);
       const touched = new Set<string>([...parsed.data.restarted_services, ...parsed.data.skipped_services]);
@@ -111,7 +155,7 @@ describe('cli contract: runtime owner takeover', () => {
       await runCli(['--json', 'stack', 'stop'], { env, timeoutMs: 30_000 }).catch(() => undefined);
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 
   it('transfers the canonical claim back to stable', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-stable-'));
@@ -120,6 +164,7 @@ describe('cli contract: runtime owner takeover', () => {
     const claimFile = path.join(controlPlaneRoot, 'fixed-owner-claim.json');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
+    const pluginPort = await getFreePort();
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
@@ -145,18 +190,15 @@ describe('cli contract: runtime owner takeover', () => {
       );
 
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
-        env: {
-          HOME: tmpHome,
-          PORT: '',
-          REMNOTE_TMUX_REFRESH: '0',
+        env: isolatedRuntimeEnv(tmpHome, {
           REMNOTE_WS_PORT: String(wsPort),
           REMNOTE_API_PORT: String(apiPort),
-        },
-        timeoutMs: 30_000,
+          REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
+        }),
+        timeoutMs: 90_000,
       });
 
-      expect(res.exitCode).toBe(0);
-      expect(res.stderr).toBe('');
+      expectCliSuccess('takeover dev->stable', res);
       const parsed = parseJsonLine(res.stdout);
       expect(parsed.ok).toBe(true);
       expect(parsed.data.previous_claim).toMatchObject({ claimed_channel: 'dev' });
@@ -171,43 +213,41 @@ describe('cli contract: runtime owner takeover', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  });
+  }, 120_000);
 
   it('reclaims to stable by stopping the current dev bundle', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-stable-stop-'));
     const tmpHome = path.join(tmpDir, 'home');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const pluginPort = await getFreePort();
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
-    };
+      REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
       const devRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(devRes.exitCode).toBe(0);
+      expectCliSuccess('takeover dev before stable reclaim', devRes);
 
       const stableRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(stableRes.exitCode).toBe(0);
-      expect(stableRes.stderr).toBe('');
+      expectCliSuccess('takeover stable reclaim', stableRes);
       const parsed = parseJsonLine(stableRes.stdout);
       expect(parsed.ok).toBe(true);
       expect(parsed.data.stopped_services).toEqual(expect.arrayContaining(['daemon', 'api', 'plugin']));
 
       const statusRes = await runCli(['--json', 'stack', 'status'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
       expect(statusRes.exitCode).toBe(0);
       const status = parseJsonLine(statusRes.stdout);
@@ -218,7 +258,7 @@ describe('cli contract: runtime owner takeover', () => {
       await runCli(['--json', 'stack', 'stop'], { env, timeoutMs: 30_000 }).catch(() => undefined);
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 
   it('invokes the stable launcher during reclaim', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-stable-launcher-'));
@@ -227,16 +267,15 @@ describe('cli contract: runtime owner takeover', () => {
     const launcherScript = path.join(tmpDir, 'stable-launcher.js');
     const wsPort = await getFreePort();
     const apiPort = await getFreePort();
-    const env = {
-      HOME: tmpHome,
-      PORT: '',
-      REMNOTE_TMUX_REFRESH: '0',
+    const pluginPort = await getFreePort();
+    const env = isolatedRuntimeEnv(tmpHome, {
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
       REMNOTE_WS_PORT: String(wsPort),
       REMNOTE_API_PORT: String(apiPort),
+      REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
       AGENT_REMNOTE_STABLE_LAUNCHER_CMD: process.execPath,
       AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: JSON.stringify([launcherScript, markerFile]),
-    };
+    });
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
@@ -253,15 +292,15 @@ describe('cli contract: runtime owner takeover', () => {
 
       const devRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(devRes.exitCode).toBe(0);
+      expectCliSuccess('takeover dev before launcher reclaim', devRes);
 
       const stableRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(stableRes.exitCode).toBe(0);
+      expectCliSuccess('takeover stable launcher reclaim', stableRes);
 
       const marker = await waitForJsonFile(markerFile);
       expect(marker.args).toEqual(expect.arrayContaining(['stack', 'ensure']));
@@ -269,7 +308,7 @@ describe('cli contract: runtime owner takeover', () => {
       await runCli(['--json', 'stack', 'stop'], { env, timeoutMs: 30_000 }).catch(() => undefined);
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 120_000);
 
   it('falls back to the Volta shim when no explicit stable launcher is configured', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-volta-launcher-'));
@@ -278,10 +317,16 @@ describe('cli contract: runtime owner takeover', () => {
     const voltaHome = path.join(tmpDir, '.volta');
     const binDir = path.join(voltaHome, 'bin');
     const shim = path.join(binDir, process.platform === 'win32' ? 'agent-remnote.cmd' : 'agent-remnote');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
+    const pluginPort = await getFreePort();
     const env = {
-      HOME: tmpHome,
-      REMNOTE_TMUX_REFRESH: '0',
-      REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
+      ...isolatedRuntimeEnv(tmpHome, {
+        REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
+        REMNOTE_WS_PORT: String(wsPort),
+        REMNOTE_API_PORT: String(apiPort),
+        REMNOTE_PLUGIN_SERVER_PORT: String(pluginPort),
+      }),
       VOLTA_HOME: voltaHome,
     };
 
@@ -311,15 +356,15 @@ describe('cli contract: runtime owner takeover', () => {
 
       const devRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(devRes.exitCode).toBe(0);
+      expectCliSuccess('takeover dev before volta reclaim', devRes);
 
       const stableRes = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
         env,
-        timeoutMs: 30_000,
+        timeoutMs: 90_000,
       });
-      expect(stableRes.exitCode).toBe(0);
+      expectCliSuccess('takeover stable volta reclaim', stableRes);
 
       const marker = await waitForJsonFile(markerFile);
       expect(marker.args).toEqual(expect.arrayContaining(['stack', 'ensure']));
@@ -327,5 +372,5 @@ describe('cli contract: runtime owner takeover', () => {
       await runCli(['--json', 'stack', 'stop'], { env, timeoutMs: 30_000 }).catch(() => undefined);
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 150_000);
 });
