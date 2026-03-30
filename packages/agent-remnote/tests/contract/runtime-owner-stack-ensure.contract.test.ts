@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { promises as fs } from 'node:fs';
 
 import { ensurePluginArtifacts } from '../helpers/ensurePluginArtifacts.js';
 import { runCli } from '../helpers/runCli.js';
+
+async function getFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      server.close((err) => {
+        if (err) reject(err);
+        else resolve(port);
+      });
+    });
+  });
+}
 
 describe('cli contract: runtime owner stack ensure', () => {
   it('starts plugin server as part of the local dev bundle', async () => {
@@ -16,10 +32,15 @@ describe('cli contract: runtime owner stack ensure', () => {
     const pluginPid = path.join(tmpDir, 'plugin-server.pid');
     const pluginLog = path.join(tmpDir, 'plugin-server.log');
     const pluginState = path.join(tmpDir, 'plugin-server.state.json');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
     const env = {
       HOME: tmpHome,
+      PORT: '',
       REMNOTE_TMUX_REFRESH: '0',
       REMNOTE_STORE_DB: storeDb,
+      REMNOTE_WS_PORT: String(wsPort),
+      REMNOTE_API_PORT: String(apiPort),
       REMNOTE_PLUGIN_SERVER_PID_FILE: pluginPid,
       REMNOTE_PLUGIN_SERVER_LOG_FILE: pluginLog,
       REMNOTE_PLUGIN_SERVER_STATE_FILE: pluginState,

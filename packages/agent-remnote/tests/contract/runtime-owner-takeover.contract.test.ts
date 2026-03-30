@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import { promises as fs } from 'node:fs';
 
 import { runCli } from '../helpers/runCli.js';
@@ -22,16 +23,39 @@ async function waitForJsonFile(filePath: string, timeoutMs = 3000): Promise<any>
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
 
+async function getFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      server.close((err) => {
+        if (err) reject(err);
+        else resolve(port);
+      });
+    });
+  });
+}
+
 describe('cli contract: runtime owner takeover', () => {
   it('transfers the canonical claim from stable to dev when no live services block the change', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-'));
     const tmpHome = path.join(tmpDir, 'home');
     const claimFile = path.join(tmpHome, '.agent-remnote', 'fixed-owner-claim.json');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'dev'], {
-        env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
+        env: {
+          HOME: tmpHome,
+          PORT: '',
+          REMNOTE_TMUX_REFRESH: '0',
+          REMNOTE_WS_PORT: String(wsPort),
+          REMNOTE_API_PORT: String(apiPort),
+        },
         timeoutMs: 30_000,
       });
 
@@ -57,10 +81,15 @@ describe('cli contract: runtime owner takeover', () => {
   it('starts the local dev bundle after takeover to dev', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-dev-start-'));
     const tmpHome = path.join(tmpDir, 'home');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
     const env = {
       HOME: tmpHome,
+      PORT: '',
       REMNOTE_TMUX_REFRESH: '0',
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
+      REMNOTE_WS_PORT: String(wsPort),
+      REMNOTE_API_PORT: String(apiPort),
     };
 
     try {
@@ -89,6 +118,8 @@ describe('cli contract: runtime owner takeover', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const controlPlaneRoot = path.join(tmpHome, '.agent-remnote');
     const claimFile = path.join(controlPlaneRoot, 'fixed-owner-claim.json');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
 
     try {
       await fs.mkdir(tmpHome, { recursive: true });
@@ -114,7 +145,13 @@ describe('cli contract: runtime owner takeover', () => {
       );
 
       const res = await runCli(['--json', 'stack', 'takeover', '--channel', 'stable'], {
-        env: { HOME: tmpHome, REMNOTE_TMUX_REFRESH: '0' },
+        env: {
+          HOME: tmpHome,
+          PORT: '',
+          REMNOTE_TMUX_REFRESH: '0',
+          REMNOTE_WS_PORT: String(wsPort),
+          REMNOTE_API_PORT: String(apiPort),
+        },
         timeoutMs: 30_000,
       });
 
@@ -139,10 +176,15 @@ describe('cli contract: runtime owner takeover', () => {
   it('reclaims to stable by stopping the current dev bundle', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agent-remnote-runtime-owner-takeover-stable-stop-'));
     const tmpHome = path.join(tmpDir, 'home');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
     const env = {
       HOME: tmpHome,
+      PORT: '',
       REMNOTE_TMUX_REFRESH: '0',
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
+      REMNOTE_WS_PORT: String(wsPort),
+      REMNOTE_API_PORT: String(apiPort),
     };
 
     try {
@@ -183,10 +225,15 @@ describe('cli contract: runtime owner takeover', () => {
     const tmpHome = path.join(tmpDir, 'home');
     const markerFile = path.join(tmpDir, 'stable-launcher.json');
     const launcherScript = path.join(tmpDir, 'stable-launcher.js');
+    const wsPort = await getFreePort();
+    const apiPort = await getFreePort();
     const env = {
       HOME: tmpHome,
+      PORT: '',
       REMNOTE_TMUX_REFRESH: '0',
       REMNOTE_STORE_DB: path.join(tmpDir, 'store.sqlite'),
+      REMNOTE_WS_PORT: String(wsPort),
+      REMNOTE_API_PORT: String(apiPort),
       AGENT_REMNOTE_STABLE_LAUNCHER_CMD: process.execPath,
       AGENT_REMNOTE_STABLE_LAUNCHER_ARGS_JSON: JSON.stringify([launcherScript, markerFile]),
     };
