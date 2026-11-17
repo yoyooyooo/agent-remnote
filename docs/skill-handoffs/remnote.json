@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "kind": "notion_skill_handoff",
+  "name": "remnote",
+  "page_id": "41b5636c-236e-81a7-9619-f91a83e4164a",
+  "skill_id": "skill-31315f6a2cee5e080a920c8bf7af564dc96ae47cd92d44b5a4c0efcdd4431c67",
+  "ref": "skill://41b5636c-236e-81a7-9619-f91a83e4164a/SKILL.md",
+  "snapshot_id": "s_a0de44d3b9a0fd7dfbd767c0807b16969efe6d7f5b5e527722c37e2e0ed8307d",
+  "version_id": "34961248b919d72c7956d13bf1e95dff9b59bfdb9d6e9fe9fedc266fdff3f6aa",
+  "pinned_ref": "skill://shared_skill%3Alibrary-992754f7-01c1-4ad1-a492-81f6f35d4ed6%3Askill-31315f6a2cee5e080a920c8bf7af564dc96ae47cd92d44b5a4c0efcdd4431c67/SKILL.md?snapshot=s_a0de44d3b9a0fd7dfbd767c0807b16969efe6d7f5b5e527722c37e2e0ed8307d&file_id=file-d18fa121305f96c2c9ea561601e0b6c7ee8ccff39c8a6aa4d366bf785c25707c",
+  "normal_consumer": {
+    "status": "verified",
+    "completed_at": "2026-11-17T22:39:08.429Z",
+    "proof_sha256": "a3ce10657fff91b85db5b8dcd089343ad816e86dedbdb0e8bf24ed2d277a0fbd",
+    "authoring_flag_used": false,
+    "consumer_remote_writes": 0,
+    "complete_file_set": true,
+    "full_frontmatter_text_code_explicit_links_equal": true,
+    "source_raw_bytes_and_modes_exact": true
+  },
+  "export_metadata": {
+    "path": ".ntn-skills.json",
+    "sha256": "2e3dc870cc497eec45f1e07ad7270c08c50637961a5abcd3d84f3eec8de84b66",
+    "bytes": 711,
+    "mode": "100644"
+  },
+  "files": [
+    {
+      "path": "SKILL.md",
+      "file_id": "file-d18fa121305f96c2c9ea561601e0b6c7ee8ccff39c8a6aa4d366bf785c25707c",
+      "page_id": "41b5636c-236e-81a7-9619-f91a83e4164a",
+      "sha256": "f0612ed32fbe816fd43eb552e55edfad36fa55c0542192ae2179995d81ebdfe8",
+      "bytes": 7979,
+      "mode": "100644"
+    },
+    {
+      "path": "SKILL.toml",
+      "file_id": "file-3ad0d83fffa72a698b2363d53b6770de761316a83d1b4a8a7149bba7279c9d1a",
+      "page_id": "41b5636c-236e-8100-a83b-e0ab4a524389",
+      "sha256": "592d8e42afc35439e19f366453af9a743f56b452e66f91143a55f3aaad60b277",
+      "bytes": 143,
+      "mode": "100644"
+    },
+    {
+      "path": "evals/evals.json",
+      "file_id": "file-5946c893181dc0b5a6325a85b783e6c9ecfa7b8be8f02c939952fd012a417f3b",
+      "page_id": "41b5636c-236e-81a5-87cf-e4ad61907f06",
+      "sha256": "b68a2e19f53e2de68943b4e2180bf503b7e9166eb81b18ac31c5126627eba26e",
+      "bytes": 14288,
+      "mode": "100644"
+    },
+    {
+      "path": "evals/trigger-evals.json",
+      "file_id": "file-0604e2ee1c4ff8247803ec2d1153f106dac16472420fe35dc43b4d45be2d68bb",
+      "page_id": "41b5636c-236e-81c2-b50a-ffda34d20cc7",
+      "sha256": "46ea7a3484ec5bbec8503674e348ca0ff84cf595431fa143a7be561f0a8083e4",
+      "bytes": 4077,
+      "mode": "100644"
+    },
+    {
+      "path": "references/failure-recovery.md",
+      "file_id": "file-06ceb0af4bcf27dd344f92215f6a3268cea887d573f4325b5c5a98132cb913e3",
+      "page_id": "41b5636c-236e-81e7-9677-f6948cb668c4",
+      "sha256": "8233f9b72b8fa85768e8e7841ebd41ffcf4598b306664e36bf9a514c7fa040a0",
+      "bytes": 1441,
+      "mode": "100644"
+    },
+    {
+      "path": "references/payload-handoff.md",
+      "file_id": "file-a7d7e97d3b2635382734cdf8f8dbfd6d3d5f88b2aa2d3e04bafeae2b7743310f",
+      "page_id": "41b5636c-236e-818e-ad0d-d8a749eec7a0",
+      "sha256": "49e3910fe0461f8399004fc0b795309e3be1020deddaac8d8c3f771de8647826",
+      "bytes": 3563,
+      "mode": "100644"
+    },
+    {
+      "path": "references/promotion-and-apply.md",
+      "file_id": "file-46660124bb91262781a391eee6c164f2d02ffe389249d37f40a31c5ad0418c63",
+      "page_id": "41b5636c-236e-81e1-be50-c0a3986f3dfc",
+      "sha256": "3d61f4c2e5a7ec89b57f5523cc09f23fec76f69c8587c6ae41a11a44401df060",
+      "bytes": 1498,
+      "mode": "100644"
+    },
+    {
+      "path": "references/remnote-concepts.md",
+      "file_id": "file-421cbe9d2ff00978e2e7b4d6f184c3c8994049928fd190920932653bfd80a780",
+      "page_id": "41b5636c-236e-81ce-b07b-e2a15e3685cc",
+      "sha256": "4a3e6c9513b42d62308b7851acfd29fde68090277cd0d8bfe5b11b874e049960",
+      "bytes": 3140,
+      "mode": "100644"
+    },
+    {
+      "path": "references/remote-parity.md",
+      "file_id": "file-87360b30f005ee1b51230edacb7d9d57d2895e6d25fc2d23307aefa8437d99d0",
+      "page_id": "41b5636c-236e-81b7-bff5-ccf52e81d95b",
+      "sha256": "cf903d534dc386ff3759524954f1efe8627c8fce719888798e9692402aea6560",
+      "bytes": 2550,
+      "mode": "100644"
+    },
+    {
+      "path": "references/runtime-ops.md",
+      "file_id": "file-c9b0be45891ec297ff7b96cd4a9b22037df83a5af97198b751ce37d2670bc278",
+      "page_id": "41b5636c-236e-8111-b61c-fa488880a331",
+      "sha256": "5be43c807386e75cfe5f13fbbb2fb54dcd1241edcad26f2b15b764ec2267130e",
+      "bytes": 2418,
+      "mode": "100644"
+    },
+    {
+      "path": "references/scenario-surface.md",
+      "file_id": "file-78d85f2115c01537b9a2c4dab0fb1077e9851695c0997212baf9f55df90e65a4",
+      "page_id": "41b5636c-236e-81ad-acd2-fd9fafef023f",
+      "sha256": "127bb5d13ce5ce5ea86fe9a85e3104095685abe95521fc793f7ea286290c8a25",
+      "bytes": 4694,
+      "mode": "100644"
+    },
+    {
+      "path": "references/table-property-boundaries.md",
+      "file_id": "file-454e432246b4b1ac417505ce4bda6590910091e9df7e42efbdb6590dc77a72de",
+      "page_id": "41b5636c-236e-81b5-aa14-e00c281c399a",
+      "sha256": "d55aa1f47e0003911e0eed42f0f5cc6e921fe428193a9b138a84018cdc416a29",
+      "bytes": 882,
+      "mode": "100644"
+    },
+    {
+      "path": "references/write-basic.md",
+      "file_id": "file-994d488d93089158c1fcfb98ecdcea2535ca9caefd41c980446098826cdfc0c7",
+      "page_id": "41b5636c-236e-812b-a27b-f889d3c1dc0e",
+      "sha256": "b232dd135871735c50c4f8832613d8591fa927b11887f3233bc90eb1ccc58ca4",
+      "bytes": 3492,
+      "mode": "100644"
+    },
+    {
+      "path": "references/write-routes.md",
+      "file_id": "file-134bbc9d0c443470f3b88e8caeddd64fe8c8c1f659615194e1f3f3a95b569273",
+      "page_id": "41b5636c-236e-817d-8df4-ceef904d9a41",
+      "sha256": "20c0e24abf23868ed69f0573d9187197beb282ff20a0bdb2ecdbe87ccdf178e3",
+      "bytes": 1497,
+      "mode": "100644"
+    }
+  ]
+}

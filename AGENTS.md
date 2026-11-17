@@ -67,7 +67,10 @@ RemNote 官方资料：
 - `scripts/`
   - 本地探活、排障、模拟脚本
 - `skills/`
-  - 项目内 skill
+  - 历史 skill 评测工作区；可复用的 `remnote` 正本已迁至 Notion
+  - 当前归属与完整快照校验见 `docs/ssot/agent-remnote/skill-ownership.md`
+- `docs/skill-handoffs/`
+  - Notion skill 的身份及已验证快照回执，不保存指令正文
 
 边界规则：
 

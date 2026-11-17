@@ -14,6 +14,7 @@
 7. 写入输入面矩阵：`docs/ssot/agent-remnote/write-input-surfaces.md`
 8. Runtime mode 与 command parity：`docs/ssot/agent-remnote/runtime-mode-and-command-parity.md`
 9. SQLite 性能排查与优化：`docs/ssot/agent-remnote/performance-sqlite.md`
+10. Agent guidance 与 Notion 归属：`docs/ssot/agent-remnote/skill-ownership.md`
 
 ## 架构裁决补充
 

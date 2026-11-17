@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { notionSkillExportConfigured, readNotionRemnoteGuidance } from '../helpers/notionSkillGuidance.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 
@@ -9,12 +10,11 @@ function readRepoFile(relPath: string): string {
 }
 
 describe('contract: remnote docs drift', () => {
-  it('keeps user-facing docs and skill guidance aligned on the authoritative parity inventory', () => {
+  it('keeps repository docs aligned on the authoritative parity inventory', () => {
     const files = [
       'README.md',
       'README.zh-CN.md',
       'packages/agent-remnote/README.md',
-      'skills/remnote/SKILL.md',
       'docs/ssot/agent-remnote/README.md',
       ...(existsSync(path.join(REPO_ROOT, 'README.local.md')) ? ['README.local.md'] : []),
       'specs/030-remnote-business-command-mode-parity/spec.md',
@@ -26,6 +26,13 @@ describe('contract: remnote docs drift', () => {
       expect(text).toContain('runtime-mode-and-command-parity.md');
     }
   });
+
+  it.skipIf(!notionSkillExportConfigured)(
+    'checks the complete Notion guidance export against the authoritative parity inventory',
+    () => {
+      expect(readNotionRemnoteGuidance()).toContain('runtime-mode-and-command-parity.md');
+    },
+  );
 
   it('keeps core SSoT docs aligned on the Wave 1 runtime spine', () => {
     const files = [

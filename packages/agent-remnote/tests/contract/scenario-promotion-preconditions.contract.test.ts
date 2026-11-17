@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { remnoteCommandInventory } from '../../src/lib/business-semantics/commandInventory.js';
 import { wave1RemnoteBusinessCommandVerificationCases } from '../helpers/remnoteBusinessCommandMatrix.js';
+import { notionSkillExportConfigured, readNotionRemnoteGuidance } from '../helpers/notionSkillGuidance.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 
@@ -16,14 +17,15 @@ describe('contract: scenario promotion preconditions', () => {
   it('keeps scenario surfaces outside current authoritative inventory before promotion', () => {
     const ids = remnoteCommandInventory.map((entry) => entry.id);
     expect(ids.some((id) => id === 'scenario.run' || id.startsWith('scenario.'))).toBe(false);
-    expect(Object.keys(wave1RemnoteBusinessCommandVerificationCases).some((id) => id.startsWith('scenario.'))).toBe(false);
+    expect(Object.keys(wave1RemnoteBusinessCommandVerificationCases).some((id) => id.startsWith('scenario.'))).toBe(
+      false,
+    );
   });
 
-  it('keeps docs and skill marked as planned / experimental for scenario run', () => {
+  it('keeps repository docs marked as planned / experimental for scenario run', () => {
     const files = [
       'README.md',
       'README.zh-CN.md',
-      'skills/remnote/SKILL.md',
       'docs/ssot/agent-remnote/cli-contract.md',
       'specs/031-query-scenario-package-and-command-taxonomy/contracts/command-taxonomy.md',
     ];
@@ -32,5 +34,9 @@ describe('contract: scenario promotion preconditions', () => {
       const text = readRepoFile(relPath);
       expect(text).toMatch(/planned|experimental|promotion preconditions/i);
     }
+  });
+
+  it.skipIf(!notionSkillExportConfigured)('checks promotion wording in the complete Notion guidance export', () => {
+    expect(readNotionRemnoteGuidance()).toMatch(/planned|experimental|promotion preconditions/i);
   });
 });

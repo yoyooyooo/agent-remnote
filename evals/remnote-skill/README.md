@@ -23,7 +23,11 @@ This directory keeps only the durable evaluation conclusions for the `skills/rem
 - baseline snapshots
 - automatic description-optimization logs
 
-The canonical reusable eval set now lives in:
+The canonical reusable eval set is part of the Notion-owned `remnote` Skill:
 
-- `skills/remnote/evals/evals.json`
-- `skills/remnote/evals/trigger-evals.json`
+- `skill://41b5636c-236e-81a7-9619-f91a83e4164a/evals/evals.json`
+- `skill://41b5636c-236e-81a7-9619-f91a83e4164a/evals/trigger-evals.json`
+
+Use the formal `ntn-skills` reader and the fixed snapshot receipt in
+`docs/skill-handoffs/remnote.json`. Historical summaries above retain their
+original paths; they do not install or recreate `skills/remnote`.
